@@ -171,6 +171,11 @@ question/answer transcript. Companion presents title, filing-category and tag
 suggestions from this same feed; other document-change fields, including typed
 custom fields, remain available in the web review surface.
 
+A title proposal is eligible only while the current title is automatically
+owned. Accepting it makes the resulting title human-owned. A person renaming
+the document, or a rule assigning a title before the queued effect runs,
+invalidates the proposal rather than being overwritten.
+
 The retained proposal binds the target's immutable source and field generation,
 plus any supporting documents. A custom-field proposal also binds a one-way
 fingerprint of the prior typed display value; the value itself is shown through

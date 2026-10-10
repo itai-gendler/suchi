@@ -3309,6 +3309,35 @@ test('edits document tags inline and preserves tags when a change is refused', a
   await expect(row.locator('.pill')).toHaveText(['airtel', 'payment'])
 })
 
+test('keeps human titles locked until the owner returns naming to Suchi', async ({ page }) => {
+  const writes = []
+  await mockAPI(page, { documentDetails: {
+    42: { document: { title: 'Carefully named bill', title_owner: 'human' } },
+  } })
+  await page.route('**/api/documents/42', route => {
+    if (route.request().method() !== 'PATCH') return route.fallback()
+    writes.push(route.request().postDataJSON())
+    return route.fulfill({ status: 204 })
+  })
+
+  await page.goto('/#/doc/42')
+  const lock = page.getByRole('img', { name: "Suggestions and rules won't change this title.", exact: true })
+  await expect(lock).toBeVisible()
+  await expect(lock).toHaveAttribute('title', "Suggestions and rules won't change this title.")
+
+  await page.getByRole('button', { name: 'Let Suchi rename this', exact: true }).click()
+  await expect.poll(() => writes).toEqual([{ title_owner: 'auto' }])
+  await expect(lock).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Let Suchi rename this', exact: true })).toHaveCount(0)
+
+  await page.getByTitle('Rename', { exact: true }).click()
+  await page.getByRole('textbox', { name: 'Document title', exact: true }).fill('Pinned bill title')
+  await page.getByRole('textbox', { name: 'Document title', exact: true }).press('Enter')
+  await expect.poll(() => writes).toEqual([{ title_owner: 'auto' }, { title: 'Pinned bill title' }])
+  await expect(page.getByTitle('Rename', { exact: true })).toContainText('Pinned bill title')
+  await expect(lock).toBeVisible()
+})
+
 test('keeps a new document behind Reveal when an earlier sensitivity save finishes', async ({ page }) => {
   await mockAPI(page, { documentDetails: {
     42: { document: { sensitivity: 'internal', title: 'Earlier document' } },

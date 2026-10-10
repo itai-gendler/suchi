@@ -50,6 +50,7 @@
   let textCopyStatus = $state('')
   let editingTitle = $state(false)
   let titleDraft = $state('')
+  let titleOwnerBusy = $state(false)
   let editingLanguages = $state(false)
   let languagesDraft = $state('')
   let editingTags = $state(false)
@@ -230,6 +231,7 @@
     access = null
     canManageAccess = false
     editingTitle = false
+    titleOwnerBusy = false
     editingLanguages = false
     editingTags = false
     tagOptions = []
@@ -741,12 +743,29 @@
       await patchDocument(id, patch)
       if (disposed || version !== loadVersion) return
       doc = { ...doc, ...patch }
+      if ('title' in patch && !('title_owner' in patch)) doc.title_owner = 'human'
       if ('languages' in patch) doc.languages_locked = patch.languages !== ''
       await refreshReviewTags(version, id)
       if (disposed || version !== loadVersion) return
       notify?.(label || 'Saved')
     } catch (ex) {
       if (!disposed && version === loadVersion) notify?.(ex.message || 'Could not save')
+    }
+  }
+
+  async function releaseTitle() {
+    if (titleOwnerBusy) return
+    const version = loadVersion
+    titleOwnerBusy = true
+    try {
+      await patchDocument(id, { title_owner: 'auto' })
+      if (disposed || version !== loadVersion) return
+      doc = { ...doc, title_owner: 'auto' }
+      notify?.('Suchi can rename this title')
+    } catch (ex) {
+      if (!disposed && version === loadVersion) notify?.(ex.message || 'Could not release title')
+    } finally {
+      if (!disposed && version === loadVersion) titleOwnerBusy = false
     }
   }
 
@@ -1154,15 +1173,26 @@
         {#if trashed}
           <h2 style="font-size:1.15rem;overflow-wrap:anywhere">{doc.title || `Document #${doc.id}`}</h2>
         {:else if editingTitle}
-          <form onsubmit={(e) => { e.preventDefault(); editingTitle = false; save({ title: titleDraft }, 'Title saved') }}>
-            <input class="input" bind:value={titleDraft} />
+          <form class="title-form" onsubmit={(e) => { e.preventDefault(); editingTitle = false; save({ title: titleDraft }, 'Title saved') }}>
+            <input class="input" aria-label="Document title" bind:value={titleDraft} />
           </form>
         {:else}
-          <h2 style="font-size:1.15rem">
-            <button style="all:unset;cursor:text" title="Rename" onclick={() => (editingTitle = true)}>
-              <span class="dot {sensDot(doc.sensitivity)}" style="display:inline-block;margin-right:8px"></span>{doc.title || `Document #${doc.id}`}
-            </button>
-          </h2>
+          <div class="title-heading">
+            <h2>
+              <button class="title-rename" title="Rename" onclick={() => (editingTitle = true)}>
+                <span class="dot {sensDot(doc.sensitivity)}"></span>{doc.title || `Document #${doc.id}`}
+              </button>
+              {#if doc.title_owner === 'human'}
+                <span class="title-lock" role="img" aria-label="Suggestions and rules won't change this title."
+                      title="Suggestions and rules won't change this title."><Icon name="lock" size={14} /></span>
+              {/if}
+            </h2>
+            {#if doc.title_owner === 'human'}
+              <button class="title-release" disabled={titleOwnerBusy} onclick={releaseTitle}>
+                {titleOwnerBusy ? 'Releasing…' : 'Let Suchi rename this'}
+              </button>
+            {/if}
+          </div>
         {/if}
 
         <dl class="kv" style="margin-top:12px">
@@ -1855,6 +1885,15 @@
     .document-detail-grid > .preview iframe { flex:1; height:100%; min-height:0; }
     .detail-sidebar { height:100%; min-height:0; overflow-y:auto; overscroll-behavior:contain; scrollbar-gutter:stable; }
   }
+  .title-form .input { width:100%; max-width:none; }
+  .title-heading { display:grid; gap:4px; min-width:0; }
+  .title-heading h2 { display:flex; align-items:flex-start; gap:7px; min-width:0; font-size:1.15rem; }
+  .title-rename { all:unset; display:inline; min-width:0; overflow-wrap:anywhere; cursor:text; }
+  .title-rename .dot { display:inline-block; margin-right:8px; }
+  .title-lock { display:inline-flex; flex:none; margin-top:2px; color:var(--muted); }
+  .title-release { justify-self:start; padding:0; border:0; background:none; color:var(--muted); font:inherit; font-size:.7rem; cursor:pointer; }
+  .title-release:hover { color:var(--accent); text-decoration:underline; }
+  .title-release:disabled { cursor:default; opacity:.6; text-decoration:none; }
   .document-tags { min-width:0 }
   .metadata-display { display:flex; align-items:flex-start; flex-wrap:wrap; gap:7px; width:100%; min-width:0; }
   .metadata-value { display:flex; flex:1 1 90px; align-items:center; flex-wrap:wrap; gap:6px; min-width:0; }

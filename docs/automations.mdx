@@ -57,6 +57,12 @@ Assignment and removal actions are designed to converge when retried.
 Trash timestamp. Other metadata actions still require a live document; discarding
 does not grant a rule permission to edit Trash or cross a filing-system boundary.
 
+`assign_title` claims rule ownership. It may replace an automatic title and
+refresh a title previously assigned by a rule, including during Refile, but it
+skips a title renamed or approved by a person. On the document screen, **Let
+Suchi rename this** releases that protection without immediately changing the
+text.
+
 Example:
 
 ```json

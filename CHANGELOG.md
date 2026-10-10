@@ -10,6 +10,9 @@ Notable user-visible changes to Suchi are recorded here.
   order with aggregate progress, plain processing states, safe retries and
   persistent completion actions; global drops navigate to the same surface
   instead of opening a second modal.
+- Titles renamed or approved by a person are now protected from classifier and
+  rule overwrites. A lock explains the protection, and **Let Suchi rename this**
+  returns naming to automatic handling without changing the current title.
 
 ## [0.2.1] - 2026-10-10
 

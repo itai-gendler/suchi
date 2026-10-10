@@ -412,7 +412,7 @@ Portable takeout of live originals and selected metadata from one system.
 Manifest version **`"2"`** identifies its code/name. The ZIP contains original
 bytes, `documents/<name>-<id>.json` sidecars and selected-system taxonomy-table
 dumps, not a database restore graph. Sidecar format stays **1**, adding optional
-`jd_system` and `jd_address` describing the source. Document IDs can change on intake.
+`title_owner`, `jd_system`, and `jd_address`. Document IDs can change on intake.
 
 ```sh
 suchi export --out /tmp/my-suchi.zip --owner-id 1
@@ -430,9 +430,10 @@ failure. Missing original blobs fail by default. `--allow-incomplete` is an
 explicit recovery override, and the manifest records its skipped originals.
 
 After extracting the zip, placing each original beside its sidecar in an
-fs-watch staging directory restores title, source date, correspondents, tags,
-and JD category within the configured target. Follow the [takeout reingestion guide](/guides/export-import)
-for target preparation, safe copy order and verification steps. This is not a full metadata
+fs-watch staging directory restores title ownership, title, source date,
+correspondents, tags, and JD category within the configured target. Follow the
+[takeout reingestion guide](/guides/export-import) for target preparation, safe
+copy order and verification steps. This is not a full metadata
 round trip: per-document custom
 field values and notes are omitted, while exported `sensitivity`, `mime_type`,
 and `sha256` sidecar fields are currently informational and ignored on ingest.

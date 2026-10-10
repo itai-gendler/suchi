@@ -199,6 +199,11 @@ Detail reloads only when its document ID changes or an explicit action requests
 refresh. Arrival of sidebar categories must not restart reads or discard edits.
 Metadata/language saves check that same document generation before updating local
 state, so an earlier save cannot change the next document's sensitivity or Reveal.
+Person-renamed titles show one lock with the protection explanation and a
+subtle **Let Suchi rename this** action. Rename completion updates local
+ownership to `human`; release sends only `title_owner: auto` and removes the
+lock without changing the title. Both paths use the same route-generation guard
+as other detail metadata writes.
 
 `DocumentDetail.svelte` owns similar-document results, version history,
 replacement upload, attributed exact-revision notes, typed custom fields,

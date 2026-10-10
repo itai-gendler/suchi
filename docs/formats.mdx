@@ -182,6 +182,9 @@ pre-consume decrypt.
 - Sender (`From: Name <email>`) upserts into the `correspondents`
   table and attaches to the doc under `role=sender`.
 
+Subject parsing changes the title only while its owner is `auto`; a later
+reparse cannot overwrite a title renamed by a person or assigned by a rule.
+
 For Outlook `.msg` files, `msgconvert` creates a temporary RFC 822
 working copy for this same parsing path. The original CFB bytes remain
 in `original_blob`, and downloads retain the
@@ -250,10 +253,12 @@ a specific payload — and fan out one document per segment.
 - Separator pages are dropped; the ranges between them become segments.
 - Each segment becomes a fresh document (with its own `original_blob`
   and `post-ingest` job), linked via `split_parent_id`.
-- Each child inherits the live parent's owner, title, capture time, category,
-  and sensitivity in its creation transaction. Edits during extraction are
-  preserved; a trashed parent cannot create new children. Device OCR belongs to
-  the combined scan and is discarded; each child runs server extraction.
+- Each child inherits the live parent's owner, title text, capture time,
+  category, and sensitivity in its creation transaction, but starts with
+  automatic title ownership so it can be named from its own extracted content.
+  Edits during extraction are preserved; a trashed parent cannot create new
+  children. Device OCR belongs to the combined scan and is discarded; each
+  child runs server extraction.
 - The parent doc is soft-deleted so the workspace only shows the
   children. Undelete brings the parent (original combined scan) back
   if the split was wrong. Retries preserve its original Trash retention date.
@@ -609,6 +614,7 @@ Version, split and attachment documents inherit their source system.
 {
   "suchi_sidecar": 1,
   "title": "Electricity bill Mar 2026",
+  "title_owner": "human",
   "created": "2026-03-02",
   "correspondent": "BESCOM",
   "correspondents": [
@@ -624,8 +630,9 @@ Version, split and attachment documents inherit their source system.
 
 | Field              | Type              | Semantics                                                                                                                                                    |
 | ------------------ | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `suchi_sidecar`    | int               | Must equal `1`. Producers that omit it get the flat-JSON compat path (title/created/correspondent/tags only).                                                |
+| `suchi_sidecar`    | int               | Must equal `1`. Producers that omit it get the flat-JSON compat path (`title`/`title_owner`/`created`/`correspondent`/`tags` only).                            |
 | `title`            | string            | Overrides the filename-derived title.                                                                                                                        |
+| `title_owner`      | string            | Optional `auto`, `rule`, or `human` ownership for a supplied title. A title without this field defaults to `human`; a filename-derived title defaults to `auto`.                 |
 | `created`          | string (ISO 8601) | Source date. Stored as `documents.created_at`; `documents.added_at` records when Suchi ingested the file.                                                    |
 | `correspondent`    | string            | Singular sender name (legacy shape). When `correspondents[]` is also set, the array wins.                                                                    |
 | `correspondents[]` | array             | Multi-party form. Each entry is `{name, role}`; role is `sender \| recipient \| cc \| other` (`sender` when omitted). Applied via `document_correspondents`. |
@@ -642,14 +649,15 @@ the ingest outbox commit together. An unknown custom field, invalid typed value,
 bad JSON, or explicit-but-mismatched `suchi_sidecar` version rejects the intake
 without partial metadata; the file moves to `<dir>/errors/` with a `.err`
 companion. Producers that omit `suchi_sidecar` get the flat-JSON compatibility
-shape (`title`/`created`/`correspondent`/`tags` only).
+shape (`title`/`title_owner`/`created`/`correspondent`/`tags` only).
 
 The native `suchi export` sidecar is a partial takeout, not a complete restore
-contract. It carries title, source date, correspondents, tags, and JD category,
-which fs-watch applies. Per-document custom-field values and notes are not
-exported. `sensitivity`, `mime_type`, and `sha256` may appear for provenance,
-but the current sidecar parser ignores them; MIME and SHA-256 are recomputed
-from the file and sensitivity is not restored.
+contract. It carries title ownership with the title, source date,
+correspondents, tags, and JD category, which fs-watch applies. Per-document
+custom-field values and notes are not exported. `sensitivity`, `mime_type`, and
+`sha256` may appear for provenance, but the current sidecar parser ignores
+them; MIME and SHA-256 are recomputed from the file and sensitivity is not
+restored.
 Native takeout manifest version `"2"` identifies one selected system and includes
 these optional source fields while sidecar format remains 1. Reingestion can allocate
 new installation-global IDs; source addresses are not immutable aliases. Full

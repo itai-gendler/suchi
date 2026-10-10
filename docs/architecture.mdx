@@ -136,13 +136,15 @@ repair mislabeled PDFs and reach encryption handling without rewriting originals
 or changing the pipeline revision. [Supported formats](/formats) owns dispatch,
 format limits and real-tool requirements.
 
-Split extraction/CAS work stays outside the writer. Child insertion then reads the
-**current live parent inside the transaction**, inheriting system, owner, category,
-title, MIME, source time and sensitivity after any intervening edits. A trashed or
-missing parent cannot produce a new visible child. Source copying and the child's
-job commit together. Immutable split origins identify completed parts after parent
-retirement; retrying retirement does not reset an existing Trash deadline.
-See [Scan splitting](/formats#multi-doc-splitting-on-qr-separator-sheets).
+Split extraction/CAS work stays outside the writer. Child insertion then reads
+the **current live parent inside the transaction**, inheriting system, owner,
+category, title text, MIME, source time and sensitivity after any intervening
+edits. The child starts with automatic title ownership because its content is a
+new segment. A trashed or missing parent cannot produce a new visible child.
+Source copying and the child's job commit together. Immutable split origins
+identify completed parts after parent retirement; retrying retirement does not
+reset an existing Trash deadline. See [Scan
+splitting](/formats#multi-doc-splitting-on-qr-separator-sheets).
 
 Filesystem/IMAP producers use the same document/job transaction pattern. IMAP
 checkpoints ascending batches of at most 50 UIDs after import/bookkeeping; failure
@@ -156,6 +158,16 @@ and relationships. One system/owner/hash document may have multiple sources, and
 different documents/systems may share CAS bytes. Mailbox history preserves the
 observed name/folder after account deletion. Split children/email attachments
 inherit sources; each version records its own upload.
+
+`documents.title_owner` is the narrow precedence state for naming: `auto`
+allows model or rule naming, `rule` allows a later rule refresh, and `human`
+blocks both. API renames and approved title suggestions claim human ownership;
+the explicit release operation returns to `auto` without changing text.
+Filesystem sidecars preserve an explicit owner and otherwise treat supplied
+titles as human; Paperless import is human, new uploads and split children are
+automatic, and replacement versions inherit both title and owner. Email subject
+parsing cannot replace a non-automatic title. Title and owner changes share
+`title_revision`, so in-flight suggestions lose to a later decision.
 
 ### Versions, references, and discovery currentness
 
@@ -171,10 +183,10 @@ The upload rechecks predecessor change permission inside the single-writer
 transaction, gives a previously standalone row and its replacement one random
 `v:` family key, inserts the new source and `post-ingest` job with the row, and
 copies only continuity metadata: system, owner, filing category, sensitivity,
-explicit ACL grants, manual tags, correspondents, and title. Extraction state,
-accepted intelligence, classifier-owned tags, custom-field values/document
-links, notes, the previous archive number, and other exact-revision state start
-fresh. The original predecessor
+explicit ACL grants, manual tags, correspondents, title, and title ownership.
+Extraction state, accepted intelligence, classifier-owned tags, custom-field
+values/document links, notes, the previous archive number, and other
+exact-revision state start fresh. The original predecessor
 row and every immutable blob remain unchanged. Idempotency receipts and the
 predecessor/hash fallback recover a lost successful response without creating a
 second version.
@@ -384,14 +396,16 @@ all of `DATA_DIR`, including credential keys, with writers stopped or an atomic
 whole-directory snapshot; a database-only copy is incomplete.
 
 The active catalog in `core/db/migrations/` contains immutable
-`0001_baseline.sql` for stable schema 1 (v0.1.0) and the v0.2.0 migrations
-`0002_metadata_cleanup.sql` and `0003_automation_asks.sql`, for
-`user_version = 3`. Migration 0002 converts
-document types to namespaced tags and adds `documents.version_family_key`, the
-family/currentness index, the partial document-link reverse index, and the
-guarded chain backfill. The one-row `schema_lineage = 'stable-v1'` identity is
-unchanged. Frozen pre-v0.1.0 SQL and the final account-identity rebuild live separately
-as compatibility migrations `0002`–`0005`; the active catalog cannot discover
+`0001_baseline.sql` for stable schema 1 (v0.1.0), the v0.2.0 migrations
+`0002_metadata_cleanup.sql` and `0003_automation_asks.sql`, and current
+unreleased `0004_product_foundations.sql`, for `user_version = 4`. Migration
+0002 converts document types to namespaced tags and adds version-family
+currentness. Migration 0003 adds classifier-backed automation questions.
+Migration 0004 adds title ownership, conservatively marks existing curated and
+imported titles as human-owned, and extends title revision tracking to owner
+changes. The one-row `schema_lineage = 'stable-v1'` identity is unchanged.
+Frozen pre-v0.1.0 SQL and the final account-identity rebuild live separately as
+compatibility migrations `0002`–`0005`; the active catalog cannot discover
 them by path.
 
 Stable migration 0002 removes the duplicate document-type vocabulary after
@@ -401,32 +415,32 @@ automation conjunctions suspend rather than broadening. Source-archive types
 are translated at the importer boundary; no native type schema or API remains.
 
 `migrations.Prepare` delegates core admission to `db.PrepareStable`, which
-classifies the database before writing. Empty databases receive both active
-migrations. An exact current schema-2 database is a no-op. An exact stable
-schema-1 database first passes integrity and foreign-key checks, then applies
-only active migration 0002 and must match the current manifest. Every accepted
+classifies the database before writing. Empty databases receive all active
+migrations. An exact current schema-4 database is a no-op. Exact stable schemas
+1, 2, and 3 first pass integrity and foreign-key checks, then apply only their
+remaining active migrations and must match the current manifest. Every accepted
 pre-stable state must match its complete canonical `sqlite_schema` fingerprint
 and lineage, not merely a `user_version`. Unknown, partial, spoofed, corrupt and
 future states fail without mutation. The exact pre-identity schema-4 fingerprint
-is an explicit compatibility boundary; a schema claiming stable lineage with an
-unrecognized fingerprint is deliberately rejected. The
-[release process compatibility table](/release-process#stable-v1-database-compatibility)
-is the sole authority for supported incoming states, frozen steps and the
-required release test matrix.
+is a separate explicit compatibility boundary; a schema claiming stable lineage
+with an unrecognized fingerprint is deliberately rejected. The [release process
+compatibility table](/release-process#stable-v1-database-compatibility) is the
+sole authority for supported incoming states, frozen steps and the required
+release test matrix.
 
 Every admitted pre-stable archive passes integrity and foreign-key checks and
 gets an exclusive mode-0600 SQLite snapshot before adoption. Remaining
-compatibility steps, active migration 0002, stable lineage and schema version 2
-commit in one immediate transaction through the sole writer. Compatibility
-`0005` rebuilds `users`, `documents` and `audit_events`; adds provider identity,
-a durable development-account marker and retained-event metadata; moves the
-singular correspondent into the role-bearing junction; and preserves primary
-keys, revision values and dependent references. It also resolves watched-folder
-ownership to a numeric user ID, drops the empty obsolete `plugin_kv` table and
-redundant ACL index, and removes successful jobs older than seven days. The final
-integrity, foreign keys and canonical schema-2 fingerprint must match a fresh
-archive; failures roll back while retaining the snapshot and restoring
-foreign-key enforcement.
+compatibility steps, active migrations 0002–0004, stable lineage and schema
+version 4 commit in one immediate transaction through the sole writer.
+Compatibility `0005` rebuilds `users`, `documents` and `audit_events`; adds
+provider identity, a durable development-account marker and retained-event
+metadata; moves the singular correspondent into the role-bearing junction; and
+preserves primary keys, revision values and dependent references. It also
+resolves watched-folder ownership to a numeric user ID, drops the empty obsolete
+`plugin_kv` table and redundant ACL index, and removes successful jobs older
+than seven days. The final integrity, foreign keys and canonical schema-4
+fingerprint must match a fresh archive; failures roll back while retaining the
+snapshot and restoring foreign-key enforcement.
 Extension objects created after `_suchi_extension_migrations` are outside the
 core fingerprint. Core objects rebuilt during adoption remain explicitly
 included even when SQLite places their replacement rows after that extension

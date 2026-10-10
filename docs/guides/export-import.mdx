@@ -43,9 +43,10 @@ unzip -p /tmp/suchi-export.zip manifest.json
 The zip contains original files and matching JSON sidecars under
 `documents/`. The files under `taxonomy/` are reference dumps; they are not
 automatically installed by the restore process.
-Manifest version `"2"` identifies the selected system code/name; `--all` means all
-owners there, not all systems. Sidecar format stays 1 with optional `jd_system` and
-`jd_address`. Those record the source, not an ID-preserving restore protocol.
+Manifest version `"2"` identifies the selected system code/name; `--all` means
+all owners there, not all systems. Sidecar format stays 1 with optional
+`title_owner`, `jd_system`, and `jd_address`. Those preserve naming precedence
+and record the source system, not an ID-preserving restore protocol.
 
 ## Prepare the fresh instance
 
@@ -108,7 +109,7 @@ does not update metadata; edit existing records through Suchi.
 | Data | Result |
 | --- | --- |
 | Original bytes | Preserved exactly; SHA-256 and MIME are recomputed on the target. |
-| Title and source date | Restored. The target records its own ingest time separately. |
+| Title, title ownership, and source date | Restored. The target records its own ingest time separately. |
 | Tags | Restored from tag slugs; display names can be normalized to their slug form. |
 | Correspondents | Restored, including sender, recipient, cc, and other roles. |
 | Filing category | Restored when the numeric code exists on the target; otherwise Inbox. |

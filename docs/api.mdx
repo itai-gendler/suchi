@@ -715,13 +715,14 @@ success only after every returned live child has completed post-ingest.
 
 ### `GET /api/documents/{id}`
 
-Full projection of one document: title, extracted content (post-OCR),
-MIME, blobs, JD category, tags (slug list), correspondents, attributed notes,
-typed custom-field values, selected rendered layout, and an optional read-only
-previous archive number. Trashed docs are visible with `trashed_at` set so
-mobile clients can render the undelete flow. `owner_id` identifies the document
-owner; trashed documents also include `deletes_at`, exactly 30 days after
-`trashed_at`. Live and restored documents omit both deletion timestamps.
+Full projection of one document: title and title ownership, extracted content
+(post-OCR), MIME, blobs, JD category, tags (slug list), correspondents,
+attributed notes, typed custom-field values, selected rendered layout, and an
+optional read-only previous archive number. Trashed docs are visible with
+`trashed_at` set so mobile clients can render the undelete flow. `owner_id`
+identifies the document owner; trashed documents also include `deletes_at`,
+exactly 30 days after `trashed_at`. Live and restored documents omit both
+deletion timestamps.
 
 `encryption_state` is `encrypted` when a password is still needed, or
 `decrypted` after a successful manual or automatic password unlock. It is
@@ -739,6 +740,7 @@ The normal sensitivity-reveal and raw-original download restrictions still apply
   "id": 1,
   "owner_id": 1,
   "title": "Electricity bill March 2026",
+  "title_owner": "human",
   "content": "Electricity bill for March 2026...",
   "content_source": "server",
   "device_content_confidence": 0.86,
@@ -816,6 +818,14 @@ mailbox's current display name. Suchi retains the name captured at ingest and
 uses it if that mailbox is later deleted; `detail` remains the observed address
 and folder. `added_at` is when Suchi ingested the document;
 `created_at` and optional `source_mtime` carry upstream dates.
+
+`title_owner` is `auto`, `rule`, or `human`. New uploads start as `auto`.
+`PATCH {"title":"..."}` and an accepted title suggestion claim `human`
+ownership, so later model suggestions and title rules cannot overwrite the
+name. `PATCH {"title_owner":"auto"}` keeps the current text but lets Suchi name
+the document again; it may be sent with a new `title`. Other `title_owner`
+values fail with `400 invalid_title_owner`. Changing either the title or its
+owner advances the title revision used to invalidate stale suggestions.
 
 `custom_fields` preserves each definition's declared type: strings for
 `text`/`url`/`select`, numbers for `number`/`monetary`, Unix seconds for `date`,
