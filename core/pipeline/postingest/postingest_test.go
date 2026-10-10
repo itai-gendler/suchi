@@ -657,6 +657,39 @@ func assertSplitState(t *testing.T, d *db.DB, parentID int64, parentTrashed bool
 	}
 }
 
+func TestEmailMetadataPreservesHumanTitleOwnership(t *testing.T) {
+	ctx := t.Context()
+	d, cas := openPostIngestHarness(t)
+	docID := seedPostIngestDocument(t, d, cas, "message/rfc822", []byte("raw email"))
+	if _, err := d.Write.Exec(`UPDATE documents SET title='Human title',title_owner='human' WHERE id=?`, docID); err != nil {
+		t.Fatal(err)
+	}
+	h := New(d, cas, testActions(t), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if err := h.updateEmailParent(ctx, docID, &eml.Email{Subject: "Parsed subject"}, "message body"); err != nil {
+		t.Fatal(err)
+	}
+	var title, owner, content string
+	if err := d.Read.QueryRow(`SELECT title,title_owner,content FROM documents WHERE id=?`, docID).Scan(&title, &owner, &content); err != nil {
+		t.Fatal(err)
+	}
+	if title != "Human title" || owner != "human" || content != "message body" {
+		t.Fatalf("human email metadata title=%q owner=%q content=%q", title, owner, content)
+	}
+
+	if _, err := d.Write.Exec(`UPDATE documents SET title_owner='auto' WHERE id=?`, docID); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.updateEmailParent(ctx, docID, &eml.Email{Subject: "Updated subject"}, "updated body"); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.Read.QueryRow(`SELECT title,title_owner,content FROM documents WHERE id=?`, docID).Scan(&title, &owner, &content); err != nil {
+		t.Fatal(err)
+	}
+	if title != "Updated subject" || owner != "auto" || content != "updated body" {
+		t.Fatalf("automatic email metadata title=%q owner=%q content=%q", title, owner, content)
+	}
+}
+
 func TestHandleMSGPreservesOriginalBlobAndMIME(t *testing.T) {
 	ctx := context.Background()
 	d, cas := openPostIngestHarness(t)
@@ -718,20 +751,21 @@ func TestHandleMSGPreservesOriginalBlobAndMIME(t *testing.T) {
 	}
 
 	var (
-		childID    int64
-		childTitle string
-		childMIME  string
-		childBlob  string
-		childJobs  int
+		childID         int64
+		childTitle      string
+		childTitleOwner string
+		childMIME       string
+		childBlob       string
+		childJobs       int
 	)
 	if err := d.Read.QueryRowContext(ctx, `
-		SELECT id, title, mime_type, original_blob
+		SELECT id, title, title_owner, mime_type, original_blob
 		FROM documents WHERE email_parent_id = ?
-	`, docID).Scan(&childID, &childTitle, &childMIME, &childBlob); err != nil {
+	`, docID).Scan(&childID, &childTitle, &childTitleOwner, &childMIME, &childBlob); err != nil {
 		t.Fatal(err)
 	}
-	if childTitle != "invoice.pdf" || childMIME != "application/pdf" {
-		t.Fatalf("attachment = (%q, %q), want invoice.pdf/application/pdf", childTitle, childMIME)
+	if childTitle != "invoice.pdf" || childTitleOwner != "auto" || childMIME != "application/pdf" {
+		t.Fatalf("attachment = (%q, %q, %q), want invoice.pdf/auto/application/pdf", childTitle, childTitleOwner, childMIME)
 	}
 	if err := d.Read.QueryRowContext(ctx, `
 		SELECT COUNT(*) FROM jobs WHERE doc_id = ? AND kind = ? AND state = 'pending'

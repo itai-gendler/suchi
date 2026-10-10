@@ -207,13 +207,14 @@ func (h *Handler) Handle(ctx context.Context, e pluginapi.Event) error {
 		}
 
 		var hasCorrespondent, inInbox, languageLocked bool
-		var languages string
+		var languages, titleOwner string
 		if err := tx.QueryRowContext(ctx, `
 			SELECT EXISTS (
 			        SELECT 1 FROM document_correspondents dc WHERE dc.document_id=d.id AND dc.role='sender'),
-			       COALESCE(d.jd_category_id = js.inbox_category_id, 0), d.languages_locked, COALESCE(d.languages, '')
+			       COALESCE(d.jd_category_id = js.inbox_category_id, 0), d.languages_locked,
+			       COALESCE(d.languages, ''), d.title_owner
 			FROM documents d JOIN jd_systems js ON js.id=d.system_id WHERE d.id=?
-		`, e.DocID).Scan(&hasCorrespondent, &inInbox, &languageLocked, &languages); err != nil {
+		`, e.DocID).Scan(&hasCorrespondent, &inInbox, &languageLocked, &languages, &titleOwner); err != nil {
 			return err
 		}
 
@@ -321,7 +322,7 @@ func (h *Handler) Handle(ctx context.Context, e pluginapi.Event) error {
 			}
 		}
 
-		if res.Title != "" && res.Title != title {
+		if titleOwner == "auto" && res.Title != "" && res.Title != title {
 			if err := propose(approvals.DocumentChange{Field: "title", Value: res.Title}, res.Confidence); err != nil {
 				return err
 			}

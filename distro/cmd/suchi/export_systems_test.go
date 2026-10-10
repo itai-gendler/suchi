@@ -53,7 +53,7 @@ func TestNativeTakeoutAllOwnersStaysInSelectedSystem(t *testing.T) {
  INSERT INTO jd_areas(system_id,code_start,code_end,name,position) VALUES(1,10,19,'Records',0),(2,10,19,'Records',0);
  INSERT INTO jd_categories(system_id,id,area_start,code,name,system) VALUES(1,1,10,13,'Tax',0),(2,2,10,13,'Tax',0);
  INSERT INTO tags(system_id,id,name,slug,created_at,updated_at) VALUES(1,1,'Private audit label','same-name',0,0),(2,2,'Advisory label','same-name',0,0);
- INSERT INTO documents(system_id,id,owner_id,original_blob,original_size,title,mime_type,jd_category_id,created_at,updated_at) VALUES(1,147,1,?,22,'Excluded audit file','text/plain',1,0,0),(2,148,1,?,22,'First owner','text/plain',2,0,0),(2,149,2,?,22,'Second owner','text/plain',2,0,0);`, ref.SHA256, ref.SHA256, ref.SHA256)
+ INSERT INTO documents(system_id,id,owner_id,original_blob,original_size,title,title_owner,mime_type,jd_category_id,created_at,updated_at) VALUES(1,147,1,?,22,'Excluded audit file','human','text/plain',1,0,0),(2,148,1,?,22,'First owner','rule','text/plain',2,0,0),(2,149,2,?,22,'Second owner','human','text/plain',2,0,0);`, ref.SHA256, ref.SHA256, ref.SHA256)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -115,9 +115,15 @@ func TestNativeTakeoutAllOwnersStaysInSelectedSystem(t *testing.T) {
 	if len(sidecars) != 2 {
 		t.Fatalf("all owners did not export both target documents: %+v", sidecars)
 	}
-	for address, title := range map[string]string{"S02.13.148": "First owner", "S02.13.149": "Second owner"} {
+	for address, want := range map[string]struct {
+		title string
+		owner string
+	}{
+		"S02.13.148": {"First owner", "rule"},
+		"S02.13.149": {"Second owner", "human"},
+	} {
 		side, ok := sidecars[address]
-		if !ok || side.Title != title || side.Version != 1 || side.JDSystem != "S02" || side.JDCategory != 13 || side.SHA256 != ref.SHA256 {
+		if !ok || side.Title != want.title || side.TitleOwner != want.owner || side.Version != 1 || side.JDSystem != "S02" || side.JDCategory != 13 || side.SHA256 != ref.SHA256 {
 			t.Fatalf("wrong source provenance: %+v", side)
 		}
 	}

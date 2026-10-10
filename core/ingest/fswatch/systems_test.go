@@ -62,7 +62,12 @@ func TestIntakeSystemIsolationAndWriterMembership(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		id, duplicate, err := watchers[i].ingest(ctx, path, &sidecar.V1{Version: 1, JDSystem: code, Correspondent: "Shared name", Tags: []string{"Shared tag"}})
+		side := &sidecar.V1{Version: 1, JDSystem: code, Correspondent: "Shared name", Tags: []string{"Shared tag"}}
+		side.Title = "Curated title"
+		if i == 1 {
+			side.Title, side.TitleOwner = "Rule title", "rule"
+		}
+		id, duplicate, err := watchers[i].ingest(ctx, path, side)
 		if err != nil || duplicate {
 			t.Fatalf("%s intake: duplicate=%v err=%v", code, duplicate, err)
 		}
@@ -72,16 +77,23 @@ func TestIntakeSystemIsolationAndWriterMembership(t *testing.T) {
 		t.Fatal("cross-system upload reused document identity")
 	}
 	var sharedBlob, metadataIsolated bool
+	var firstTitle, firstOwner, secondTitle, secondOwner string
 	if err := d.Read.QueryRowContext(ctx, `
 		SELECT a.original_blob = b.original_blob,
 		       (SELECT correspondent_id FROM document_correspondents WHERE document_id=a.id AND role='sender' ORDER BY position,correspondent_id LIMIT 1) !=
-		       (SELECT correspondent_id FROM document_correspondents WHERE document_id=b.id AND role='sender' ORDER BY position,correspondent_id LIMIT 1)
+		       (SELECT correspondent_id FROM document_correspondents WHERE document_id=b.id AND role='sender' ORDER BY position,correspondent_id LIMIT 1),
+		       a.title, a.title_owner, b.title, b.title_owner
 		FROM documents a, documents b
-		WHERE a.id = ? AND b.id = ?`, ids[0], ids[1]).Scan(&sharedBlob, &metadataIsolated); err != nil {
+		WHERE a.id = ? AND b.id = ?`, ids[0], ids[1]).Scan(
+		&sharedBlob, &metadataIsolated, &firstTitle, &firstOwner, &secondTitle, &secondOwner,
+	); err != nil {
 		t.Fatal(err)
 	}
 	if !sharedBlob || !metadataIsolated {
 		t.Fatalf("shared CAS=%v isolated correspondents=%v", sharedBlob, metadataIsolated)
+	}
+	if firstTitle != "Curated title" || firstOwner != "human" || secondTitle != "Rule title" || secondOwner != "rule" {
+		t.Fatalf("sidecar titles=%q/%q and %q/%q", firstTitle, firstOwner, secondTitle, secondOwner)
 	}
 	id, duplicate, err := watchers[1].ingest(ctx, path, nil)
 	if err != nil || !duplicate || id != ids[1] {

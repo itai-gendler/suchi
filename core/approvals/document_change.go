@@ -263,6 +263,12 @@ func checkDocumentChange(ctx context.Context, tx *sql.Tx, docID int64, c Documen
 	if !current.SameSource(*c.Baseline) || current.FieldRevision(c.Field) != c.Baseline.FieldRevision(c.Field) {
 		return "", ErrStaleProposal
 	}
+	if c.Field == "title" && reviewer == nil {
+		var owner string
+		if err := tx.QueryRowContext(ctx, `SELECT title_owner FROM documents WHERE id=?`, docID).Scan(&owner); err != nil || owner != "auto" {
+			return "", ErrStaleProposal
+		}
+	}
 	reason := ReviewReasonReviewFirst
 	if c.Threshold != nil && c.Confidence < *c.Threshold {
 		reason = ReviewReasonLowConfidence
@@ -657,7 +663,19 @@ func writeDocumentChangeValue(ctx context.Context, tx *sql.Tx, docID, systemID i
 		err = customfield.Lookup(dataType).Write(ctx, tx, docID, c.ValueID, typed)
 		changed = err == nil
 	case "title":
-		result, err = tx.ExecContext(ctx, `UPDATE documents SET title=?,updated_at=? WHERE id=? AND title<>?`, c.Value, now, docID, c.Value)
+		if reviewed {
+			result, err = tx.ExecContext(ctx, `
+				UPDATE documents
+				SET title=?,title_owner='human',updated_at=?
+				WHERE id=? AND (title<>? OR title_owner<>'human')
+			`, c.Value, now, docID, c.Value)
+		} else {
+			result, err = tx.ExecContext(ctx, `
+				UPDATE documents
+				SET title=?,title_owner='auto',updated_at=?
+				WHERE id=? AND title_owner='auto' AND title<>?
+			`, c.Value, now, docID, c.Value)
+		}
 	case "language":
 		value := lang.Format(c.Value)
 		lock := 0

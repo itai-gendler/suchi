@@ -38,8 +38,12 @@ func BuiltinActions() []ActionDefinition {
 				if err != nil {
 					return err
 				}
-				_, err = tx.ExecContext(ctx,
-					`UPDATE documents SET title = ? WHERE id = ?`, title, target.DocID)
+				_, err = tx.ExecContext(ctx, `
+					UPDATE documents
+					SET title = ?, title_owner = 'rule'
+					WHERE id = ? AND title_owner <> 'human'
+					  AND (title <> ? OR title_owner <> 'rule')
+				`, title, target.DocID, title)
 				return err
 			},
 		},

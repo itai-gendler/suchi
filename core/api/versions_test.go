@@ -143,7 +143,7 @@ func TestUploadNewVersionCopiesOnlyFilingMetadata(t *testing.T) {
 		INSERT INTO custom_fields(system_id,id,name,data_type,created_at,updated_at)
 		VALUES(1,95,'Internal note','text',0,0);
 		UPDATE documents
-		SET title='Signed contract', sensitivity='restricted',
+		SET title='Signed contract', title_owner='human', sensitivity='restricted',
 		    languages=',fr,', content='reviewed predecessor text'
 		WHERE id=?;
 		INSERT INTO document_tags(document_id,tag_id,classifier_owned) VALUES
@@ -172,20 +172,20 @@ func TestUploadNewVersionCopiesOnlyFilingMetadata(t *testing.T) {
 	}
 
 	var (
-		title, sensitivity, languages string
-		sourceFamily, newFamily       string
+		title, titleOwner, sensitivity, languages string
+		sourceFamily, newFamily                   string
 	)
 	if err := d.Read.QueryRow(`
-		SELECT title, COALESCE(sensitivity,''), languages, version_family_key
+		SELECT title, title_owner, COALESCE(sensitivity,''), languages, version_family_key
 		FROM documents WHERE id=?
-	`, created.ID).Scan(&title, &sensitivity, &languages, &newFamily); err != nil {
+	`, created.ID).Scan(&title, &titleOwner, &sensitivity, &languages, &newFamily); err != nil {
 		t.Fatal(err)
 	}
 	if err := d.Read.QueryRow(`SELECT version_family_key FROM documents WHERE id=?`, previousID).Scan(&sourceFamily); err != nil {
 		t.Fatal(err)
 	}
-	if title != "Signed contract" || sensitivity != "restricted" {
-		t.Fatalf("copied filing metadata title=%q sensitivity=%q", title, sensitivity)
+	if title != "Signed contract" || titleOwner != "human" || sensitivity != "restricted" {
+		t.Fatalf("copied filing metadata title=%q owner=%q sensitivity=%q", title, titleOwner, sensitivity)
 	}
 	if languages != "" {
 		t.Fatalf("replacement languages=%q, want fresh extraction state", languages)

@@ -64,14 +64,18 @@ func TestImportEndToEnd(t *testing.T) {
 	var (
 		haveLegacy int
 		inCat      int64
+		titleOwner string
 	)
 	if err := d.Read.QueryRow(
-		`SELECT COUNT(*), jd_category_id FROM documents WHERE legacy_id = 100`,
-	).Scan(&haveLegacy, &inCat); err != nil {
+		`SELECT COUNT(*), jd_category_id, title_owner FROM documents WHERE legacy_id = 100`,
+	).Scan(&haveLegacy, &inCat, &titleOwner); err != nil {
 		t.Fatalf("check legacy id: %v", err)
 	}
 	if haveLegacy != 1 {
 		t.Errorf("legacy_id row count = %d, want 1", haveLegacy)
+	}
+	if titleOwner != "human" {
+		t.Errorf("imported title owner = %q, want human", titleOwner)
 	}
 	inbox, _ := jd.InboxCategoryID(ctx, d, 1)
 	if inCat != inbox {

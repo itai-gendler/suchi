@@ -136,6 +136,7 @@ func (s *Server) UploadNewVersion(w http.ResponseWriter, r *http.Request) {
 		duplicateLiveID int64
 		prevOwner       int64
 		prevTitle       string
+		prevTitleOwner  string
 		prevJDCatID     int64
 		prevSensitivity sql.NullString
 		familyKey       sql.NullString
@@ -171,10 +172,10 @@ func (s *Server) UploadNewVersion(w http.ResponseWriter, r *http.Request) {
 		// authorization after acquiring the write lock so ACL revocation or
 		// trashing cannot race the version insert.
 		err := tx.QueryRowContext(r.Context(), `
-			SELECT owner_id, title, jd_category_id, sensitivity, version_family_key
+			SELECT owner_id, title, title_owner, jd_category_id, sensitivity, version_family_key
 			FROM documents WHERE id = ? AND trashed_at IS NULL
 		`, prevID).Scan(
-			&prevOwner, &prevTitle, &prevJDCatID, &prevSensitivity, &familyKey,
+			&prevOwner, &prevTitle, &prevTitleOwner, &prevJDCatID, &prevSensitivity, &familyKey,
 		)
 		if errors.Is(err, sql.ErrNoRows) {
 			return errVersionPredecessorChanged
@@ -294,13 +295,13 @@ func (s *Server) UploadNewVersion(w http.ResponseWriter, r *http.Request) {
 		dbValues := upload.Metadata.databaseValues(s.deviceOCRMinConfidence, now)
 		res, err := tx.ExecContext(r.Context(), `
 			INSERT INTO documents(
-				system_id, owner_id, original_blob, original_size, title, mime_type,
+				system_id, owner_id, original_blob, original_size, title, title_owner, mime_type,
 				jd_category_id, sensitivity, version_family_key,
 				added_at, created_at, updated_at, previous_version_id, source_mtime,
 				content, content_source, device_content_confidence,
 				device_ocr_language, device_content_received_at
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-		`, systemID, prevOwner, upload.SHA256, upload.Size, title, upload.MIME,
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		`, systemID, prevOwner, upload.SHA256, upload.Size, title, prevTitleOwner, upload.MIME,
 			prevJDCatID, prevSensitivity, familyKey,
 			now, now, now, prevID, dbValues.SourceMTime, dbValues.Content,
 			dbValues.ContentSource, dbValues.DeviceConfidence,

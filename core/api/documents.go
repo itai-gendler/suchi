@@ -441,10 +441,10 @@ var (
 )
 
 // PatchDocument — PATCH /api/documents/{id}. Partial update of the
-// fields callers can set from a mobile or API client: title,
-// sensitivity, jd_category_id. Adding a new field is a two-line
-// change: add a pointer to DocumentUpdate, add a `if in.X != nil`
-// branch here.
+// fields callers can set from a mobile or API client: title, title
+// ownership, sensitivity, jd_category_id, rendered layout, and languages.
+// Adding a new field means adding a pointer to DocumentUpdate and a
+// corresponding branch below.
 //
 // Owner-scoped: a non-admin caller can only patch their own docs.
 // Every mutation writes an audit_events row with the before/after
@@ -474,6 +474,10 @@ func (s *Server) PatchDocument(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	if in.TitleOwner != nil && *in.TitleOwner != "auto" {
+		s.writeError(w, http.StatusBadRequest, "invalid_title_owner", "title_owner must be \"auto\"")
+		return
+	}
 	if in.RenderedLayoutID != nil && *in.RenderedLayoutID < 0 {
 		s.writeError(w, http.StatusBadRequest, "bad_rendered_layout", "rendered_layout_id must be zero or a positive integer")
 		return
@@ -485,9 +489,17 @@ func (s *Server) PatchDocument(w http.ResponseWriter, r *http.Request) {
 	before := map[string]any{}
 	after := map[string]any{}
 	if in.Title != nil {
-		sets = append(sets, "title = ?")
-		args = append(args, *in.Title)
-		after["title"] = *in.Title
+		owner := "human"
+		if in.TitleOwner != nil {
+			owner = *in.TitleOwner
+		}
+		sets = append(sets, "title = ?", "title_owner = ?")
+		args = append(args, *in.Title, owner)
+		after["title"], after["title_owner"] = *in.Title, owner
+	} else if in.TitleOwner != nil {
+		sets = append(sets, "title_owner = ?")
+		args = append(args, *in.TitleOwner)
+		after["title_owner"] = *in.TitleOwner
 	}
 	if in.Sensitivity != nil {
 		sets = append(sets, "sensitivity = ?")
@@ -543,14 +555,15 @@ func (s *Server) PatchDocument(w http.ResponseWriter, r *http.Request) {
 	// Snapshot the before-values so the audit log carries a diff.
 	var (
 		curTitle            sql.NullString
+		curTitleOwner       string
 		curSensitivity      sql.NullString
 		curJDCatID          sql.NullInt64
 		curRenderedLayoutID sql.NullInt64
 	)
 	err = s.DB.Read.QueryRowContext(r.Context(),
-		`SELECT title, sensitivity, jd_category_id, storage_path_id FROM documents
+		`SELECT title, title_owner, sensitivity, jd_category_id, storage_path_id FROM documents
 		 WHERE id = ?`,
-		id).Scan(&curTitle, &curSensitivity, &curJDCatID, &curRenderedLayoutID)
+		id).Scan(&curTitle, &curTitleOwner, &curSensitivity, &curJDCatID, &curRenderedLayoutID)
 	if errors.Is(err, sql.ErrNoRows) {
 		s.writeError(w, http.StatusNotFound, "not_found", "document not found")
 		return
@@ -561,6 +574,9 @@ func (s *Server) PatchDocument(w http.ResponseWriter, r *http.Request) {
 	}
 	if in.Title != nil && curTitle.Valid {
 		before["title"] = curTitle.String
+	}
+	if in.Title != nil || in.TitleOwner != nil {
+		before["title_owner"] = curTitleOwner
 	}
 	if in.Sensitivity != nil {
 		if curSensitivity.Valid {
@@ -690,6 +706,7 @@ type DocumentDetail struct {
 	ArchiveSerialNumber *int64                  `json:"archive_serial_number,omitempty"`
 	RenderedLayout      *DocumentRenderedLayout `json:"rendered_layout,omitempty"`
 	Title               string                  `json:"title"`
+	TitleOwner          string                  `json:"title_owner"`
 	Content             string                  `json:"content"`
 	ContentSource       string                  `json:"content_source"`
 	// Device OCR provenance remains visible after server text supersedes it.
@@ -750,6 +767,7 @@ type DocumentSource struct {
 // client explicitly named.
 type DocumentUpdate struct {
 	Title            *string `json:"title,omitempty"`
+	TitleOwner       *string `json:"title_owner,omitempty"`
 	Sensitivity      *string `json:"sensitivity,omitempty"`
 	JDCategoryID     *int64  `json:"jd_category_id,omitempty"`
 	RenderedLayoutID *int64  `json:"rendered_layout_id,omitempty"`
@@ -858,7 +876,7 @@ func (s *Server) GetDocument(w http.ResponseWriter, r *http.Request) {
 		deviceContentReceivedAt sql.NullInt64
 	)
 	err = s.DB.Read.QueryRowContext(r.Context(), `
-		SELECT d.id, d.owner_id, d.title, js.code, d.archive_serial_number,
+		SELECT d.id, d.owner_id, d.title, d.title_owner, js.code, d.archive_serial_number,
 		       sp.id, sp.name, sp.path,
 		       CASE WHEN ? THEN COALESCE(d.content, '') ELSE '' END,
 		       d.original_blob, d.original_size,
@@ -875,7 +893,7 @@ func (s *Server) GetDocument(w http.ResponseWriter, r *http.Request) {
 		LEFT JOIN jd_areas      ja ON ja.code_start = jc.area_start AND ja.system_id = d.system_id
 		LEFT JOIN storage_paths sp ON sp.id = d.storage_path_id AND sp.system_id = d.system_id
 		WHERE d.id = ?
-	`, includeContent, id).Scan(&d.ID, &d.OwnerID, &d.Title, &d.SystemCode, &archiveSerialNumber,
+	`, includeContent, id).Scan(&d.ID, &d.OwnerID, &d.Title, &d.TitleOwner, &d.SystemCode, &archiveSerialNumber,
 		&renderedLayoutID, &renderedLayoutName, &renderedLayoutPath, &content, &d.OriginalBlob, &d.OriginalSize,
 		&archBlob, &archSize, &mimeNull,
 		&d.JDCategoryID, &sensitivity, &d.CreatedAt, &d.AddedAt, &d.UpdatedAt, &trashed,

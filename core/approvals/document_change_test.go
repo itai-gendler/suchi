@@ -72,8 +72,8 @@ func TestDocumentChangeUsesApprovalLifecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var title, state, transitionActor, auditKind string
-	if err := e.DB().Read.QueryRowContext(ctx, `SELECT title FROM documents WHERE id = 10`).Scan(&title); err != nil {
+	var title, titleOwner, state, transitionActor, auditKind string
+	if err := e.DB().Read.QueryRowContext(ctx, `SELECT title,title_owner FROM documents WHERE id = 10`).Scan(&title, &titleOwner); err != nil {
 		t.Fatal(err)
 	}
 	if err := e.DB().Read.QueryRowContext(ctx, `SELECT state FROM approval_runs WHERE id = ?`, runID).Scan(&state); err != nil {
@@ -85,8 +85,51 @@ func TestDocumentChangeUsesApprovalLifecycle(t *testing.T) {
 	if err := e.DB().Read.QueryRowContext(ctx, `SELECT actor_kind FROM audit_events WHERE action = 'document.suggestion_apply' AND object_id = 10`).Scan(&auditKind); err != nil {
 		t.Fatal(err)
 	}
-	if title != "Electricity bill, March 2026" || state != "done" || transitionActor != "user:1" || auditKind != "user" {
-		t.Fatalf("title=%q state=%q transition_actor=%q audit_actor=%q", title, state, transitionActor, auditKind)
+	if title != "Electricity bill, March 2026" || titleOwner != "human" || state != "done" || transitionActor != "user:1" || auditKind != "user" {
+		t.Fatalf("title=%q owner=%q state=%q transition_actor=%q audit_actor=%q", title, titleOwner, state, transitionActor, auditKind)
+	}
+}
+
+func TestAutomaticTitleChangeRequiresAutomaticOwner(t *testing.T) {
+	for _, owner := range []string{"auto", "rule", "human"} {
+		t.Run(owner, func(t *testing.T) {
+			e := newEngine(t)
+			seedDocumentForChange(t, e.DB())
+			ctx := t.Context()
+			if _, err := e.DB().Write.Exec(`UPDATE documents SET title_owner=? WHERE id=10`, owner); err != nil {
+				t.Fatal(err)
+			}
+			threshold := 0.7
+			change := approvals.DocumentChange{
+				Field: "title", Value: "Model title", Source: "llm",
+				Confidence: 0.9, Threshold: &threshold, Baseline: changeBaseline(t, e),
+			}
+			log := slog.New(slog.NewTextHandler(io.Discard, nil))
+			var applied bool
+			err := e.DB().WriteTx(ctx, func(tx *sql.Tx) error {
+				var err error
+				applied, err = approvals.ApplyAutomaticDocumentChangeInTx(ctx, tx, log, 10, change)
+				return err
+			})
+			if owner == "auto" {
+				if err != nil || !applied {
+					t.Fatalf("automatic title applied=%t err=%v", applied, err)
+				}
+			} else if !errors.Is(err, approvals.ErrStaleProposal) || applied {
+				t.Fatalf("%s title applied=%t err=%v, want stale proposal", owner, applied, err)
+			}
+			var title, gotOwner string
+			if err := e.DB().Read.QueryRow(`SELECT title,title_owner FROM documents WHERE id=10`).Scan(&title, &gotOwner); err != nil {
+				t.Fatal(err)
+			}
+			wantTitle := "scan.pdf"
+			if owner == "auto" {
+				wantTitle = "Model title"
+			}
+			if title != wantTitle || gotOwner != owner {
+				t.Fatalf("title=%q owner=%q, want %q/%q", title, gotOwner, wantTitle, owner)
+			}
+		})
 	}
 }
 

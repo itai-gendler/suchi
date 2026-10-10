@@ -177,6 +177,19 @@ func runMatching(ctx context.Context, d *db.DB, actions *Registry, log *slog.Log
 				}
 			}
 			for _, a := range atm.Actions {
+				if a.Kind == "assign_title" {
+					var humanOwned bool
+					if err := tx.QueryRowContext(ctx,
+						`SELECT title_owner='human' FROM documents WHERE id=?`,
+						evCtx.DocID,
+					).Scan(&humanOwned); err != nil {
+						return err
+					}
+					if humanOwned {
+						alog.Info("automations.assign_title.skipped_human")
+						continue
+					}
+				}
 				if err := actions.execute(ctx, tx, evCtx.DocID, a); err != nil {
 					return fmt.Errorf("action %q: %w", a.Kind, err)
 				}

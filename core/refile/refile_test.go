@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/johnnybravo-xyz/suchi/core/automations"
 	"github.com/johnnybravo-xyz/suchi/core/db"
 	"github.com/johnnybravo-xyz/suchi/core/db/migrations"
 )
@@ -48,6 +49,64 @@ func TestRenderOnlyRefileSelectsOneSystemAcrossOwners(t *testing.T) {
 	}
 	if _, err := All(t.Context(), d, testActions(t), log, Options{SkipAutomations: true}); err == nil {
 		t.Fatal("unqualified refile admitted")
+	}
+}
+
+func TestRefileRefreshesRuleTitlesAndPreservesHumanTitles(t *testing.T) {
+	d, log := refileTestDB(t)
+	if _, err := d.ExecWrite(t.Context(), `
+		UPDATE documents SET title='Old rule title',title_owner='rule' WHERE id=1;
+		INSERT INTO documents(system_id,id,owner_id,original_blob,original_size,title,title_owner,jd_category_id,created_at,updated_at)
+		VALUES(1,4,1,'human',1,'Human title','human',1,0,0)
+	`); err != nil {
+		t.Fatal(err)
+	}
+	store := automations.New(d, testActions(t))
+	if _, err := store.Create(t.Context(), 1, automations.Automation{
+		Name: "retitle", Enabled: true,
+		Triggers: []automations.Trigger{{Type: automations.TriggerDocumentAdded}},
+		Actions: []automations.Action{{
+			Kind: "assign_title", Params: map[string]any{"template": "Updated rule title"},
+		}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	stats, err := All(t.Context(), d, testActions(t), log, Options{SystemID: 1, SkipRender: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stats.DocsScanned != 2 || stats.AutomationsApplied != 2 || stats.Errors != 0 {
+		t.Fatalf("refile stats=%+v", stats)
+	}
+	rows, err := d.Read.Query(`SELECT id,title,title_owner FROM documents WHERE system_id=1 ORDER BY id`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	want := []struct {
+		id    int64
+		title string
+		owner string
+	}{{1, "Updated rule title", "rule"}, {4, "Human title", "human"}}
+	i := 0
+	for ; rows.Next(); i++ {
+		if i >= len(want) {
+			t.Fatal("unexpected document")
+		}
+		var id int64
+		var title, owner string
+		if err := rows.Scan(&id, &title, &owner); err != nil {
+			t.Fatal(err)
+		}
+		if id != want[i].id || title != want[i].title || owner != want[i].owner {
+			t.Fatalf("document %d title=%q owner=%q", id, title, owner)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	if i != len(want) {
+		t.Fatalf("documents=%d, want %d", i, len(want))
 	}
 }
 

@@ -1042,10 +1042,11 @@ type MessageHeader struct {
 
 func SidecarFromMessage(h MessageHeader) sidecar.V1 {
 	s := sidecar.V1{
-		Version: sidecar.Version,
-		Title:   h.Subject,
-		Notes:   fmt.Sprintf("auto-ingested from email; sender: %s", h.From),
-		Tags:    []string{"source:email"},
+		Version:    sidecar.Version,
+		Title:      h.Subject,
+		TitleOwner: "auto",
+		Notes:      fmt.Sprintf("auto-ingested from email; sender: %s", h.From),
+		Tags:       []string{"source:email"},
 	}
 	if h.From != "" {
 		s.Correspondents = []sidecar.Correspondent{

@@ -362,6 +362,13 @@ func (w *Watcher) ingest(ctx context.Context, path string, side *sidecar.V1) (in
 	mime = mimeutil.RefineByFilename(mime, path)
 
 	title := deriveTitle(path, side)
+	titleOwner := "auto"
+	if side != nil && side.Title != "" {
+		titleOwner = "human"
+		if side.TitleOwner != "" {
+			titleOwner = side.TitleOwner
+		}
+	}
 
 	inbox, err := jd.InboxCategoryID(ctx, w.db, w.systemID)
 	if err != nil {
@@ -468,10 +475,10 @@ func (w *Watcher) ingest(ctx context.Context, path string, side *sidecar.V1) (in
 		}
 		res, err := tx.ExecContext(ctx, `
 			INSERT INTO documents(
-				system_id, owner_id, original_blob, original_size, title, mime_type,
+				system_id, owner_id, original_blob, original_size, title, title_owner, mime_type,
 				jd_category_id, added_at, created_at, updated_at, source_mtime
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-		`, w.systemID, w.ownerID, ref.SHA256, ref.Size, title, mime, catID, now, created, now, srcMTime)
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		`, w.systemID, w.ownerID, ref.SHA256, ref.Size, title, titleOwner, mime, catID, now, created, now, srcMTime)
 		if err != nil {
 			return err
 		}

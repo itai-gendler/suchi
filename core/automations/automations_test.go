@@ -3,6 +3,7 @@
 package automations_test
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"errors"
@@ -59,12 +60,12 @@ func TestApplyDocumentAdded(t *testing.T) {
 		t.Fatalf("apply: %v", err)
 	}
 
-	var title string
-	if err := d.Read.QueryRow(`SELECT title FROM documents WHERE id = ?`, docID).Scan(&title); err != nil {
+	var title, titleOwner string
+	if err := d.Read.QueryRow(`SELECT title,title_owner FROM documents WHERE id = ?`, docID).Scan(&title, &titleOwner); err != nil {
 		t.Fatal(err)
 	}
-	if want := "Landlord — housing,rent — March rent"; title != want {
-		t.Errorf("title = %q, want %q", title, want)
+	if want := "Landlord — housing,rent — March rent"; title != want || titleOwner != "rule" {
+		t.Errorf("title=%q owner=%q, want %q/rule", title, titleOwner, want)
 	}
 	var tagCount int
 	if err := d.Read.QueryRow(
@@ -73,6 +74,59 @@ func TestApplyDocumentAdded(t *testing.T) {
 	}
 	if tagCount != 2 {
 		t.Errorf("tag count = %d, want 2", tagCount)
+	}
+}
+
+func TestAssignTitlePreservesHumanTitlesAndRefreshesRuleTitles(t *testing.T) {
+	ctx := t.Context()
+	d, _ := setup(t, ctx)
+	seedUser(t, ctx, d)
+	docID := seedDoc(t, ctx, d, "Generated", "content")
+	store := automations.New(d, testActions(t))
+	rule, err := store.Create(ctx, 1, automations.Automation{
+		Name: "set title", Enabled: true,
+		Triggers: []automations.Trigger{{Type: automations.TriggerDocumentAdded}},
+		Actions: []automations.Action{{
+			Kind: "assign_title", Params: map[string]any{"template": "Rule title"},
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.Write.Exec(`UPDATE documents SET title='Human title',title_owner='human' WHERE id=?`, docID); err != nil {
+		t.Fatal(err)
+	}
+	var logs bytes.Buffer
+	log := slog.New(slog.NewTextHandler(&logs, &slog.HandlerOptions{Level: slog.LevelInfo}))
+	if err := automations.ApplyOnDocumentAdded(ctx, d, testActions(t), log, docID); err != nil {
+		t.Fatal(err)
+	}
+	var title, owner string
+	if err := d.Read.QueryRow(`SELECT title,title_owner FROM documents WHERE id=?`, docID).Scan(&title, &owner); err != nil {
+		t.Fatal(err)
+	}
+	if title != "Human title" || owner != "human" {
+		t.Fatalf("human title=%q owner=%q", title, owner)
+	}
+	if text := logs.String(); !strings.Contains(text, "automations.assign_title.skipped_human") ||
+		!strings.Contains(text, fmt.Sprintf("automation.id=%d", rule.ID)) {
+		t.Fatalf("missing skipped-human log: %s", text)
+	}
+
+	if _, err := d.Write.Exec(`
+		UPDATE documents SET title='Old rule title',title_owner='rule' WHERE id=?;
+		UPDATE automation_actions SET params_json='{"template":"Updated rule title"}' WHERE automation_id=?
+	`, docID, rule.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := automations.ApplyOnDocumentAdded(ctx, d, testActions(t), log, docID); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.Read.QueryRow(`SELECT title,title_owner FROM documents WHERE id=?`, docID).Scan(&title, &owner); err != nil {
+		t.Fatal(err)
+	}
+	if title != "Updated rule title" || owner != "rule" {
+		t.Fatalf("refreshed title=%q owner=%q", title, owner)
 	}
 }
 

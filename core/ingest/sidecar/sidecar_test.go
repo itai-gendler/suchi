@@ -12,6 +12,7 @@ func TestParseValid(t *testing.T) {
 	b := []byte(`{
 		"suchi_sidecar": 1,
 		"title": "Electricity March 2026",
+		"title_owner": "human",
 		"correspondent": "BESCOM",
 		"tags": ["utilities", "source:email"],
 		"created": "2026-03-02",
@@ -25,6 +26,9 @@ func TestParseValid(t *testing.T) {
 	}
 	if s.Title != "Electricity March 2026" {
 		t.Errorf("Title=%q", s.Title)
+	}
+	if s.TitleOwner != "human" {
+		t.Errorf("TitleOwner=%q", s.TitleOwner)
 	}
 	if s.Correspondent != "BESCOM" {
 		t.Errorf("Correspondent=%q", s.Correspondent)
@@ -63,6 +67,7 @@ func TestParseRejects(t *testing.T) {
 		"empty-object":            `{}`,
 		"wrong-version":           `{"suchi_sidecar": 99}`,
 		"malformed-json":          `{`,
+		"invalid-title-owner":     `{"suchi_sidecar": 1, "title": "x", "title_owner": "model"}`,
 	}
 	for name, body := range cases {
 		t.Run(name, func(t *testing.T) {

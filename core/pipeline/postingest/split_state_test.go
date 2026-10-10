@@ -21,7 +21,7 @@ func TestSplitChildUsesCurrentParentState(t *testing.T) {
 				VALUES(2,'other@example.test','Other','member',1,1);
 				INSERT INTO jd_categories(system_id,id,area_start,code,name,system)
 				VALUES(1,2,0,2,'Filed',0);
-				UPDATE documents SET owner_id=2,jd_category_id=2,title='Edited scan',
+				UPDATE documents SET owner_id=2,jd_category_id=2,title='Edited scan',title_owner='human',
 				    sensitivity='restricted',source_mtime=123 WHERE id=?;
 			`, parentID); err != nil {
 				t.Fatal(err)
@@ -49,13 +49,13 @@ func TestSplitChildUsesCurrentParentState(t *testing.T) {
 				t.Fatal(err)
 			}
 			var ownerID, categoryID, mtime int64
-			var title, sensitivity string
-			if err := d.Read.QueryRowContext(t.Context(), `SELECT owner_id,jd_category_id,title,sensitivity,source_mtime
-				FROM documents WHERE split_parent_id=?`, parentID).Scan(&ownerID, &categoryID, &title, &sensitivity, &mtime); err != nil {
+			var title, titleOwner, sensitivity string
+			if err := d.Read.QueryRowContext(t.Context(), `SELECT owner_id,jd_category_id,title,title_owner,sensitivity,source_mtime
+				FROM documents WHERE split_parent_id=?`, parentID).Scan(&ownerID, &categoryID, &title, &titleOwner, &sensitivity, &mtime); err != nil {
 				t.Fatal(err)
 			}
-			if ownerID != 2 || categoryID != 2 || title != "Edited scan (part 1/1)" || sensitivity != "restricted" || mtime != 123 {
-				t.Fatalf("stale child: owner=%d category=%d title=%q sensitivity=%q mtime=%d", ownerID, categoryID, title, sensitivity, mtime)
+			if ownerID != 2 || categoryID != 2 || title != "Edited scan (part 1/1)" || titleOwner != "auto" || sensitivity != "restricted" || mtime != 123 {
+				t.Fatalf("stale child: owner=%d category=%d title=%q title_owner=%q sensitivity=%q mtime=%d", ownerID, categoryID, title, titleOwner, sensitivity, mtime)
 			}
 		})
 	}

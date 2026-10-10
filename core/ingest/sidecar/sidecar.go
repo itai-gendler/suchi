@@ -9,6 +9,7 @@
 //	{
 //	  "suchi_sidecar": 1,
 //	  "title":          "Electricity bill March 2026",
+//	  "title_owner":    "human",
 //	  "correspondent":  "BESCOM",
 //	  "tags":           ["utilities", "source:email"],
 //	  "created":        "2026-03-02",
@@ -39,9 +40,9 @@ const Version = 1
 // V1 is the parsed shape. Zero-value fields mean "producer didn't
 // specify" — the ingest caller decides the default.
 type V1 struct {
-	Version int    `json:"suchi_sidecar"`
-	Title   string `json:"title,omitempty"`
-
+	Version    int    `json:"suchi_sidecar"`
+	Title      string `json:"title,omitempty"`
+	TitleOwner string `json:"title_owner,omitempty"`
 	// Correspondent preserves compatibility with single-sender producers.
 	// Correspondents takes precedence when both fields are set.
 	Correspondent string `json:"correspondent,omitempty"`
@@ -81,6 +82,9 @@ func Parse(b []byte) (*V1, error) {
 	if err := json.Unmarshal(b, &s); err != nil {
 		return nil, fmt.Errorf("sidecar: decode: %w", err)
 	}
+	if s.TitleOwner != "" && s.TitleOwner != "auto" && s.TitleOwner != "rule" && s.TitleOwner != "human" {
+		return nil, fmt.Errorf("sidecar: invalid title_owner %q", s.TitleOwner)
+	}
 	// Compat: no version key → assume flat-JSON compat shape.
 	// Every field the compat producer sets lives at the same key
 	// name, so the initial Unmarshal already populated the shared
@@ -111,7 +115,7 @@ func looksLikeFlatSidecar(b []byte) bool {
 	if err := json.Unmarshal(b, &m); err != nil {
 		return false
 	}
-	for _, k := range []string{"title", "created", "correspondent", "tags"} {
+	for _, k := range []string{"title", "title_owner", "created", "correspondent", "tags"} {
 		if _, ok := m[k]; ok {
 			return true
 		}

@@ -570,10 +570,10 @@ func importDoc(ctx context.Context, d *db.DB, cas *blob.CAS, log *slog.Logger, o
 		res, err := tx.ExecContext(ctx, `
 			INSERT INTO documents (
 				system_id, owner_id, original_blob, original_size, archive_blob, archive_size,
-				title, content, mime_type, storage_path_id,
+				title, title_owner, content, mime_type, storage_path_id,
 				jd_category_id, legacy_id, archive_serial_number,
 				added_at, created_at, updated_at
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			) VALUES (?, ?, ?, ?, ?, ?, ?, 'human', ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		`,
 			opts.SystemID, in.OwnerID, origRef.SHA256, origRef.Size, archiveBlob, archiveSize,
 			in.Fields.Title, content, mime, storagePathID,

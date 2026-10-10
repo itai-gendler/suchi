@@ -131,6 +131,93 @@ func TestAutomaticMetadataUsesThresholdWithoutLockingLanguage(t *testing.T) {
 	}
 }
 
+func TestOwnedTitlesDoNotBlockOtherAutomaticMetadata(t *testing.T) {
+	for _, owner := range []string{"human", "rule"} {
+		t.Run(owner, func(t *testing.T) {
+			ctx := t.Context()
+			d, docID := openHandlerDocument(t, "Original", "Invoice")
+			if _, err := d.Write.Exec(`UPDATE documents SET title_owner=? WHERE id=?`, owner, docID); err != nil {
+				t.Fatal(err)
+			}
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				body, _ := json.Marshal(Result{
+					Title: "Model title", Language: "de", Tags: []string{"model-tag"}, Confidence: 1,
+				})
+				_ = json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": map[string]string{"content": string(body)}}}})
+			}))
+			defer server.Close()
+			p, err := New(Config{EndpointURL: server.URL, Model: "test", ConfidenceThreshold: 0.7}, silentLog())
+			if err != nil {
+				t.Fatal(err)
+			}
+			h := NewHandler(p, d, silentLog())
+			if err := h.Handle(ctx, pluginapi.Event{SystemID: 1, Kind: Kind, DocID: docID}); err != nil {
+				t.Fatal(err)
+			}
+			var title, gotOwner, language string
+			var tags, titleReviews int
+			if err := d.Read.QueryRow(`
+				SELECT title,title_owner,languages,
+				       (SELECT COUNT(*) FROM document_tags WHERE document_id=documents.id),
+				       (SELECT COUNT(*) FROM approval_runs
+				        WHERE doc_id=documents.id AND json_extract(vars_json,'$.field')='title')
+				FROM documents WHERE id=?
+			`, docID).Scan(&title, &gotOwner, &language, &tags, &titleReviews); err != nil {
+				t.Fatal(err)
+			}
+			if title != "Original" || gotOwner != owner || lang.Primary(language) != "de" || tags != 1 || titleReviews != 0 {
+				t.Fatalf("title=%q owner=%q language=%q tags=%d title_reviews=%d", title, gotOwner, language, tags, titleReviews)
+			}
+
+			if owner == "human" {
+				if _, err := d.Write.Exec(`UPDATE documents SET title_owner='auto' WHERE id=?`, docID); err != nil {
+					t.Fatal(err)
+				}
+				if err := h.Handle(ctx, pluginapi.Event{SystemID: 1, Kind: Kind, DocID: docID}); err != nil {
+					t.Fatal(err)
+				}
+				if err := d.Read.QueryRow(`SELECT title,title_owner FROM documents WHERE id=?`, docID).Scan(&title, &gotOwner); err != nil {
+					t.Fatal(err)
+				}
+				if title != "Model title" || gotOwner != "auto" {
+					t.Fatalf("released title=%q owner=%q", title, gotOwner)
+				}
+			}
+		})
+	}
+}
+
+func TestOwnedTitleIsNotQueuedForReview(t *testing.T) {
+	ctx := t.Context()
+	d, docID := openHandlerDocument(t, "Original", "Invoice")
+	setHandlerAutoApply(t, d, false)
+	if _, err := d.Write.Exec(`UPDATE documents SET title_owner='human' WHERE id=?`, docID); err != nil {
+		t.Fatal(err)
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		body, _ := json.Marshal(Result{Title: "Model title", Confidence: 0.1})
+		_ = json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": map[string]string{"content": string(body)}}}})
+	}))
+	defer server.Close()
+	p, err := New(Config{EndpointURL: server.URL, Model: "test", ConfidenceThreshold: 0.7}, silentLog())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := NewHandler(p, d, silentLog()).Handle(ctx, pluginapi.Event{SystemID: 1, Kind: Kind, DocID: docID}); err != nil {
+		t.Fatal(err)
+	}
+	var titleReviews int
+	if err := d.Read.QueryRow(`
+		SELECT COUNT(*) FROM approval_runs
+		WHERE doc_id=? AND json_extract(vars_json,'$.field')='title'
+	`, docID).Scan(&titleReviews); err != nil {
+		t.Fatal(err)
+	}
+	if titleReviews != 0 {
+		t.Fatalf("title reviews=%d, want 0", titleReviews)
+	}
+}
+
 func TestApplicationModeDisabledDuringProviderCallQueuesReview(t *testing.T) {
 	ctx := context.Background()
 	d, docID := openHandlerDocument(t, "Original", "Due 2026-08-06")
@@ -328,7 +415,7 @@ func TestClassifierHumanReassertionsWinDuringRequest(t *testing.T) {
 		t.Fatal(err)
 	}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		if _, err := d.Write.Exec(`UPDATE documents SET title=title, languages='en', languages_locked=1 WHERE id=?; UPDATE document_tags SET classifier_owned=0 WHERE document_id=?`, docID, docID); err != nil {
+		if _, err := d.Write.Exec(`UPDATE documents SET title_owner='human', languages='en', languages_locked=1 WHERE id=?; UPDATE document_tags SET classifier_owned=0 WHERE document_id=?`, docID, docID); err != nil {
 			t.Error(err)
 		}
 		body, _ := json.Marshal(Result{Title: "Model title", Language: "de", Tags: []string{"model-tag"}, Confidence: 1})
@@ -342,13 +429,13 @@ func TestClassifierHumanReassertionsWinDuringRequest(t *testing.T) {
 	if err := NewHandler(p, d, silentLog()).Handle(ctx, pluginapi.Event{SystemID: 1, Kind: Kind, DocID: docID}); err != nil {
 		t.Fatal(err)
 	}
-	var title, language string
+	var title, titleOwner, language string
 	var proposals, humanTags int
-	if err := d.Read.QueryRow(`SELECT title,languages,(SELECT COUNT(*) FROM approval_runs WHERE doc_id=documents.id),(SELECT COUNT(*) FROM document_tags WHERE document_id=documents.id AND tag_id=99 AND classifier_owned=0) FROM documents WHERE id=?`, docID).Scan(&title, &language, &proposals, &humanTags); err != nil {
+	if err := d.Read.QueryRow(`SELECT title,title_owner,languages,(SELECT COUNT(*) FROM approval_runs WHERE doc_id=documents.id),(SELECT COUNT(*) FROM document_tags WHERE document_id=documents.id AND tag_id=99 AND classifier_owned=0) FROM documents WHERE id=?`, docID).Scan(&title, &titleOwner, &language, &proposals, &humanTags); err != nil {
 		t.Fatal(err)
 	}
-	if title != "Original" || language != "en" || proposals != 0 || humanTags != 1 {
-		t.Fatalf("human state lost: %q %q proposals=%d tags=%d", title, language, proposals, humanTags)
+	if title != "Original" || titleOwner != "human" || language != "en" || proposals != 0 || humanTags != 1 {
+		t.Fatalf("human state lost: title=%q owner=%q language=%q proposals=%d tags=%d", title, titleOwner, language, proposals, humanTags)
 	}
 }
 

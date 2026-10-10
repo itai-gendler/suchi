@@ -68,6 +68,9 @@ func TestSidecarFromMessage(t *testing.T) {
 	if s.Title != "Electricity bill March 2026" {
 		t.Errorf("Title=%q", s.Title)
 	}
+	if s.TitleOwner != "auto" {
+		t.Errorf("TitleOwner=%q", s.TitleOwner)
+	}
 	if len(s.Correspondents) != 1 || s.Correspondents[0].Role != "sender" {
 		t.Errorf("Correspondents=%+v", s.Correspondents)
 	}

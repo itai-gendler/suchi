@@ -84,6 +84,7 @@ type exportManifest struct {
 type exportSidecar struct {
 	Version        int              `json:"suchi_sidecar"`
 	Title          string           `json:"title,omitempty"`
+	TitleOwner     string           `json:"title_owner,omitempty"`
 	Created        string           `json:"created,omitempty"` // ISO 8601 from documents.created_at
 	Correspondent  string           `json:"correspondent,omitempty"`
 	Correspondents []exportCorrRole `json:"correspondents,omitempty"`
@@ -421,7 +422,7 @@ func dumpDocuments(ctx context.Context, zw *zip.Writer, d *db.DB, cas *blob.CAS,
 		args = append(args, ownerID)
 	}
 	rows, err := d.Read.QueryContext(ctx, `
-		SELECT id, title, original_blob, mime_type, created_at,
+		SELECT id, title, title_owner, original_blob, mime_type, created_at,
 		       COALESCE(sensitivity, ''), COALESCE(jd_category_id, 0)
 		  FROM documents `+where+`
 		 ORDER BY id`, args...)
@@ -435,13 +436,14 @@ func dumpDocuments(ctx context.Context, zw *zip.Writer, d *db.DB, cas *blob.CAS,
 		var (
 			id          int64
 			title       string
+			titleOwner  string
 			blobSHA     string
 			mime        sql.NullString
 			created     int64
 			sensitivity string
 			jdCatID     int64
 		)
-		if err := rows.Scan(&id, &title, &blobSHA, &mime, &created, &sensitivity, &jdCatID); err != nil {
+		if err := rows.Scan(&id, &title, &titleOwner, &blobSHA, &mime, &created, &sensitivity, &jdCatID); err != nil {
 			return written, skipped, err
 		}
 
@@ -449,6 +451,7 @@ func dumpDocuments(ctx context.Context, zw *zip.Writer, d *db.DB, cas *blob.CAS,
 		side := exportSidecar{
 			Version:     1,
 			Title:       title,
+			TitleOwner:  titleOwner,
 			Created:     time.Unix(created, 0).UTC().Format(time.RFC3339),
 			Sensitivity: sensitivity,
 			SHA256:      blobSHA,

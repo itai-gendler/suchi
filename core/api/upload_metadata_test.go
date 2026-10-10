@@ -210,7 +210,7 @@ func TestDocumentDetailExposesDeviceOCRProvenance(t *testing.T) {
 	if err := json.Unmarshal(detailRec.Body.Bytes(), &detail); err != nil {
 		t.Fatal(err)
 	}
-	if detail.Content != "server text" || detail.ContentSource != "server" || detail.EncryptionState != "decrypted" ||
+	if detail.TitleOwner != "auto" || detail.Content != "server text" || detail.ContentSource != "server" || detail.EncryptionState != "decrypted" ||
 		detail.DeviceContentConfidence == nil || *detail.DeviceContentConfidence != 0.8 ||
 		detail.DeviceOCRLanguage != "en_US" || detail.DeviceContentReceivedAt == nil {
 		t.Fatalf("detail provenance = %+v", detail)

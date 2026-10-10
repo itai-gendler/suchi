@@ -1044,9 +1044,14 @@ func (h *Handler) updateEmailParent(ctx context.Context, docID int64, e *eml.Ema
 		if !e.Date.IsZero() {
 			created = e.Date.Unix()
 		}
-		var titleArg any
 		if e.Subject != "" {
-			titleArg = e.Subject
+			if _, err := tx.ExecContext(ctx, `
+				UPDATE documents
+				SET title=?, title_owner='auto', updated_at=?
+				WHERE id=? AND title_owner='auto' AND title<>?
+			`, e.Subject, now, docID, e.Subject); err != nil {
+				return err
+			}
 		}
 		var msgIDArg any
 		if e.MessageID != "" {
@@ -1055,14 +1060,13 @@ func (h *Handler) updateEmailParent(ctx context.Context, docID int64, e *eml.Ema
 		_, err := tx.ExecContext(ctx, `
 			UPDATE documents
 			SET content = ?,
-			    title = COALESCE(?, title),
 			    created_at = ?,
 			    email_message_id = COALESCE(?, email_message_id),
 			    pipeline_version_content = ?,
 			    pipeline_version_ocr = ?,
 			    updated_at = ?
 			WHERE id = ?
-		`, body, titleArg, created, msgIDArg,
+		`, body, created, msgIDArg,
 			PipelineVersionContent, PipelineVersionOCR,
 			now, docID)
 		return err
