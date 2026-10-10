@@ -124,6 +124,29 @@ an adoption snapshot is database-only. See
 for runtime invariants and [Backup and restore](/backup-restore#upgrade-and-rollback)
 for operator procedure.
 
+### Major-version schema epochs
+
+Suchi resets migration history at major releases instead of carrying every old
+upgrade path forever:
+
+1. The final release of the outgoing major is the bridge. It accepts the last
+   canonical schema, applies one reviewed conversion, and writes an
+   application-owned marker such as `schema_state(epoch, version)`.
+2. The new major starts from one declarative baseline. Fresh installs create it
+   directly; the normal runtime drops older migrations, fingerprints, and
+   release-specific checksums. Git tags retain that history.
+3. Migrations within the new major use the application-owned epoch/version
+   marker rather than `PRAGMA user_version`. Some explicit compatibility marker
+   remains mandatory so partial or hand-edited databases fail closed.
+4. Older databases upgrade through the bridge release. If direct legacy
+   conversion becomes necessary, it belongs in a separate offline upgrade
+   command, not normal server startup.
+5. Repeat only at the next major boundary: v1 carries v1 migrations, v2 starts
+   a new epoch, and so on.
+
+The first cutover is v1.0. Until its bridge ships, the pre-1.0 compatibility
+table above remains authoritative.
+
 ### Already-adopted pre-identity archives
 
 An untagged archive may already carry `user_version = 1` and `stable-v1` while

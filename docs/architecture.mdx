@@ -446,6 +446,15 @@ core fingerprint. Core objects rebuilt during adoption remain explicitly
 included even when SQLite places their replacement rows after that extension
 boundary.
 
+Core migration history is bounded at major-version schema epochs. The outgoing
+major's bridge validates its last canonical schema and writes an
+application-owned epoch/version marker; the incoming major creates one
+declarative baseline and carries only migrations from that epoch. Direct older
+conversion stays in the bridge or a separate offline command, not steady-state
+server startup. The current pre-1.0 admission machinery remains required until
+the v1 bridge ships; [Release process](/release-process#major-version-schema-epochs)
+owns the cutover policy.
+
 Compiled extensions use `core/db.MigrationSet` and `MigrateSet`, independently of
 `PRAGMA user_version`. Each component supplies its complete ordered history from
 version 1. The reserved `_suchi_extension_migrations` table stores
