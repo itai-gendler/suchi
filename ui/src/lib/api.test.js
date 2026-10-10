@@ -106,6 +106,29 @@ test('concurrent demo uploads share one cookie-session upgrade', async () => {
   }
 })
 
+test('document upload sends its retry idempotency key', async () => {
+  const originalFetch = globalThis.fetch
+  const previousCode = systems.code
+  let request
+  systems.code = 'S01'
+  globalThis.fetch = async (path, options) => {
+    request = { path, options }
+    return new Response(JSON.stringify({ id: 41 }), {
+      status: 201,
+      headers: { 'content-type': 'application/json' },
+    })
+  }
+  try {
+    const result = await uploadDocument(new File(['scan'], 'scan.pdf'), 'S01', '123e4567-e89b-42d3-a456-426614174000')
+    assert.equal(result.id, 41)
+    assert.equal(request.path, '/api/documents/?system=S01')
+    assert.equal(request.options.headers['Idempotency-Key'], '123e4567-e89b-42d3-a456-426614174000')
+  } finally {
+    systems.code = previousCode
+    globalThis.fetch = originalFetch
+  }
+})
+
 test('version upload preserves source time and sends a stable idempotency key', async () => {
   const originalFetch = globalThis.fetch
   const previousCode = systems.code

@@ -18,8 +18,7 @@
     setupReminder: () => import('./lib/SetupReminder.svelte'),
     documents:   () => import('./routes/Documents.svelte'),
     detail:      () => import('./routes/DocumentDetail.svelte'),
-    upload:      () => import('./routes/Upload.svelte'),
-    uploadBox:   () => import('./lib/UploadBox.svelte'),
+    upload:      () => import('./lib/UploadBox.svelte'),
     search:      () => import('./routes/Search.svelte'),
     trash:       () => import('./routes/Trash.svelte'),
     views:       () => import('./routes/Views.svelte'),
@@ -33,10 +32,7 @@
 
   let mobileNavOpen = $state(false)
   let sidebarCollapsed = $state(false)
-  let uploadOpen = $state(false)
   let uploadFiles = $state([])
-  let uploadDialog = $state(null)
-  let uploadReturnFocus = null
   let dragDepth = $state(0)   // window-level drop target (except on #/upload)
   const initials = $derived((session.user?.display_name || session.user?.email || '?')
     .split(/[\s@._-]+/).filter(Boolean).slice(0, 2).map(w => w[0].toUpperCase()).join('') || '?')
@@ -286,56 +282,18 @@
   }
 
   function globalDrop(e) {
-    const user = session.user
     const handled = e.defaultPrevented
     e.preventDefault()
     dragDepth = 0
-    if (handled || uploadOpen || page === 'upload' || !user || !scopeReady) return
+    if (handled || page === 'upload' || !session.user || !scopeReady) return
     const files = [...(e.dataTransfer?.files || [])]
-    if (!files.length) return
-    openUpload()
-    uploadFiles = files
+    if (files.length) openUpload(files)
   }
 
-  function openUpload() {
+  function openUpload(files = []) {
     if (!session.user || !scopeReady) return
-    uploadFiles = []
-    uploadReturnFocus = document.activeElement
-    uploadOpen = true
-    queueMicrotask(() => uploadDialog?.focus())
-  }
-
-  function closeUpload({ refresh = false } = {}) {
-    if (!uploadOpen) return
-    uploadOpen = false
-    uploadFiles = []
-    if (refresh) refreshVisibleData()
-    queueMicrotask(() => uploadReturnFocus?.focus?.())
-  }
-
-  function onUploadKey(e) {
-    if (e.key === 'Escape') {
-      e.preventDefault()
-      e.stopPropagation()
-      closeUpload({ refresh: true })
-      return
-    }
-    if (e.key !== 'Tab' || !uploadDialog) return
-    const focusable = [...uploadDialog.querySelectorAll('button:not([disabled]), a[href], input:not([disabled]):not([type="hidden"]):not([hidden]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')]
-    if (!focusable.length) {
-      e.preventDefault()
-      uploadDialog.focus()
-      return
-    }
-    const first = focusable[0]
-    const last = focusable[focusable.length - 1]
-    if (e.shiftKey && (document.activeElement === first || document.activeElement === uploadDialog)) {
-      e.preventDefault()
-      last.focus()
-    } else if (!e.shiftKey && document.activeElement === last) {
-      e.preventDefault()
-      first.focus()
-    }
+    uploadFiles = files
+    go(filingHref('#/upload'))
   }
 
   function onKey(e) {
@@ -419,7 +377,6 @@
     setupNeeded = false
     setupError = false
     mobileNavOpen = false
-    uploadOpen = false
     uploadFiles = []
     dragDepth = 0
     toast = ''
@@ -464,7 +421,12 @@
     (!systems.introduced || route.query.get('system') === systems.code))
   $effect(() => {
     route.path
-    untrack(() => { mobileNavOpen = false; closeUpload(); visibleChatScope = null })
+    const uploadRoute = route.parts[0] === 'upload'
+    untrack(() => {
+      mobileNavOpen = false
+      visibleChatScope = null
+      if (!uploadRoute) uploadFiles = []
+    })
   })
   const page = $derived(route.parts[0] || 'dashboard')
   const documentID = $derived(/^\d+$/.test(route.parts[1] || '') && Number(route.parts[1]) > 0 ? route.parts[1] : '')
@@ -516,7 +478,7 @@
 </script>
 
 <svelte:window onkeydown={onKey}
-  ondragenter={(e) => { if (scopeReady && e.dataTransfer?.types?.includes('Files') && !uploadOpen && page !== 'upload') { e.preventDefault(); dragDepth++ } }}
+  ondragenter={(e) => { if (scopeReady && e.dataTransfer?.types?.includes('Files') && page !== 'upload') { e.preventDefault(); dragDepth++ } }}
   ondragleave={() => (dragDepth = Math.max(0, dragDepth - 1))}
   ondragover={(e) => { if (dragDepth > 0) e.preventDefault() }}
   ondrop={globalDrop} />
@@ -533,7 +495,7 @@
   <Lazy load={lazyRoutes.login} props={{ onSignedIn: () => { go('#/dashboard') } }} />
 {:else}
   {#key systems.generation}
-  <div class="shell" class:sidebar-collapsed={sidebarCollapsed} inert={chatOpen || uploadOpen}>
+  <div class="shell" class:sidebar-collapsed={sidebarCollapsed} inert={chatOpen}>
     {#if mobileNavOpen}
       <button class="mobile-nav-veil" aria-label="Close navigation" onclick={() => (mobileNavOpen = false)}></button>
     {/if}
@@ -694,7 +656,10 @@
         {:else if page === 'search'}<Lazy load={lazyRoutes.search} props={{ onScopeChange: publishChatScope }} />
         {:else if page === 'tasks'}<Lazy load={lazyRoutes.tasks} props={{ notify: scopedNotify, onCount: pollStats, canReviewIntelligence, canManageJobs: session.user?.role === 'admin' }} />
         {:else if page === 'automations'}<Lazy load={lazyRoutes.automations} props={{ notify: scopedNotify, readOnly: session.user?.role !== 'admin', jdCategories }} />
-        {:else if page === 'upload'}<Lazy load={lazyRoutes.upload} props={{ notify: scopedNotify, jdCategories }} />
+        {:else if page === 'upload'}
+          <div class="upload-wrap">
+            <Lazy load={lazyRoutes.upload} props={{ initialFiles: uploadFiles, onInitialFilesConsumed: () => (uploadFiles = []) }} />
+          </div>
         {:else if page === 'settings'}<Lazy load={lazyRoutes.settings} props={{ notify: scopedNotify, accountNotify, initialTab: route.query.get('tab'), initialSection: route.query.get('section'), initialPeople: route.query.get('people'), initialMetadata: route.query.get('metadata'), setupNeeded, setupError, onRetrySetup: refreshSetupState, onTaxonomyChanged: handleArchiveTaxonomyChanged }} />
         {:else if page === 'trash'}<Lazy load={lazyRoutes.trash} props={{ notify: scopedNotify }} />
         {:else if page === 'views'}<Lazy load={lazyRoutes.views} props={{ notify: scopedNotify, canShare: canShareViews, startCreate: route.query.get('new') === '1', createQuery: route.query.get('q') || '', createDocumentIDs: route.query.get('ids') || '', jdCategories }} />
@@ -709,20 +674,6 @@
     </div>
   </div>
 
-  {#if uploadOpen}
-    <div class="modal-veil" onclick={() => closeUpload({ refresh: true })} role="presentation">
-      <!-- svelte-ignore a11y_click_events_have_key_events -->
-      <div class="modal" bind:this={uploadDialog} onclick={(e) => e.stopPropagation()} onkeydown={onUploadKey}
-           role="dialog" aria-modal="true" aria-label="Upload documents" tabindex="-1">
-        <div class="modal-head">
-          <h3>Upload</h3>
-          <button class="btn sm" onclick={() => closeUpload({ refresh: true })}
-                  title="Close upload" aria-label="Close upload"><Icon name="x" size={13} /></button>
-        </div>
-        <Lazy load={lazyRoutes.uploadBox} props={{ notify: scopedNotify, jdCategories, initialFiles: uploadFiles }} />
-      </div>
-    </div>
-  {/if}
 
   {#if ChatDrawer}
     <ChatDrawer open={chatOpen} request={chatRequest} status={chatStatusInfo}

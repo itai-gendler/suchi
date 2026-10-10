@@ -302,8 +302,8 @@ function uploadMultipart(path, file, { system = systems.code, keepScope = true, 
   return req('POST', path, fd, { system, keepScope, headers })
 }
 
-export function uploadDocument(file, system = systems.code) {
-  return uploadMultipart('/api/documents/', file, { system })
+export function uploadDocument(file, system = systems.code, idempotencyKey = '') {
+  return uploadMultipart('/api/documents/', file, { system, idempotencyKey })
 }
 
 export function uploadDocumentVersion(id, file, idempotencyKey) {

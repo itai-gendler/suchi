@@ -4,6 +4,13 @@ Notable user-visible changes to Suchi are recorded here.
 
 ## [Unreleased]
 
+### Changed
+
+- Upload is now one full-page queue. All selected files appear immediately in
+  order with aggregate progress, plain processing states, safe retries and
+  persistent completion actions; global drops navigate to the same surface
+  instead of opening a second modal.
+
 ## [0.2.1] - 2026-10-10
 
 Source tag only: no binaries, images or GitHub release are published for this

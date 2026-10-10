@@ -21,6 +21,7 @@ async function mockUpload(page, options = {}) {
       expect(url.searchParams.get('kind')).toBe('post-')
       if (options.tasks) return options.tasks(route)
     } else if (url.pathname === '/api/documents/41') {
+      if (options.document) return options.document(route)
       body = { id: 41, title: 'Scanned receipt', content: options.content ?? 'Receipt total 42', tags: [] }
     }
     return route.fulfill({ json: body })
@@ -47,25 +48,22 @@ async function paste(page, selector = '.drop', type = 'image/png') {
   }, { selector, type, png })
 }
 
-for (const target of ['page', 'dialog']) {
-  test(`previews pasted images in the upload ${target} and sends only after confirmation`, async ({ page }) => {
-    const uploads = await mockUpload(page)
-    await page.goto(target === 'page' ? '/#/upload' : '/#/dashboard')
-    if (target === 'dialog') await page.getByRole('button', { name: 'Upload documents', exact: true }).click()
-    await expect(page.locator('.drop')).toBeVisible()
-    expect(await paste(page, target === 'dialog' ? '[role=dialog]' : '.drop')).toBe(true)
-    const preview = page.getByRole('region', { name: 'Pasted images' })
-    await expect(preview.getByRole('img', { name: 'Preview of screenshot.png' })).toBeVisible()
-    expect(uploads).toHaveLength(0)
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
-    await preview.getByRole('button', { name: 'Upload image', exact: true }).click()
-    await expect(page.getByText('Text extracted', { exact: true })).toBeVisible()
-    await expect(preview).toHaveCount(0)
-    expect(uploads).toHaveLength(1)
-    expect(uploads[0].postDataBuffer().includes(Buffer.from(png, 'base64'))).toBe(true)
-    expect(await page.evaluate(() => window.revokedURLs)).toEqual(await page.evaluate(() => window.previewURLs))
-  })
-}
+test('previews pasted images on the upload page and sends only after confirmation', async ({ page }) => {
+  const uploads = await mockUpload(page)
+  await page.goto('/#/upload')
+  await expect(page.locator('.drop')).toBeVisible()
+  expect(await paste(page)).toBe(true)
+  const preview = page.getByRole('region', { name: 'Pasted images' })
+  await expect(preview.getByRole('img', { name: 'Preview of screenshot.png' })).toBeVisible()
+  expect(uploads).toHaveLength(0)
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  await preview.getByRole('button', { name: 'Upload image', exact: true }).click()
+  await expect(page.getByText('Ready', { exact: true })).toBeVisible()
+  await expect(preview).toHaveCount(0)
+  expect(uploads).toHaveLength(1)
+  expect(uploads[0].postDataBuffer().includes(Buffer.from(png, 'base64'))).toBe(true)
+  expect(await page.evaluate(() => window.revokedURLs)).toEqual(await page.evaluate(() => window.previewURLs))
+})
 
 test('discards pasted previews and releases their URLs on navigation', async ({ page }) => {
   const uploads = await mockUpload(page)
@@ -97,6 +95,60 @@ test('leaves pastes outside upload and inside text inputs untouched', async ({ p
   expect(uploads).toHaveLength(0)
 })
 
+test('shows every selected file before the first upload finishes and preserves order', async ({ page }) => {
+  let firstUpload
+  await mockUpload(page, { upload: (route, index) => {
+    if (index === 1) {
+      firstUpload = route
+      return
+    }
+    return route.fulfill({ json: { id: 41 } })
+  } })
+  await page.goto('/#/upload')
+  await page.locator('input[type=file]').setInputFiles(['first.png', 'second.png', 'third.png'].map(file))
+  const rows = page.locator('.queue-row')
+  await expect(rows).toHaveCount(3)
+  await expect(rows.nth(0)).toContainText('first.png')
+  await expect(rows.nth(0)).toContainText('Uploading')
+  await expect(rows.nth(1)).toContainText('second.png')
+  await expect(rows.nth(1)).toContainText('Waiting')
+  await expect(rows.nth(2)).toContainText('third.png')
+  await expect(rows.nth(2)).toContainText('Waiting')
+  await expect(page.getByRole('status')).toHaveText('0 of 3 finished')
+  await firstUpload.fulfill({ json: { id: 41 } })
+  await expect(page.getByRole('status')).toContainText('3 uploaded')
+})
+
+test('a global file drop opens the full upload queue', async ({ page }) => {
+  await mockUpload(page)
+  await page.goto('/#/dashboard')
+  await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Upload documents', exact: true })).toBeEnabled()
+  await page.evaluate(({ png }) => {
+    const transfer = new DataTransfer()
+    const bytes = Uint8Array.from(atob(png), character => character.charCodeAt(0))
+    transfer.items.add(new File([bytes], 'dropped.png', { type: 'image/png' }))
+    window.dispatchEvent(new DragEvent('drop', { dataTransfer: transfer, bubbles: true, cancelable: true }))
+  }, { png })
+  await expect(page).toHaveURL(/#\/upload/)
+  await expect(page.locator('.queue-row')).toContainText('dropped.png')
+  await expect(page.getByText('Ready', { exact: true })).toBeVisible()
+})
+
+test('retries a failed upload with the same idempotency key', async ({ page }) => {
+  const uploads = await mockUpload(page, { upload: (route, index) => index === 1
+    ? route.fulfill({ status: 503, json: { error: 'Temporarily unavailable' } })
+    : route.fulfill({ json: { id: 41 } }) })
+  await page.goto('/#/upload')
+  await page.locator('input[type=file]').setInputFiles(file('retry.png'))
+  await expect(page.getByText('Upload failed', { exact: true })).toBeVisible()
+  const firstKey = uploads[0].headers()['idempotency-key']
+  expect(firstKey).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/)
+  await page.getByRole('button', { name: 'Retry', exact: true }).click()
+  await expect(page.getByText('Ready', { exact: true })).toBeVisible()
+  expect(uploads[1].headers()['idempotency-key']).toBe(firstKey)
+})
+
 test('reports uploaded, duplicate, restored, and failed files distinctly', async ({ page }) => {
   await mockUpload(page, { upload: (route, index) => {
     if (index === 4) return route.fulfill({ status: 413, json: { error: 'Too large' } })
@@ -104,28 +156,38 @@ test('reports uploaded, duplicate, restored, and failed files distinctly', async
   } })
   await page.goto('/#/upload')
   await page.locator('input[type=file]').setInputFiles(['new.png', 'duplicate.png', 'restored.png', 'large.png'].map(file))
-  await expect(page.getByText('Uploaded', { exact: true })).toBeVisible()
-  await expect(page.getByText('duplicate', { exact: true })).toBeVisible()
-  await expect(page.getByText('Restored from Trash', { exact: true })).toBeVisible()
-  await expect(page.getByText('Larger than the server allows', { exact: true })).toBeVisible()
-  await expect(page.getByText('1 uploaded · 1 restored · 1 duplicate · 1 failed', { exact: true })).toBeVisible()
-  await expect(page.getByRole('link', { name: 'Open', exact: true })).toHaveCount(3)
+  await expect(page.getByText('Ready', { exact: true })).toBeVisible()
+  await expect(page.getByText('Already in the archive · Ready', { exact: true })).toBeVisible()
+  await expect(page.getByText('Restored · Ready', { exact: true })).toBeVisible()
+  await expect(page.getByText('Choose a smaller file or ask the administrator to raise the upload limit.', { exact: true })).toBeVisible()
+  await expect(page.getByRole('status')).toHaveText('3 uploaded · 3 ready · 1 failed')
+  await expect(page.getByRole('button', { name: 'Retry', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('link', { name: 'Open document', exact: true })).toHaveCount(3)
 })
 
-test('reports no text only after extraction and classification finish', async ({ page }) => {
+test('waits for processing to finish before reading the document', async ({ page }) => {
   let jobs = [{ kind: 'post-ingest', state: 'running' }]
-  await mockUpload(page, { content: '   ', tasks: route => route.fulfill({ json: { results: jobs } }) })
+  let documentReads = 0
+  await mockUpload(page, {
+    tasks: route => route.fulfill({ json: { results: jobs } }),
+    document: route => {
+      documentReads++
+      return route.fulfill({ json: { id: 41, title: 'Blank scan', content: '   ', tags: [] } })
+    },
+  })
   await page.clock.install()
   await page.goto('/#/upload')
   await page.locator('input[type=file]').setInputFiles(file('blank.png'))
-  await expect(page.getByText('Still processing…', { exact: true })).toBeVisible()
-  await expect(page.getByText('No text found', { exact: true })).toHaveCount(0)
+  await expect(page.getByText('Uploaded · Processing', { exact: true })).toBeVisible()
+  expect(documentReads).toBe(0)
   jobs = [{ kind: 'post-classify', state: 'pending' }]
   await page.clock.runFor(2500)
-  await expect(page.getByText('Still processing…', { exact: true })).toBeVisible()
+  await expect(page.getByText('Uploaded · Processing', { exact: true })).toBeVisible()
+  expect(documentReads).toBe(0)
   jobs = []
   await page.clock.runFor(2500)
-  await expect(page.getByText('No text found', { exact: true })).toBeVisible()
+  await expect(page.getByText('Ready · No text found', { exact: true })).toBeVisible()
+  expect(documentReads).toBe(1)
 })
 
 test('keeps processing honest after automatic checks pause and allows checking again', async ({ page }) => {
@@ -140,12 +202,12 @@ test('keeps processing honest after automatic checks pause and allows checking a
     await page.clock.runFor(2500)
     await expect.poll(() => reads).toBe(check)
   }
-  await expect(page.getByText('Still processing', { exact: true })).toBeVisible()
-  await expect(page.getByText('Automatic checks paused. Server processing continues.', { exact: true })).toBeVisible()
-  await expect(page.getByText('Text extracted', { exact: true })).toHaveCount(0)
+  await expect(page.getByText('Uploaded · Processing', { exact: true })).toBeVisible()
+  await expect(page.getByText('Automatic checks paused. Processing continues on the server.', { exact: true })).toBeVisible()
+  await expect(page.getByText('Ready', { exact: true })).toHaveCount(0)
   jobs = []
   await page.getByRole('button', { name: 'Check again', exact: true }).click()
-  await expect(page.getByText('Text extracted', { exact: true })).toBeVisible()
+  await expect(page.getByText('Ready', { exact: true })).toBeVisible()
 })
 
 test('shows unavailable and failed processing without claiming completion', async ({ page }) => {
@@ -156,11 +218,11 @@ test('shows unavailable and failed processing without claiming completion', asyn
   await page.clock.install()
   await page.goto('/#/upload')
   await page.locator('input[type=file]').setInputFiles(file('failed.png'))
-  await expect(page.getByText('Processing status unavailable', { exact: true })).toBeVisible()
+  await expect(page.getByText('Could not check processing status', { exact: true })).toBeVisible()
   unavailable = false
   await page.clock.runFor(2500)
   await expect(page.getByText('Processing needs attention', { exact: true })).toBeVisible()
-  await expect(page.getByText('Text extracted', { exact: true })).toHaveCount(0)
+  await expect(page.getByText('Ready', { exact: true })).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Check again', exact: true })).toBeVisible()
 })
 
@@ -177,7 +239,7 @@ test('stops polling and ignores late document details after leaving upload', asy
   await pending.fulfill({ json: { id: 41, title: 'Late private title', content: 'Private text' } })
   await page.clock.runFor(5000)
   await expect(page.getByText('Late private title', { exact: false })).toHaveCount(0)
-  await expect(page.getByText('Text extracted', { exact: true })).toHaveCount(0)
+  await expect(page.getByText('Ready', { exact: true })).toHaveCount(0)
 })
 
 test('continues an accepted file batch after leaving upload without showing late receipts', async ({ page }) => {

@@ -3,100 +3,248 @@
   import { captureScope, scopeCurrent, scopedHash as filingHref } from './systems.svelte.js'
   import { onMount, onDestroy } from 'svelte'
   import { session } from './session.svelte.js'
-  import { uploadDocument, getDocument, patchDocument, listTasks } from './api.js'
-  import { SENSITIVITY_OPTIONS, fmtBytes } from './format.js'
+  import { uploadDocument, getDocument, listTasks } from './api.js'
+  import { fmtBytes } from './format.js'
   import { markUploaded } from './upload_bus.svelte.js'
   import Icon from './Icon.svelte'
 
-  let { notify, jdCategories = [], initialFiles = [] } = $props()
+  const CHECK_DELAY = 2500
+  const MAX_CHECKS = 40
+  const CHECK_CONCURRENCY = 4
+
+  let { initialFiles = [], onInitialFilesConsumed } = $props()
   let over = $state(false)
   let queue = $state([])
   let previews = $state([])
   let surface
   let fileInput
   let mounted = true
+  let workerRunning = false
+  let pollRunning = false
+  let pollTimer
   const scope = captureScope()
-  const timers = new Map()
+  const processingQueue = new Set()
 
-  onMount(() => { if (initialFiles.length) send([...initialFiles]) })
+  const waitingCount = $derived(queue.filter(entry => entry.state === 'waiting').length)
+  const uploadingCount = $derived(queue.filter(entry => entry.state === 'uploading').length)
+  const acceptedCount = $derived(queue.filter(entry => entry.receipt).length)
+  const readyCount = $derived(queue.filter(entry => entry.state === 'ready' || entry.state === 'no_text').length)
+  const processingCount = $derived(queue.filter(entry => entry.state === 'processing' || entry.state === 'status_unknown').length)
+  const failedCount = $derived(queue.filter(entry => entry.state === 'upload_failed' || entry.state === 'processing_failed').length)
+  const settledTransfers = $derived(queue.length - waitingCount - uploadingCount)
+  const completedCount = $derived(queue.filter(entry => entry.state === 'ready' || entry.state === 'no_text').length)
+  const summary = $derived.by(() => {
+    if (!queue.length) return ''
+    if (waitingCount || uploadingCount) {
+      const parts = [`${settledTransfers} of ${queue.length} finished`]
+      if (acceptedCount) parts.push(`${acceptedCount} uploaded`)
+      if (failedCount) parts.push(`${failedCount} failed`)
+      return parts.join(' · ')
+    }
+    const parts = [`${acceptedCount} uploaded`]
+    if (readyCount) parts.push(`${readyCount} ready`)
+    if (processingCount) parts.push(`${processingCount} processing`)
+    if (failedCount) parts.push(`${failedCount} failed`)
+    return parts.join(' · ')
+  })
+
+  onMount(() => {
+    if (!initialFiles.length) return
+    const files = [...initialFiles]
+    onInitialFilesConsumed?.()
+    enqueue(files)
+  })
+
   onDestroy(() => {
     mounted = false
     clearPreviews()
-    for (const [timer, resolve] of timers) { clearTimeout(timer); resolve() }
-    timers.clear()
+    clearTimeout(pollTimer)
+    processingQueue.clear()
   })
 
-  function current(user) { return mounted && session.user === user && scopeCurrent(scope) }
-
-  function pause() {
-    return new Promise(resolve => {
-      const timer = setTimeout(() => { timers.delete(timer); resolve() }, 2500)
-      timers.set(timer, resolve)
-    })
+  function current(user) {
+    return mounted && session.user === user && scopeCurrent(scope)
   }
 
-  // Completed jobs are omitted by the API. Read unfinished post-processing
-  // before the document so a completed extraction cannot leave a stale receipt.
-  async function hydrate(entry, user) {
-    if (entry.checking || !current(user)) return
-    entry.checking = true
-    entry.paused = false
-    for (let attempt = 0; attempt < 40 && current(user); attempt++) {
-      try {
-        const tasks = await listTasks({ include: 'jobs', doc_id: entry.id, kind: 'post-', limit: 200 })
-        if (!current(user)) return
-        const doc = await getDocument(entry.id)
-        if (!current(user)) return
-        if (!Array.isArray(tasks?.results)) throw new Error('Invalid processing response')
-        entry.doc = doc
-        const active = tasks.results.some(job => job.state === 'pending' || job.state === 'running')
-        const failed = tasks.results.some(job => job.state === 'dead')
-        entry.processing = active ? 'processing' : failed ? 'failed' : 'ready'
-        if (!active) { entry.checking = false; markUploaded(); return }
-      } catch {
-        if (!current(user)) return
-        entry.processing = 'unknown'
-      }
-      if (attempt < 39) await pause()
-    }
-    if (!current(user)) return
-    entry.checking = false
-    entry.paused = true
+  function newIdempotencyKey() {
+    const bytes = crypto.getRandomValues(new Uint8Array(16))
+    bytes[6] = (bytes[6] & 0x0f) | 0x40
+    bytes[8] = (bytes[8] & 0x3f) | 0x80
+    const hex = [...bytes].map(byte => byte.toString(16).padStart(2, '0'))
+    return `${hex.slice(0, 4).join('')}-${hex.slice(4, 6).join('')}-${hex.slice(6, 8).join('')}-${hex.slice(8, 10).join('')}-${hex.slice(10).join('')}`
   }
 
-  async function send(files) {
-    const user = session.user
-    const target = scope.code
-    const counts = { uploaded: 0, restored: 0, duplicate: 0, failed: 0 }
+  function enqueue(files) {
+    const additions = []
     for (const file of files) {
-      if (session.user !== user) return
-      const entry = $state({ name: file.name, size: file.size, status: 'uploading', doc: null, processing: 'checking', checking: false, paused: false })
-      if (mounted) queue = [entry, ...queue]
-      try {
-        const result = await uploadDocument(file, target)
-        if (session.user !== user) return
-        markUploaded(scope)
-        if (!current(user)) continue
-        entry.address = result?.jd_address
-        entry.id = result?.id
-        entry.status = result?.restored ? 'restored' : result?.deduplicated ? 'duplicate' : 'uploaded'
-        counts[entry.status]++
-        hydrate(entry, user)
-      } catch (ex) {
-        if (session.user !== user) return
-        if (!current(user)) continue
-        counts.failed++
-        entry.status = 'error'
-        entry.msg = ex.status === 413 ? 'Larger than the server allows' : ex.message || 'Upload failed'
-      }
+      if (!file?.name) continue
+      additions.push({
+        key: newIdempotencyKey(),
+        file,
+        name: file.name,
+        size: file.size,
+        system: scope.code,
+        state: 'waiting',
+        receipt: '',
+        error: '',
+        statusCode: 0,
+        doc: null,
+        id: null,
+        address: '',
+        checks: 0,
+        paused: false,
+      })
     }
-    if (current(user)) notify?.(Object.entries(counts).filter(([, count]) => count).map(([label, count]) => `${count} ${label === 'duplicate' && count > 1 ? 'duplicates' : label}`).join(' · '))
+    if (!additions.length) return
+    queue = [...queue, ...additions]
+    void processQueue()
+  }
+
+  async function processQueue() {
+    if (workerRunning) return
+    workerRunning = true
+    const user = session.user
+    while (session.user === user) {
+      const entry = queue.find(item => item.state === 'waiting')
+      if (!entry) break
+      await uploadEntry(entry, user)
+    }
+    workerRunning = false
+  }
+
+  async function uploadEntry(entry, user) {
+    entry.state = 'uploading'
+    entry.error = ''
+    entry.statusCode = 0
+    try {
+      const result = await uploadDocument(entry.file, entry.system, entry.key)
+      if (session.user !== user) return
+      markUploaded(scope)
+      entry.address = result?.jd_address || ''
+      entry.id = result?.id
+      entry.receipt = result?.restored ? 'restored' : result?.deduplicated ? 'duplicate' : 'uploaded'
+      entry.file = null
+      entry.state = 'processing'
+      if (current(user)) watchProcessing(entry)
+    } catch (ex) {
+      if (session.user !== user) return
+      entry.state = 'upload_failed'
+      entry.statusCode = ex.status || 0
+      entry.error = ex.status === 413
+        ? 'Choose a smaller file or ask the administrator to raise the upload limit.'
+        : ex.message || 'The upload did not finish.'
+    }
+  }
+
+  function watchProcessing(entry) {
+    entry.checks = 0
+    entry.paused = false
+    entry.state = 'processing'
+    processingQueue.add(entry)
+    schedulePoll(0)
+  }
+
+  function schedulePoll(delay = CHECK_DELAY) {
+    if (!mounted || pollRunning || pollTimer || !processingQueue.size) return
+    pollTimer = setTimeout(() => {
+      pollTimer = null
+      void pollProcessing()
+    }, delay)
+  }
+
+  async function pollProcessing() {
+    if (!mounted || pollRunning) return
+    pollRunning = true
+    const user = session.user
+    const entries = [...processingQueue].slice(0, CHECK_CONCURRENCY)
+    await Promise.all(entries.map(entry => checkProcessing(entry, user)))
+    pollRunning = false
+    if (mounted && processingQueue.size) schedulePoll()
+  }
+
+  function pauseChecks(entry) {
+    if (entry.checks < MAX_CHECKS) return false
+    processingQueue.delete(entry)
+    entry.paused = true
+    return true
+  }
+
+  async function checkProcessing(entry, user) {
+    if (!current(user)) {
+      processingQueue.delete(entry)
+      return
+    }
+    entry.checks++
+    try {
+      const tasks = await listTasks({ include: 'jobs', doc_id: entry.id, kind: 'post-', limit: 200 })
+      if (!current(user)) return
+      if (!Array.isArray(tasks?.results)) throw new Error('Invalid processing response')
+      const active = tasks.results.some(job => job.state === 'pending' || job.state === 'running')
+      const failed = tasks.results.some(job => job.state === 'dead')
+      if (active) {
+        entry.state = 'processing'
+        pauseChecks(entry)
+        return
+      }
+      const doc = await getDocument(entry.id)
+      if (!current(user)) return
+      processingQueue.delete(entry)
+      entry.doc = doc
+      entry.state = failed ? 'processing_failed' : doc?.content?.trim() ? 'ready' : 'no_text'
+      markUploaded()
+    } catch {
+      if (!current(user)) return
+      entry.state = 'status_unknown'
+      pauseChecks(entry)
+    }
+  }
+
+  function retry(entry) {
+    if (!entry.file || entry.statusCode === 413) return
+    entry.state = 'waiting'
+    entry.error = ''
+    void processQueue()
+  }
+
+  function remove(entry) {
+    processingQueue.delete(entry)
+    queue = queue.filter(item => item !== entry)
+  }
+
+  function clearCompleted() {
+    queue = queue.filter(entry => entry.state !== 'ready' && entry.state !== 'no_text')
+  }
+
+  function statusLabel(entry) {
+    switch (entry.state) {
+      case 'waiting': return 'Waiting'
+      case 'uploading': return 'Uploading'
+      case 'processing': return entry.receipt === 'duplicate'
+        ? 'Already in the archive · Processing'
+        : entry.receipt === 'restored'
+          ? 'Restored · Processing'
+          : 'Uploaded · Processing'
+      case 'ready': return entry.receipt === 'duplicate'
+        ? 'Already in the archive · Ready'
+        : entry.receipt === 'restored'
+          ? 'Restored · Ready'
+          : 'Ready'
+      case 'no_text': return entry.receipt === 'duplicate'
+        ? 'Already in the archive · No text found'
+        : entry.receipt === 'restored'
+          ? 'Restored · No text found'
+          : 'Ready · No text found'
+      case 'upload_failed': return 'Upload failed'
+      case 'processing_failed': return 'Processing needs attention'
+      case 'status_unknown': return 'Could not check processing status'
+      default: return ''
+    }
   }
 
   function onDrop(event) {
     event.preventDefault()
     over = false
-    send([...(event.dataTransfer?.files || [])])
+    enqueue([...(event.dataTransfer?.files || [])])
   }
 
   function clearPreviews() {
@@ -106,7 +254,7 @@
 
   function onPaste(event) {
     const target = event.target
-    if (!surface?.contains(target) && !surface?.closest('[role="dialog"]')?.contains(target)) return
+    if (!surface?.contains(target)) return
     if (target.closest?.('input, textarea, select, [contenteditable]:not([contenteditable="false"])')) return
     const files = [...(event.clipboardData?.files || [])].filter(file => file.type.startsWith('image/'))
     if (!files.length) return
@@ -117,40 +265,39 @@
   function uploadPasted() {
     const files = previews.map(preview => preview.file)
     clearPreviews()
-    send(files)
-  }
-
-  // Managed metadata stays read-only here; these fields can be safely changed
-  // without overwriting classifier or human-maintained values.
-  async function patch(entry, body, message) {
-    const user = session.user
-    if (!entry.id) return
-    try {
-      await patchDocument(entry.id, body)
-      if (!current(user)) return
-      const doc = await getDocument(entry.id)
-      if (!current(user)) return
-      entry.doc = doc
-      markUploaded()
-      if (message) notify?.(message)
-    } catch (ex) { if (current(user)) notify?.(ex.message || 'Update failed') }
+    enqueue(files)
   }
 </script>
 
 <svelte:window onpaste={onPaste} />
 
-<div bind:this={surface}>
-  <div class="drop" class:over
-       role="button" tabindex="0" aria-label="Upload documents"
+<div class="upload-surface" bind:this={surface}>
+  {#if queue.length}
+    <section class="queue-summary" aria-label="Upload progress">
+      <div>
+        <b>Upload files</b>
+        <span role="status" aria-live="polite" aria-atomic="true">{summary}</span>
+      </div>
+      <progress max={queue.length} value={settledTransfers} aria-label={summary}></progress>
+    </section>
+  {/if}
+
+  <div class="drop" class:over class:compact={queue.length > 0}
+       role="button" tabindex="0" aria-label="Add files"
        ondragover={(event) => { event.preventDefault(); over = true }}
        ondragleave={() => (over = false)}
        ondrop={onDrop}
        onclick={() => fileInput.click()}
        onkeydown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); fileInput.click() } }}>
-    <Icon name="upload" size={44} />
-    <p style="margin:12px 0 4px;font-size:1.05rem"><b>Drop documents here</b> or click to choose</p>
-    <p style="margin:0;font-size:.8rem">PDF, office docs, images, email files. Or focus here and paste a screenshot.</p>
-    <input bind:this={fileInput} type="file" multiple hidden onchange={(event) => { const files = [...event.target.files]; event.target.value = ''; send(files) }} />
+    <Icon name="upload" size={queue.length ? 20 : 44} />
+    {#if queue.length}
+      <b>Add more files</b>
+    {:else}
+      <p class="drop-title"><b>Drop documents here</b> or click to choose</p>
+      <p class="drop-help">PDF, office documents, images, and email files. You can also focus here and paste a screenshot.</p>
+    {/if}
+    <input bind:this={fileInput} type="file" multiple hidden
+      onchange={(event) => { const files = [...event.target.files]; event.target.value = ''; enqueue(files) }} />
   </div>
 
   {#if previews.length}
@@ -165,7 +312,7 @@
           </figure>
         {/each}
       </div>
-      <div class="up-detail">
+      <div class="queue-actions">
         <button class="btn primary" onclick={uploadPasted}>Upload {previews.length === 1 ? 'image' : `${previews.length} images`}</button>
         <button class="btn" onclick={clearPreviews}>Discard</button>
       </div>
@@ -173,71 +320,83 @@
   {/if}
 
   {#if queue.length}
-    <div class="upload-queue" aria-label="Upload results">
-      {#each queue as entry}
-        <div class="card up-card">
-          <div class="irow" style="padding:0;border:0">
-            <span class="dot" class:ok={entry.status === 'uploaded' || entry.status === 'restored'} class:warn={entry.status === 'duplicate'} class:danger={entry.status === 'error'}></span>
-            <span class="title grow" title={entry.name}>{entry.name}</span>
-            <span class="sub">{fmtBytes(entry.size)}</span>
-          </div>
-          <div class="up-detail" aria-live="polite">
-            {#if entry.status === 'uploading'}<span class="pill">Uploading…</span>
-            {:else if entry.status === 'error'}<span class="pill danger">Upload failed</span><span class="receipt-message">{entry.msg}</span>
-            {:else}
-              {#if entry.status === 'duplicate'}
-                <span class="pill warn">duplicate</span><span class="sub">Already in your archive; source recorded.</span>
-              {:else if entry.status === 'restored'}
-                <span class="pill">Restored from Trash</span><span class="sub">Existing document and metadata kept.</span>
-              {:else}<span class="pill">Uploaded</span>{/if}
-              {#if entry.processing === 'ready'}
-                <span class="pill" class:warn={!entry.doc?.content?.trim()}>{entry.doc?.content?.trim() ? 'Text extracted' : 'No text found'}</span>
-              {:else if entry.processing === 'failed'}
-                <span class="pill danger">Processing needs attention</span>
-              {:else if entry.processing === 'unknown'}
-                <span class="pill warn">Processing status unavailable</span>
-              {:else}<span class="pill">Still processing{entry.checking ? '…' : ''}</span>{/if}
-              {#if entry.paused}<span class="sub">Automatic checks paused. Server processing continues.</span>{/if}
-              {#if !entry.checking && (entry.paused || entry.processing === 'failed')}
-                <button class="btn sm" onclick={() => hydrate(entry, session.user)}>Check again</button>
-              {/if}
-            {/if}
-          </div>
-          {#if entry.id}
-            <div class="up-detail">
-              {#if entry.doc?.jd_address || entry.address}<span class="chip">{entry.doc?.jd_address || entry.address}</span>{/if}
-              {#if entry.doc?.title && entry.doc.title !== entry.name}<span class="receipt-message">“{entry.doc.title}”</span>{/if}
-              {#each entry.doc?.tags?.slice(0, 3) || [] as tag}<span class="pill">{tag}</span>{/each}
-              {#if entry.doc?.correspondents?.length}<span class="sub">from {entry.doc.correspondents.map(c => c.name || c).join(', ')}</span>{/if}
-              <span class="spacer"></span>
-              <select class="input" style="max-width:180px;padding:5px 8px;font-size:.8rem"
-                      aria-label="File under" value={entry.doc?.jd_category_id ?? ''}
-                      onchange={(event) => event.target.value && patch(entry, { jd_category_id: Number(event.target.value) }, 'Filed')}>
-                <option value="" disabled>file under…</option>
-                {#each jdCategories as category}<option value={category.id}>{category.code} {category.name}</option>{/each}
-              </select>
-              <select class="input" style="max-width:140px;padding:5px 8px;font-size:.8rem"
-                      aria-label="Sensitivity" value={entry.doc?.sensitivity ?? ''}
-                      onchange={(event) => patch(entry, { sensitivity: event.target.value }, 'Sensitivity set')}>
-                <option value="">sensitivity…</option>
-                {#each SENSITIVITY_OPTIONS as option (option.value)}<option value={option.value}>{option.label}</option>{/each}
-              </select>
-              <a class="btn sm" href={filingHref(`#/doc/${entry.id}`)}>Open</a>
+    <section class="upload-queue" aria-label="Files">
+      {#each queue as entry (entry.key)}
+        <article class="card queue-row">
+          <span class="state-dot"
+                class:active={entry.state === 'uploading' || entry.state === 'processing'}
+                class:ok={entry.state === 'ready' || entry.state === 'no_text'}
+                class:danger={entry.state === 'upload_failed' || entry.state === 'processing_failed'}
+                aria-hidden="true"></span>
+          <div class="file-copy">
+            <b title={entry.name}>{entry.name}</b>
+            <div class="file-meta">
+              <span class="row-status">{statusLabel(entry)}</span>
+              <span>{fmtBytes(entry.size)}</span>
             </div>
-          {/if}
-        </div>
+            {#if entry.doc?.title && entry.doc.title !== entry.name}
+              <span title={entry.doc.title}>Filed as “{entry.doc.title}”</span>
+            {/if}
+            {#if entry.error}<span class="row-error" role="alert">{entry.error}</span>{/if}
+            {#if entry.paused}<span>Automatic checks paused. Processing continues on the server.</span>{/if}
+          </div>
+          <div class="row-actions">
+            {#if entry.state === 'upload_failed' && entry.statusCode !== 413}
+              <button class="btn sm" onclick={() => retry(entry)}>Retry</button>
+            {/if}
+            {#if entry.state === 'upload_failed'}
+              <button class="btn sm" onclick={() => remove(entry)}>Remove</button>
+            {/if}
+            {#if entry.id && (entry.paused || entry.state === 'processing_failed')}
+              <button class="btn sm" onclick={() => watchProcessing(entry)}>Check again</button>
+            {/if}
+            {#if entry.id}<a class="btn sm" href={filingHref(`#/doc/${entry.id}`)}>Open document</a>{/if}
+          </div>
+        </article>
       {/each}
+    </section>
+
+    <div class="queue-footer">
+      <button class="btn" disabled={!completedCount} onclick={clearCompleted}>Clear completed</button>
+      <a class="btn" href={filingHref('#/documents')}>View documents</a>
     </div>
   {/if}
 </div>
 
 <style>
-  .upload-queue { margin-top:16px;display:flex;flex-direction:column;gap:10px }
-  .receipt-message { overflow-wrap:anywhere;min-width:0 }
-  .pasted { margin-top:16px;padding:16px }
+  .upload-surface { display:flex;flex-direction:column;gap:14px;max-width:760px;margin:0 auto }
+  .queue-summary { position:sticky;top:0;z-index:4;display:grid;gap:9px;padding:13px 16px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--surface);box-shadow:var(--shadow) }
+  .queue-summary div { display:flex;align-items:baseline;justify-content:space-between;gap:16px }
+  .queue-summary span { color:var(--muted);font-size:.82rem;text-align:right }
+  progress { width:100%;height:8px;accent-color:var(--accent) }
+  .drop.compact { display:flex;align-items:center;justify-content:center;gap:9px;padding:12px 16px }
+  .drop-title { margin:12px 0 4px;font-size:1.05rem }
+  .drop-help { margin:0;font-size:.8rem }
+  .upload-queue { display:flex;flex-direction:column;gap:8px }
+  .queue-row { display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:12px;padding:13px 15px }
+  .state-dot { width:10px;height:10px;border-radius:50%;background:var(--line-strong) }
+  .state-dot.active { background:var(--accent);animation:pulse 1.2s infinite }
+  .state-dot.ok { background:var(--ok) }
+  .state-dot.danger { background:var(--danger) }
+  .file-copy { display:flex;min-width:0;flex-direction:column;gap:3px }
+  .file-copy b,.file-copy span { overflow:hidden;text-overflow:ellipsis;white-space:nowrap }
+  .file-copy span { color:var(--muted);font-size:.8rem }
+  .file-meta { display:flex;align-items:center;gap:7px;min-width:0 }
+  .file-meta span + span::before { content:'·';margin-right:7px }
+  .file-copy .row-status { color:var(--ink);font-weight:600 }
+  .file-copy .row-error { color:var(--danger);white-space:normal }
+  .row-actions,.queue-actions,.queue-footer { display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap }
+  .pasted { padding:16px }
   .pasted .sub { margin:6px 0 12px;color:var(--muted);font-size:.82rem }
   .pasted-images { display:flex;flex-wrap:wrap;gap:12px;margin-bottom:14px }
   figure { margin:0;max-width:100% }
-  figure img { display:block;max-width:100%;width:180px;height:140px;object-fit:contain;border:1px solid var(--line);border-radius:6px }
-  figcaption { max-width:180px;font-size:.75rem;overflow-wrap:anywhere;color:var(--muted);margin-top:5px }
+  figure img { display:block;width:180px;max-width:100%;height:140px;object-fit:contain;border:1px solid var(--line);border-radius:6px }
+  figcaption { max-width:180px;margin-top:5px;color:var(--muted);font-size:.75rem;overflow-wrap:anywhere }
+  @media (max-width:620px) {
+    .queue-summary { position:static }
+    .queue-summary div { align-items:flex-start;flex-direction:column;gap:3px }
+    .queue-summary span { text-align:left }
+    .queue-row { grid-template-columns:auto minmax(0,1fr) }
+    .row-actions { grid-column:2;justify-content:flex-start }
+  }
 </style>

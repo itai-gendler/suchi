@@ -463,12 +463,15 @@ Import shared values instead of duplicating them. Update the owning feature guid
 
 ## State and interaction
 
-`UploadBox.svelte` owns picker, drop and confirmed paste batches through one path.
-The shell ignores drops handled by the dialog/Upload screen. Accepted batches
-keep their starting system across navigation while the account remains unchanged;
-old receipts cannot advance the new system's upload-refresh revision. Processing
-task reads precede document reads. Unmount releases polling timers and local paste
-URLs; timeouts pause checks without claiming completion.
+`UploadBox.svelte` owns the full-page picker, drop, confirmed paste and visible
+queue. The shell routes top-bar, command and global-drop entry points there; no
+second modal owns upload state. A batch records every file synchronously in
+selection order and sends them sequentially to its captured system. Each entry
+keeps one idempotency key for retry and drops its `File` after acceptance.
+A single bounded scheduler checks processing tasks before fetching terminal
+document details, so active jobs do not cause repeated document reads. Navigation
+stops receipt polling and releases paste URLs while already accepted transfers
+continue for the same account.
 
 Share creation displays its URL before clipboard access. `lib/clipboard.js`
 reports failures so that URL stays manually selectable. Late creation/copy feedback

@@ -75,17 +75,19 @@ Query suggestions appear in Search/Documents fields, separately from this menu.
 Date controls use the locale-independent ISO `yyyy-mm-dd` format. Controls that
 also capture a time append `Thh:mm`.
 
-Drop files on Upload or anywhere on an available archive page to open per-file
-results. New uploads wait until the selected system is available. Each drop
-uploads once and refreshes visible lists after success. In Upload, focus the drop
-area to paste a screenshot; **Upload image** confirms sending and **Discard**
-removes the local preview. Ordinary text-field pasting stays unchanged.
+**Upload** opens one full-page queue from the top bar, command menu or a file
+drop anywhere in the archive. Every selected file appears immediately, in order,
+as **Waiting**, **Uploading**, **Processing**, **Ready** or a clear failure.
+The summary and progress bar count completed transfers; each accepted row links
+to its document.
 
-Results distinguish new, duplicate, restored and failed files. **Text extracted**
-or **No text found** appears after processing; errors stay explicit. Automatic
-checks pause after about 100 seconds; **Check again** resumes them. Accepted
-batches continue through navigation while the same account remains signed in;
-closing the browser can interrupt them.
+Network and server failures retain the file for **Retry**. An oversized file
+instead asks for a smaller file or a changed server limit. Processing checks do
+not claim completion when the server is unavailable; **Check again** resumes a
+paused or failed check. Focus the drop area to paste a screenshot, then choose
+**Upload image** or **Discard**. Accepted batches keep their original filing
+system and continue while the same account remains signed in; closing the browser
+can interrupt them.
 
 Document/selection sharing displays the created link. **Copy link** retries without
 creating another; blocked clipboard access leaves the URL selectable. **Show QR
