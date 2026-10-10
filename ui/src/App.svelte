@@ -420,11 +420,11 @@
   const scopeReady = $derived(systems.ready && systems.user === session.user &&
     (!systems.introduced || route.query.get('system') === systems.code))
   $effect(() => {
-    route.path
+    const path = route.path
     const uploadRoute = route.parts[0] === 'upload'
     untrack(() => {
       mobileNavOpen = false
-      visibleChatScope = null
+      if (visibleChatScope?.path !== path) visibleChatScope = null
       if (!uploadRoute) uploadFiles = []
     })
   })
@@ -685,7 +685,7 @@
 {/if}
 
 {#if accountToast}
-  <div class="toast" role="status" aria-live="polite">{accountToast}</div>
+  <div class="toast" role="status" aria-live="polite" aria-atomic="true">{accountToast}</div>
 {:else if toast}
-  <div class="toast">{toast}</div>
+  <div class="toast" role="status" aria-live="polite" aria-atomic="true">{toast}</div>
 {/if}

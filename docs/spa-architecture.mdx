@@ -184,10 +184,21 @@ Documents/Inbox derive filters, dates and pagination from the hash, without a pa
 cache. Links preserve route/query; filter controls remove `page`. Documents owns
 a dedicated **Shared by me** button that toggles `share_link=active`; it means
 unexpired, unrevoked links created by the current user, not documents merely
-visible through ACLs. A bounded footer fits mobile. Invalid/out-of-range pages
-use `go(hash, { replace: true })` to sync route state without creating
-Back-button loops. Verify with:
-`cd ui && bun run e2e --grep 'document pagination|inbox pagination|active share links'`.
+visible through ACLs. At narrow widths, the tag, correspondent, share,
+sensitivity and date controls sit behind one screen-local disclosure; URL-derived
+chips remain visible and **Clear all** removes only those controls.
+
+The route publishes that same normalized hash scope to archive research before
+issuing its list request. The shell clears a published scope only when its route
+path no longer matches; same-path query updates replace it rather than briefly
+falling back to all-archive scope.
+
+Document result containers are noninteractive. Each has one title-labelled
+document link plus sibling selection and quick-action controls; per-row filing
+controls include the document title in their accessible names. A bounded footer
+fits mobile. Invalid/out-of-range pages use `go(hash, { replace: true })` to sync
+route state without creating Back-button loops. Verify with:
+`cd ui && bun run e2e --grep 'document pagination|document controls|mobile document filters|active share links'`.
 
 Trash uses `#/doc/{id}` and the same detail owner. Server `trashed_at`, `deletes_at`
 and `owner_id` select read-only recovery; skip versions, similarity and access
@@ -435,9 +446,10 @@ new account scope; failure leaves unrelated requests valid.
 After success, the screen reloads `/api/whoami`, waits for the principal/scope
 reset tick, and uses the shell's separate account notification channel. That
 channel is deliberately outside the filing-scoped subtree, so **Sign-in email
-changed** survives account/system reset and is announced with `role=status` and
-`aria-live=polite`. Scoped token, pairing, mailbox, and vault feedback continues
-through the ordinary notifier.
+changed** survives account/system reset. Both account and ordinary transient
+notices use an atomic polite `role=status`; actionable failures remain persistent
+inside their owning screen. Scoped token, pairing, mailbox, and vault feedback
+continues through the ordinary notifier.
 
 `App.svelte` allowlists only `identity_bound`, `email_changed`, and
 `email_checked` from the OIDC callback's `account_notice` query parameter. It

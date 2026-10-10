@@ -19,6 +19,10 @@ Notable user-visible changes to Suchi are recorded here.
   separates active-link controls from paged expired/revoked history. Public
   ingress exposes no application, API, asset, health or metrics routes;
   recipient reads no longer write an unused view counter.
+- Document list and grid controls are no longer nested inside document links.
+  Filters have accessible names; phones collapse them behind **Filters (n)**
+  while keeping active chips and **Clear all** visible. Transient confirmations
+  are now announced politely by assistive technology.
 
 ## [0.2.1] - 2026-10-10
 

@@ -2353,11 +2353,14 @@ test('resets document pagination when route filters change', async ({ page }) =>
   await expect(page.getByText(/Page 1 of 2/)).toBeVisible()
 })
 
-test('filters Documents by active share links', async ({ page }) => {
+test('filters Documents by active share links', async ({ page }, testInfo) => {
   await mockAPI(page, {
     documents: [{ id: 42, title: 'Shared receipt', created_at: 1780000000, tags: [] }],
   })
   await page.goto('/#/documents?q=receipt&page=2')
+  if (testInfo.project.name === 'mobile') {
+    await page.getByRole('button', { name: 'Filters', exact: true }).click()
+  }
 
   const filtered = page.waitForRequest(request => {
     const url = new URL(request.url())
@@ -2369,8 +2372,79 @@ test('filters Documents by active share links', async ({ page }) => {
   await filtered
   await expect(page).toHaveURL(/#\/documents\?q=receipt&share_link=active$/)
 
-  await page.getByRole('button', { name: 'Shared by me' }).click()
+  await page.getByRole('button', { name: 'Shared by me', exact: true }).click()
   await expect(page).toHaveURL(/#\/documents\?q=receipt$/)
+})
+
+test('keeps document controls outside named document links and labels filters', async ({ page }, testInfo) => {
+  await mockAPI(page, {
+    tags: [{ id: 7, name: 'Tax' }],
+    correspondents: [{ id: 8, name: 'Power company' }],
+    documents: [{
+      id: 42, title: 'Electricity bill', created_at: 1780000000, tags: ['Tax'],
+      jd_category_code: 13, jd_category_name: 'Utilities', jd_area_name: 'Home',
+    }],
+  })
+  await page.goto('/#/documents')
+  if (testInfo.project.name === 'mobile') {
+    await page.getByRole('button', { name: 'Filters', exact: true }).click()
+  }
+
+  await expect(page.getByLabel('Filter by tag')).toBeVisible()
+  await expect(page.getByLabel('Filter by correspondent')).toBeVisible()
+  await expect(page.getByLabel('Filter by sensitivity')).toBeVisible()
+
+  let row = page.locator('.document-row').filter({ hasText: 'Electricity bill' })
+  let link = row.getByRole('link', { name: 'Electricity bill', exact: true })
+  await expect(link).toBeVisible()
+  await expect(link.locator('input, select, button')).toHaveCount(0)
+  await expect(row.getByLabel('Select Electricity bill', { exact: true })).toBeVisible()
+  await expect(row.getByLabel('Refile Electricity bill', { exact: true })).toHaveCount(1)
+  if (testInfo.project.name === 'desktop') {
+    await page.locator('body').press('j')
+    await row.hover()
+    const trash = row.getByRole('button', { name: 'Trash Electricity bill', exact: true })
+    await trash.focus()
+    await trash.press('Enter')
+    await expect(page.getByRole('alertdialog', { name: 'Move document to trash?' })).toBeVisible()
+    await page.getByRole('button', { name: 'Cancel', exact: true }).click()
+    await expect(page).toHaveURL(/#\/documents$/)
+  }
+
+  await page.getByRole('button', { name: 'Grid', exact: true }).click()
+  row = page.locator('.document-card').filter({ hasText: 'Electricity bill' })
+  link = row.getByRole('link', { name: 'Electricity bill', exact: true })
+  await expect(link).toBeVisible()
+  await expect(link.locator('input, select, button')).toHaveCount(0)
+  await expect(row.getByLabel('Select Electricity bill', { exact: true })).toBeVisible()
+})
+
+test('collapses mobile document filters while retaining active chips and Clear all', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'mobile', 'mobile disclosure regression')
+  await mockAPI(page, {
+    tags: [{ id: 7, name: 'Tax' }],
+    correspondents: [{ id: 8, name: 'Power company' }],
+    documents: [{ id: 42, title: 'Electricity bill', created_at: 1780000000, tags: [] }],
+  })
+  await page.goto('/#/documents?tags__id__in=7&correspondents__id__in=8&sensitivity=restricted&share_link=active&created_at__gte=1780000000')
+
+  const disclosure = page.getByRole('button', { name: 'Filters (5)', exact: true })
+  await expect(disclosure).toBeVisible()
+  await expect(disclosure).toHaveAttribute('aria-expanded', 'false')
+  await expect(page.getByLabel('Filter by tag')).toBeHidden()
+  const chips = page.getByRole('group', { name: 'Active document filters' })
+  await expect(chips).toContainText('Tag: Tax')
+  await expect(chips).toContainText('Correspondent: Power company')
+  await expect(chips).toContainText('Restricted')
+  await expect(chips).toContainText('Shared by me')
+
+  await disclosure.click()
+  await expect(page.getByLabel('Filter by tag')).toBeVisible()
+  await expect(page.getByLabel('Filter by tag')).toHaveValue('7')
+  await expect(page.getByLabel('Filter by correspondent')).toHaveValue('8')
+  await chips.getByRole('button', { name: 'Clear all', exact: true }).click()
+  await expect(page).toHaveURL(/#\/documents$/)
+  await expect(chips).toHaveCount(0)
 })
 
 test('keeps full-width search above one wide-screen options row', async ({ page }, testInfo) => {
@@ -2458,12 +2532,15 @@ test('document pagination survives detail navigation, history and reload', async
   await pager.screenshot({ path: testInfo.outputPath('document-pagination.png') })
 })
 
-test('document pagination preserves dates and resets on filter or sort changes', async ({ page }) => {
+test('document pagination preserves dates and resets on filter or sort changes', async ({ page }, testInfo) => {
   await mockAPI(page, {
     documentsCount: 743,
     documents: [{ id: 42, title: 'Receipt', created_at: 1780000000, tags: [] }],
   })
   await page.goto('/#/documents?page=3')
+  if (testInfo.project.name === 'mobile') {
+    await page.getByRole('button', { name: 'Filters', exact: true }).click()
+  }
   await page.getByRole('button', { name: 'Any date', exact: true }).click()
   const dateFrom = page.getByLabel('Added on or after', { exact: true })
   await expect(dateFrom).toHaveAttribute('type', 'text')
@@ -2478,6 +2555,9 @@ test('document pagination preserves dates and resets on filter or sort changes',
   const pager = page.getByRole('navigation', { name: 'Document pages' })
   await pager.getByRole('link', { name: 'Page 3', exact: true }).click()
   await page.reload()
+  if (testInfo.project.name === 'mobile') {
+    await page.getByRole('button', { name: 'Filters (1)', exact: true }).click()
+  }
   const activeDateRange = page.getByRole('button', { name: '2026-09-01 – 2026-09-30', exact: true })
   await expect(activeDateRange).toBeVisible()
   await activeDateRange.click()
@@ -3893,7 +3973,7 @@ for (const screen of ['list', 'detail']) {
         : page.getByRole('dialog', { name: 'Share document' })
       const link = panel.getByRole('textbox', { name: 'Share link', exact: true })
       await expect(link).toHaveValue(url)
-      await expect(page.locator('.toast')).toHaveText(clipboard === 'available'
+      await expect(page.locator('.toast[role="status"][aria-live="polite"][aria-atomic="true"]')).toHaveText(clipboard === 'available'
         ? 'Share link copied'
         : 'Share link ready. Select the link and copy it manually.')
       expect(creations).toHaveLength(1)
@@ -3912,7 +3992,7 @@ for (const screen of ['list', 'detail']) {
         })
       })
       await panel.getByRole('button', { name: 'Copy link', exact: true }).click()
-      await expect(page.locator('.toast')).toHaveText('Share link copied')
+      await expect(page.locator('.toast[role="status"][aria-live="polite"][aria-atomic="true"]')).toHaveText('Share link copied')
       expect(await page.evaluate(() => window.copiedLinks)).toEqual(clipboard === 'available' ? [url, url] : [url])
       expect(creations).toHaveLength(1)
     })
@@ -5045,7 +5125,7 @@ for (const [code, message] of Object.entries({
   })
 }
 
-test('publishes exact Inbox, Documents, and Search scopes to archive research', async ({ page }) => {
+test('publishes exact Inbox, Documents, and Search scopes to archive research', async ({ page }, testInfo) => {
   const chatRequests = []
   const inbox = { id: 9, area_code: 10, area_name: 'Intake', code: 10, name: 'Inbox', system: true }
   await mockAPI(page, {
@@ -5071,11 +5151,20 @@ test('publishes exact Inbox, Documents, and Search scopes to archive research', 
   expect(chatRequests.at(-1).scope).toMatchObject({ jd_category_id: 9, query: '' })
 
   await page.goto('/#/documents?q=needle&jd=6&document_ids=41,42&tags__id__in=5,8&correspondents__id__in=7&sensitivity=internal&share_link=active')
+  if (testInfo.project.name === 'mobile') {
+    await page.getByRole('button', { name: 'Filters (4)', exact: true }).click()
+  }
   await page.getByRole('button', { name: 'Any date', exact: true }).click()
   await page.getByLabel('Added on or after', { exact: true }).fill('2026-08-01')
+  const finalScope = page.waitForRequest(request => {
+    const url = new URL(request.url())
+    return url.pathname === '/api/documents/' &&
+      url.searchParams.get('created_at__gte') === '1785542400' &&
+      url.searchParams.get('created_at__lte') === '1788134399'
+  })
   await page.getByLabel('Added on or before', { exact: true }).fill('2026-08-30')
   await page.getByLabel('Added on or before', { exact: true }).press('Tab')
-  await page.waitForTimeout(50)
+  await finalScope
   await ask('full scope')
   expect(chatRequests.at(-1).scope).toEqual({
     query: 'needle', document_ids: [41, 42], jd_category_id: 6,

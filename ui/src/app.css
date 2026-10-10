@@ -188,7 +188,7 @@ input, select, textarea { font: inherit; color: inherit; }
   .topbar-upload span { display: none; }
   .research-ribbon { padding: 8px; }
   .content { padding: 16px 14px 32px; }
-  .irow.hoverable > .pill { display: none; }
+  .irow.hoverable .document-row-link > .pill { display: none; }
 }
 .content-narrow { max-width: 980px; margin: 0 auto; }
 
@@ -270,13 +270,17 @@ textarea.input { resize: vertical; font-family: ui-monospace, monospace; font-si
 .document-search-toolbar > input[type="search"] {
   flex: 1 1 100%; width: 100%; height: var(--toolbar-control-height);
 }
-.document-options-toolbar > select {
+.document-filter-controls {
+  display: flex; flex: 1 1 auto; align-items: center; gap: 8px; min-width: 0;
+}
+.document-filter-controls > select {
   flex: 0 1 170px; width: 170px; height: var(--toolbar-control-height);
 }
-.document-options-toolbar > .document-share-filter {
+.document-filter-controls > .document-share-filter {
   flex: 0 0 auto; height: var(--toolbar-control-height); padding: 8px 12px;
   border-radius: 9px; font-size: .9rem; white-space: nowrap;
 }
+.mobile-filter-bar, .mobile-filter-chips { display: none; }
 .document-toolbar .document-refresh {
   min-width: var(--toolbar-control-height); height: var(--toolbar-control-height); padding: 8px 12px;
   border-radius: 9px; justify-content: center; font-size: .9rem;
@@ -315,6 +319,31 @@ textarea.input { resize: vertical; font-family: ui-monospace, monospace; font-si
   .document-display-actions { width: 100%; justify-content: flex-end; }
   .document-display-actions > select { flex: 1 1 150px; min-width: 0; }
   .date-range-fields { grid-template-columns: 1fr; }
+}
+@media (max-width: 620px) {
+  .mobile-filter-bar { display: flex; margin-bottom: 8px; }
+  .mobile-filter-bar .btn { width: 100%; justify-content: space-between; }
+  .document-options-toolbar { align-items: stretch; }
+  .document-filter-controls { display: none; }
+  .document-filter-controls.mobile-open {
+    display: flex; flex: 0 0 100%; flex-direction: column; align-items: stretch;
+  }
+  .document-filter-controls > select,
+  .document-filter-controls > .document-share-filter,
+  .document-filter-controls > .date-range-filter {
+    width: 100%; max-width: none; flex: none;
+  }
+  .document-display-actions { width: 100%; justify-content: flex-end; }
+  .mobile-filter-chips {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 0 12px;
+  }
+  .filter-chip {
+    display: inline-flex; align-items: center; gap: 5px; max-width: 100%;
+    border: 1px solid var(--line-strong); border-radius: 99px;
+    background: var(--surface); padding: 4px 8px; color: var(--muted); font-size: .72rem;
+  }
+  .filter-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .clear-filter-chips { margin-left: auto; }
 }
 
 /* ---------- cards / detail ---------- */
@@ -508,6 +537,14 @@ textarea.input { resize: vertical; font-family: ui-monospace, monospace; font-si
 .rowcheck { accent-color: var(--accent); width: 15px; height: 15px; flex: none; cursor: pointer; }
 .irow.selected { background: var(--tint); }
 .irow.cursor { box-shadow: inset 3px 0 0 var(--accent); }
+.document-row { cursor: default; }
+.document-row-link {
+  display: flex; flex: 1 1 auto; align-items: center; align-self: stretch;
+  gap: 12px; min-width: 0; color: inherit; text-decoration: none;
+}
+.document-row-link:focus-visible, .grid-document-link:focus-visible {
+  border-radius: 5px; outline: 2px solid var(--accent); outline-offset: 2px;
+}
 
 /* ---------- topbar user menu ---------- */
 .avatar {
@@ -552,7 +589,7 @@ textarea.input { resize: vertical; font-family: ui-monospace, monospace; font-si
 .rthumb.none { background: repeating-linear-gradient(45deg, var(--surface-2), var(--surface-2) 5px, var(--surface) 5px, var(--surface) 10px); }
 .rthumb.none img { display: none; }
 .dgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 14px; }
-.gcard { text-decoration: none; padding: 0; overflow: hidden; display: flex; flex-direction: column; gap: 8px; }
+.gcard { padding: 0; overflow: hidden; display: flex; flex-direction: column; gap: 8px; }
 .gcard:hover { border-color: var(--line-strong); }
 .gcard.selected { border-color: var(--accent); }
 .gthumb { display: block; aspect-ratio: 4/5; background: var(--surface-2); border-bottom: 1px solid var(--line); }
@@ -564,8 +601,13 @@ textarea.input { resize: vertical; font-family: ui-monospace, monospace; font-si
    reads as "has content" (not "missing thumbnail"). Matches the
    preview-gate policy on /api/documents/{id}/thumb. */
 .rthumb.blurred img, .gthumb.blurred img { filter: blur(6px); }
-.gmeta { display: flex; gap: 8px; align-items: center; padding: 0 12px; min-width: 0; }
+.gmeta { display: flex; gap: 8px; align-items: flex-start; padding: 0 12px 10px; min-width: 0; }
+.grid-document-link {
+  display: grid; flex: 1; gap: 4px; min-width: 0; color: inherit; text-decoration: none;
+}
+.grid-document-title { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .gmeta .title { font-size: .84rem; font-weight: 550; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gmeta .sub { color: var(--muted); font-size: .8rem; }
 .hoveracts { display: none; gap: 6px; align-items: center; }
 @media (hover: hover) and (pointer: fine) {
   .irow.hoverable:hover .hoveracts,

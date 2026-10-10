@@ -39,6 +39,7 @@
   const dateFrom = $derived(dateFilterValue('created_at__gte'))
   const dateTo = $derived(dateFilterValue('created_at__lte'))
   let dateFilterOpen = $state(false)
+  let mobileFiltersOpen = $state(false)
   let dateFilterBox = $state()
   let dateFilterTrigger = $state()
   const hasDateFilter = $derived(!!(dateFrom || dateTo))
@@ -47,6 +48,21 @@
     dateFrom ? `From ${dateFrom}` :
     dateTo ? `Through ${dateTo}` : 'Any date'
   )
+  const activeFilters = $derived.by(() => {
+    const filters = []
+    if (fTag) {
+      filters.push({ key: 'tags__id__in', label: `Tag: ${tags.find(tag => String(tag.id) === fTag)?.name || fTag}` })
+    }
+    if (fCorr) {
+      filters.push({ key: 'correspondents__id__in', label: `Correspondent: ${correspondents.find(correspondent => String(correspondent.id) === fCorr)?.name || fCorr}` })
+    }
+    if (fShareLink === 'active') filters.push({ key: 'share_link', label: 'Shared by me' })
+    if (fSens) {
+      filters.push({ key: 'sensitivity', label: SENSITIVITY_OPTIONS.find(option => option.value === fSens)?.label || fSens })
+    }
+    if (hasDateFilter) filters.push({ key: 'date', label: `Added: ${dateRangeLabel}` })
+    return filters
+  })
   let view = $state((() => { try { return localStorage.getItem('suchi.docs.view') || 'list' } catch { return 'list' } })())
   function setView(v) { view = v; try { localStorage.setItem('suchi.docs.view', v) } catch {} }
   const pageSize = 50
@@ -112,6 +128,32 @@
     dateFilterOpen = false
     const query = params.toString()
     go(`#${route.path}${query ? `?${query}` : ''}`)
+  }
+
+  function clearDocumentFilter(key) {
+    if (key === 'date') {
+      clearDateFilters()
+      return
+    }
+    setRouteFilter(key, '')
+  }
+
+  function clearDocumentFilters() {
+    queryAssistant.clear()
+    const params = new URLSearchParams(route.query)
+    for (const key of ['tags__id__in', 'correspondents__id__in', 'share_link', 'sensitivity', 'created_at__gte', 'created_at__lte']) {
+      params.delete(key)
+    }
+    params.delete('page')
+    dateFilterOpen = false
+    mobileFiltersOpen = false
+    const query = params.toString()
+    go(`#${route.path}${query ? `?${query}` : ''}`)
+  }
+
+  function toggleMobileFilters() {
+    mobileFiltersOpen = !mobileFiltersOpen
+    if (!mobileFiltersOpen) dateFilterOpen = false
   }
 
   function closeDateFilter() {
@@ -463,7 +505,7 @@
     // Handle modal and popover Escape before ignoring focused inputs.
     if (bulkDecOpen && e.key === 'Escape') { bulkDecOpen = false; return }
     if (dateFilterOpen && e.key === 'Escape') { e.preventDefault(); closeDateFilter(); return }
-    if (e.target.closest('input,select,textarea') || e.metaKey || e.ctrlKey) return
+    if (e.target.closest('input,select,textarea,button,a') || e.metaKey || e.ctrlKey) return
     if (e.key === 'j' || e.key === 'k') {
       e.preventDefault()
       lastIdx = Math.min(Math.max(lastIdx + (e.key === 'j' ? 1 : -1), 0), docs.length - 1)
@@ -610,49 +652,61 @@
         {/each}
       </datalist>
     </div>
-    <div class="toolbar document-toolbar document-options-toolbar" role="group" aria-label="Document options">
-      <select class="input" value={fTag} onchange={(e) => setRouteFilter('tags__id__in', e.target.value)}>
-        <option value="">All tags</option>
-        {#each tags as t}<option value={t.id}>{t.name}</option>{/each}
-      </select>
-      <select class="input" value={fCorr} onchange={(e) => setRouteFilter('correspondents__id__in', e.target.value)}>
-        <option value="">All correspondents</option>
-        {#each correspondents as c}<option value={c.id}>{c.name}</option>{/each}
-      </select>
-      <button type="button" class="btn sm document-share-filter" class:primary={fShareLink === 'active'}
-              aria-pressed={fShareLink === 'active'} onclick={toggleSharedByMe}>
-        <Icon name="link" size={14} /> Shared by me
+    <div class="mobile-filter-bar">
+      <button type="button" class="btn sm" aria-expanded={mobileFiltersOpen}
+              aria-controls="document-filter-panel" onclick={toggleMobileFilters}>
+        <Icon name="settings" size={14} />
+        {activeFilters.length ? `Filters (${activeFilters.length})` : 'Filters'}
       </button>
-      <select class="input" value={fSens} onchange={(e) => setRouteFilter('sensitivity', e.target.value)}>
-        <option value="">Any sensitivity</option>
-        {#each SENSITIVITY_OPTIONS as option (option.value)}
-          <option value={option.value}>{option.label}</option>
-        {/each}
-      </select>
-      <div class="date-range-filter" bind:this={dateFilterBox}>
-        <button bind:this={dateFilterTrigger} type="button" class="date-range-trigger" class:on={hasDateFilter}
-                aria-expanded={dateFilterOpen} aria-controls="document-date-range"
-                onclick={() => (dateFilterOpen = !dateFilterOpen)}>
-          <span>{dateRangeLabel}</span><Icon name="calendar" size={15} />
+    </div>
+    <div class="toolbar document-toolbar document-options-toolbar" role="group" aria-label="Document options">
+      <div id="document-filter-panel" class="document-filter-controls" class:mobile-open={mobileFiltersOpen}>
+        <select class="input" aria-label="Filter by tag"
+                onchange={(e) => setRouteFilter('tags__id__in', e.target.value)}>
+          <option value="" selected={!fTag}>All tags</option>
+          {#each tags as t}<option value={t.id} selected={String(t.id) === fTag}>{t.name}</option>{/each}
+        </select>
+        <select class="input" aria-label="Filter by correspondent"
+                onchange={(e) => setRouteFilter('correspondents__id__in', e.target.value)}>
+          <option value="" selected={!fCorr}>All correspondents</option>
+          {#each correspondents as c}<option value={c.id} selected={String(c.id) === fCorr}>{c.name}</option>{/each}
+        </select>
+        <button type="button" class="btn sm document-share-filter" class:primary={fShareLink === 'active'}
+                aria-pressed={fShareLink === 'active'} onclick={toggleSharedByMe}>
+          <Icon name="link" size={14} /> Shared by me
         </button>
-        {#if dateFilterOpen}
-          <div id="document-date-range" class="date-range-menu" role="group" aria-label="Added date range">
-            <div class="date-range-fields">
-              <label class="date-range-field"><span>From</span>
-                <ISODateInput value={dateFrom} label="Added on or after"
-                              onchange={(value) => setDateFilter('created_at__gte', value)} />
-              </label>
-              <label class="date-range-field"><span>To</span>
-                <ISODateInput value={dateTo} label="Added on or before"
-                              onchange={(value) => setDateFilter('created_at__lte', value)} />
-              </label>
+        <select class="input" aria-label="Filter by sensitivity" value={fSens}
+                onchange={(e) => setRouteFilter('sensitivity', e.target.value)}>
+          <option value="">Any sensitivity</option>
+          {#each SENSITIVITY_OPTIONS as option (option.value)}
+            <option value={option.value}>{option.label}</option>
+          {/each}
+        </select>
+        <div class="date-range-filter" bind:this={dateFilterBox}>
+          <button bind:this={dateFilterTrigger} type="button" class="date-range-trigger" class:on={hasDateFilter}
+                  aria-expanded={dateFilterOpen} aria-controls="document-date-range"
+                  onclick={() => (dateFilterOpen = !dateFilterOpen)}>
+            <span>{dateRangeLabel}</span><Icon name="calendar" size={15} />
+          </button>
+          {#if dateFilterOpen}
+            <div id="document-date-range" class="date-range-menu" role="group" aria-label="Added date range">
+              <div class="date-range-fields">
+                <label class="date-range-field"><span>From</span>
+                  <ISODateInput value={dateFrom} label="Added on or after"
+                                onchange={(value) => setDateFilter('created_at__gte', value)} />
+                </label>
+                <label class="date-range-field"><span>To</span>
+                  <ISODateInput value={dateTo} label="Added on or before"
+                                onchange={(value) => setDateFilter('created_at__lte', value)} />
+                </label>
+              </div>
+              <div class="date-range-actions">
+                <button class="btn sm" type="button" disabled={!hasDateFilter} onclick={clearDateFilters}>Clear dates</button>
+                <button class="btn primary sm" type="button" onclick={closeDateFilter}>Done</button>
+              </div>
             </div>
-            <div class="date-range-actions">
-              <button class="btn sm" type="button" disabled={!hasDateFilter} onclick={clearDateFilters}>Clear dates</button>
-              <button class="btn primary sm" type="button" onclick={closeDateFilter}>Done</button>
-            </div>
-          </div>
-        {/if}
+          {/if}
+        </div>
       </div>
       <span class="document-display-actions" role="group" aria-label="Document display">
         <span class="seg">
@@ -674,6 +728,17 @@
       <span>{facetError}</span><button class="btn sm" onclick={loadFacets}>Retry filters</button>
     </div>
   {/if}
+  {#if activeFilters.length}
+    <div class="mobile-filter-chips" role="group" aria-label="Active document filters">
+      {#each activeFilters as filter (filter.key)}
+        <button type="button" class="filter-chip" aria-label={`Remove ${filter.label} filter`}
+                onclick={() => clearDocumentFilter(filter.key)}>
+          <span>{filter.label}</span><Icon name="x" size={11} />
+        </button>
+      {/each}
+      <button type="button" class="btn sm clear-filter-chips" onclick={clearDocumentFilters}>Clear all</button>
+    </div>
+  {/if}
 {/if}
 
 {#if loading}
@@ -693,39 +758,46 @@
   {#if view === 'grid' && !isInbox}
     <div class="dgrid">
       {#each docs as d, i (d.id)}
-        <a class="card gcard" href={filingHref(`#/doc/${d.id}`)} class:selected={sel.has(d.id)}>
+        <article class="card gcard document-card" class:selected={sel.has(d.id)}>
           <span class="gthumb" class:blurred={isHighSensitivity(d.sensitivity)}><img src={thumbPath(d.id, isHighSensitivity(d.sensitivity))} alt="" loading="lazy" onerror={(e) => e.target.closest('.gthumb').classList.add('none')} /></span>
           <span class="gmeta">
             <input type="checkbox" class="rowcheck" checked={sel.has(d.id)} disabled={bulkBusy}
-                   onclick={(e) => e.stopPropagation()}
-                   onchange={(e) => toggleSel(i, e)} aria-label="Select" />
-            {#if d.jd_address || d.jd_category_code}<span class="chip">{d.jd_address || d.jd_category_code}</span>{/if}
-            <span class="title">{d.title || `Document #${d.id}`}</span>
-            <DocumentUnlockStatus state={d.encryption_state} />
+                   onchange={(e) => toggleSel(i, e)}
+                   aria-label={`Select ${d.title || 'document ' + d.id}`} />
+            <a class="grid-document-link" href={filingHref(`#/doc/${d.id}`)}
+               aria-label={d.title || `Document ${d.id}`}>
+              <span class="grid-document-title">
+                {#if d.jd_address || d.jd_category_code}<span class="chip">{d.jd_address || d.jd_category_code}</span>{/if}
+                <span class="title">{d.title || `Document #${d.id}`}</span>
+                <DocumentUnlockStatus state={d.encryption_state} />
+              </span>
+              <span class="sub">{fmtDate(d.created_at)}</span>
+            </a>
           </span>
-          <span class="sub" style="padding:0 12px 10px">{fmtDate(d.created_at)}</span>
-        </a>
+        </article>
       {/each}
     </div>
   {:else}
   <div class="index">
     {#each docs as d, i (d.id)}
-      <a class="irow hoverable" href={filingHref(`#/doc/${d.id}`)} data-row={i} class:cursor={i === lastIdx} class:selected={sel.has(d.id)}>
+      <div class="irow hoverable document-row" data-row={i} class:cursor={i === lastIdx} class:selected={sel.has(d.id)}>
         <input type="checkbox" class="rowcheck" checked={sel.has(d.id)} disabled={bulkBusy}
-               onclick={(e) => e.stopPropagation()}
                onchange={(e) => toggleSel(i, e)}
                aria-label={`Select ${d.title || 'document ' + d.id}`} />
-        <span class="rthumb" class:blurred={isHighSensitivity(d.sensitivity)}><img src={thumbPath(d.id, isHighSensitivity(d.sensitivity))} alt="" loading="lazy" onerror={(e) => e.target.closest('.rthumb').classList.add('none')} /></span>
-        <span class="dot {sensDot(d.sensitivity)}" class:accent={!d.sensitivity}></span>
-        {#if d.jd_address || d.jd_category_code}<span class="chip" title={`${d.jd_category_name} · ${d.jd_area_name}`}>{d.jd_address || d.jd_category_code}</span>{/if}
-        <span class="title grow">{d.title || `Document #${d.id}`}</span>
-        <DocumentUnlockStatus state={d.encryption_state} />
-        {#if d.tags?.length}
-          {#each d.tags.slice(0, 3) as t}<span class="pill">{t}</span>{/each}
-        {/if}
+        <a class="document-row-link" href={filingHref(`#/doc/${d.id}`)}
+           aria-label={d.title || `Document ${d.id}`}>
+          <span class="rthumb" class:blurred={isHighSensitivity(d.sensitivity)}><img src={thumbPath(d.id, isHighSensitivity(d.sensitivity))} alt="" loading="lazy" onerror={(e) => e.target.closest('.rthumb').classList.add('none')} /></span>
+          <span class="dot {sensDot(d.sensitivity)}" class:accent={!d.sensitivity}></span>
+          {#if d.jd_address || d.jd_category_code}<span class="chip" title={`${d.jd_category_name} · ${d.jd_area_name}`}>{d.jd_address || d.jd_category_code}</span>{/if}
+          <span class="title grow">{d.title || `Document #${d.id}`}</span>
+          <DocumentUnlockStatus state={d.encryption_state} />
+          {#if d.tags?.length}
+            {#each d.tags.slice(0, 3) as t}<span class="pill">{t}</span>{/each}
+          {/if}
+        </a>
         <span class="end">
           {#if d.encryption_state === 'encrypted'}
-            <span class="unlock-inline" role="group" aria-label="Unlock this document">
+            <span class="unlock-inline" role="group" aria-label={`Unlock ${d.title || 'document ' + d.id}`}>
               <span class="pill warn" title="This doc is encrypted; unlock to make it searchable and previewable">
                 <Icon name="lock" size={11} /> Locked
               </span>
@@ -733,38 +805,37 @@
                      placeholder="password"
                      bind:value={unlockPw[d.id]}
                      disabled={unlockBusy.has(d.id)}
-                     onclick={(e) => e.preventDefault()}
                      onkeydown={(e) => { if (e.key === 'Enter') { e.preventDefault(); unlockOne(d) } }}
                      aria-label={`Password for ${d.title || 'document ' + d.id}`} />
               <button class="btn sm primary" disabled={unlockBusy.has(d.id) || !unlockPw[d.id]}
-                      onclick={(e) => { e.preventDefault(); e.stopPropagation(); unlockOne(d) }}>
+                      onclick={() => unlockOne(d)}>
                 {unlockBusy.has(d.id) ? '…' : 'Unlock'}
               </button>
               {#if unlockErr[d.id]}<span class="sub" style="color:var(--danger)">{unlockErr[d.id]}</span>{/if}
             </span>
           {:else if isInbox && jdCategories.length}
             <select class="input" style="padding:3px 8px;font-size:.76rem;max-width:150px"
-                    onclick={(e) => e.preventDefault()}
-                    onchange={(e) => { e.preventDefault(); if (e.target.value) fileTo(d, e.target.value) }}>
+                    aria-label={`File ${d.title || 'document ' + d.id} under`}
+                    onchange={(e) => { if (e.target.value) fileTo(d, e.target.value) }}>
               <option value="">File under…</option>
               {#each jdCategories as c}<option value={c.id}>{c.code} {c.name}</option>{/each}
             </select>
           {:else}
-            <span class="hoveracts" role="group" aria-label="Quick actions">
+            <span class="hoveracts" role="group" aria-label={`Quick actions for ${d.title || 'document ' + d.id}`}>
               <select class="input" style="padding:2px 6px;font-size:.72rem;max-width:130px"
-                      onclick={(e) => e.preventDefault()}
-                      onchange={(e) => { e.preventDefault(); if (e.target.value) fileTo(d, e.target.value) }}>
+                      aria-label={`Refile ${d.title || 'document ' + d.id}`}
+                      onchange={(e) => { if (e.target.value) fileTo(d, e.target.value) }}>
                 <option value="">Refile…</option>
                 {#each jdCategories as c}<option value={c.id}>{c.code} {c.name}</option>{/each}
               </select>
               <button class="btn sm danger" title="Trash" aria-label={`Trash ${d.title || `document ${d.id}`}`}
-                      onclick={(e) => { e.preventDefault(); e.stopPropagation(); trashRequest = { kind: 'one', doc: d } }}>
+                      onclick={() => (trashRequest = { kind: 'one', doc: d })}>
                 <Icon name="trash" size={12} /></button>
             </span>
           {/if}
           <span class="sub">{fmtDate(d.created_at)}</span>
         </span>
-      </a>
+      </div>
     {/each}
   </div>
   {/if}
