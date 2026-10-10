@@ -1138,21 +1138,16 @@ test('keeps incomplete archive setup visible across navigation and reloads', asy
   await mockAPI(page, { setupStartedAt: Math.floor(Date.now() / 1000) })
   await page.goto('/#/dashboard')
 
-  const reminder = (page.viewportSize()?.width || 0) > 860
-    ? page.locator('.sidebar .setup-reminder')
-    : page.locator('.main > .setup-reminder-mobile')
+  const reminder = page.locator('.onboarding-card')
   await expect(reminder.getByText('Choose your filing tree')).toBeVisible()
-  await expect(reminder.getByText('Choose how documents are organized to finish archive setup.')).toBeVisible()
-  await expect(reminder.getByRole('button', { name: 'Continue setup' })).toHaveAttribute('href', '#/settings?tab=archive&section=filing-tree')
+  await expect(reminder.getByText('Choose how documents will be organized before adding your first one.')).toBeVisible()
+  await expect(reminder.getByRole('link', { name: 'Continue setup' })).toHaveAttribute('href', '#/settings?tab=archive&section=filing-tree')
+  await expect(page.locator('.metrics .metric')).toHaveCount(4)
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
 
-  if ((page.viewportSize()?.width || 0) > 860) {
-    await expect(page.locator('.sidebar .setup-reminder')).toBeVisible()
-  } else {
-    const reminderBox = await reminder.boundingBox()
-    const topbarBox = await page.locator('.topbar').boundingBox()
-    expect(reminderBox.y).toBeGreaterThanOrEqual(topbarBox.y + topbarBox.height - 1)
-  }
+  const reminderBox = await reminder.boundingBox()
+  const topbarBox = await page.locator('.topbar').boundingBox()
+  expect(reminderBox.y).toBeGreaterThanOrEqual(topbarBox.y + topbarBox.height - 1)
 
   await page.goto('/#/settings')
   const setupRow = page.locator('.settings-body .setup-reminder-settings')
@@ -1185,7 +1180,7 @@ test('keeps incomplete archive setup visible across navigation and reloads', asy
   await expect(page.getByRole('region', { name: 'Archive configuration' })).toBeVisible()
 })
 
-test('shows the dashboard setup reminder only to incomplete admins', async ({ browser }) => {
+test('shows the filing-tree setup step only to incomplete admins', async ({ browser }) => {
   const cases = [
     { filingTreeChosen: true },
     { userRole: 'member' },
@@ -1195,7 +1190,7 @@ test('shows the dashboard setup reminder only to incomplete admins', async ({ br
     const page = await context.newPage()
     await mockAPI(page, options)
     await page.goto('/#/dashboard')
-    await expect(page.locator('.setup-reminder')).toHaveCount(0)
+    await expect(page.getByText('Choose your filing tree', { exact: true })).toHaveCount(0)
     await context.close()
   }
 })
@@ -1205,15 +1200,37 @@ test('keeps setup-state failures visible and retries them', async ({ page }) => 
   await mockAPI(page, options)
   await page.goto('/#/dashboard')
 
-  const reminder = (page.viewportSize()?.width || 0) > 860
-    ? page.locator('.sidebar .setup-reminder')
-    : page.locator('.main > .setup-reminder-mobile')
-  await expect(reminder.getByText('Archive setup status unavailable')).toBeVisible()
-  await expect(reminder.getByRole('button', { name: 'Continue setup' })).toBeVisible()
+  const reminder = page.locator('.onboarding-card')
+  await expect(reminder.getByText('Check archive setup')).toBeVisible()
+  await expect(reminder.getByRole('link', { name: 'Continue setup' })).toBeVisible()
 
   options.failPaths.length = 0
-  await reminder.getByRole('button', { name: 'Retry' }).click()
+  await reminder.getByRole('button', { name: 'Retry setup status' }).click()
   await expect(reminder.getByText('Choose your filing tree')).toBeVisible()
+})
+
+test('advances first-document onboarding from upload through filing', async ({ page }) => {
+  const options = { filingTreeChosen: true, documentsCount: 0, inboxCount: 0 }
+  await mockAPI(page, options)
+  await page.goto('/#/dashboard')
+
+  const onboarding = page.locator('.onboarding-card')
+  await expect(onboarding.getByText('Getting started · Step 2 of 3')).toBeVisible()
+  await expect(onboarding.getByRole('heading', { name: 'Add your first document' })).toBeVisible()
+  await expect(onboarding.getByRole('link', { name: 'Upload a document' })).toHaveAttribute('href', '#/upload')
+  await expect(page.locator('.metrics .metric')).toHaveCount(4)
+
+  options.documentsCount = 1
+  options.inboxCount = 1
+  await page.reload()
+  await expect(onboarding.getByText('Getting started · Step 3 of 3')).toBeVisible()
+  await expect(onboarding.getByRole('heading', { name: 'Finish filing your first document' })).toBeVisible()
+  await expect(onboarding.getByRole('link', { name: 'Open Inbox' })).toHaveAttribute('href', '#/inbox')
+
+  options.documentsCount = 2
+  await page.reload()
+  await expect(onboarding).toHaveCount(0)
+  await expect(page.locator('.metrics .metric')).toHaveCount(4)
 })
 
 
@@ -2938,6 +2955,7 @@ test('avoids saved-view count requests and defers facets until editing', async (
   })
   await page.goto('/#/dashboard')
   await expect(page.getByRole('link', { name: 'View all 6 saved views' })).toBeVisible()
+  await expect(page.locator('.views').getByText('0', { exact: true })).toHaveCount(0)
   await page.waitForTimeout(100)
   expect(countRequests).toEqual([])
   expect(facetRequests).toEqual([])

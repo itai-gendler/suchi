@@ -335,11 +335,14 @@ deep-link hash. Archive navigation exposes People and Metadata as separate
 sections. User/Group tabs update `people`; metadata type changes update
 `metadata`, so reload and history restore the selected panel.
 
-`App.svelte` owns the administrator's filing-tree reminder state.
-`SetupReminder.svelte` renders it in the sidebar, above a narrow Dashboard, and
-in Settings. Failures remain visible with Retry. Choosing a preset, confirmed
-Blank, or an imported tree refreshes the state; visiting Filing tree alone does
-not dismiss it.
+`App.svelte` owns the administrator's filing-tree reminder state and passes it
+to `Dashboard.svelte`. Dashboard renders the first setup step itself; on other
+screens, `SetupReminder.svelte` renders it in the sidebar, and Settings renders
+its inline form. Failures remain visible with Retry. Choosing a preset,
+confirmed Blank, or an imported tree refreshes the state; visiting Filing tree
+alone does not dismiss it. `Dashboard.svelte` derives later first-document
+steps from the real document, Inbox, review, and processing counts; no separate
+onboarding state is stored.
 
 `ConfigurationSection.svelte` owns the remaining direct Archive Configuration
 forms and their required-load/retry gates. Mailbox editing delegates to

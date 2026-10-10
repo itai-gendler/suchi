@@ -523,7 +523,7 @@
           {/if}
         </div>
       {/if}
-      {#if setupNeeded}
+      {#if setupNeeded && page !== 'dashboard'}
         <Lazy load={lazyRoutes.setupReminder} props={{ error: setupError, onRetry: refreshSetupState, onContinue: openSetupFromReminder }} />
       {/if}
 
@@ -619,9 +619,6 @@
         </button>
       </div>
 
-      {#if setupNeeded && page === 'dashboard'}
-        <Lazy load={lazyRoutes.setupReminder} props={{ placement: 'mobile', error: setupError, onRetry: refreshSetupState, onContinue: openSetupFromReminder }} />
-      {/if}
 
 
       {#if demoMode && !demoBannerDismissed}
@@ -650,7 +647,7 @@
           {#if page === 'settings'}
             <Lazy load={lazyRoutes.account} props={{ notify: scopedNotify, accountNotify, profileOnly: true }} />
           {/if}
-        {:else if page === 'dashboard'}<Lazy load={lazyRoutes.dashboard} props={{ st, statsError, inboxCategory, taxonomyLoaded, taxonomyError, recent: recentDocs, recentError, onRetryRecent: loadRecentDocuments }} />
+        {:else if page === 'dashboard'}<Lazy load={lazyRoutes.dashboard} props={{ st, statsError, inboxCategory, taxonomyLoaded, taxonomyError, recent: recentDocs, recentError, onRetryRecent: loadRecentDocuments, setupNeeded, setupError, onRetrySetup: refreshSetupState }} />
         {:else if page === 'documents'}<Lazy load={lazyRoutes.documents} props={{ notify: scopedNotify, jdCategories, canAskArchive: chatEnabled && canUseArchiveChat, canReviewIntelligence, onAskDocuments: askSelectedDocuments, onScopeChange: publishChatScope }} />
         {:else if page === 'doc' && documentID}<Lazy load={lazyRoutes.detail} props={{ id: documentID, notify: scopedNotify, jdCategories }} />
         {:else if page === 'inbox'}<Lazy load={lazyRoutes.documents} props={{ notify: scopedNotify, inbox: inboxCategory, inboxMode: true, taxonomyLoaded, jdCategories, canAskArchive: chatEnabled && canUseArchiveChat, canReviewIntelligence, onAskDocuments: askSelectedDocuments, onScopeChange: publishChatScope }} />

@@ -131,7 +131,7 @@ limits, permissions, and Trash/purge behavior.
 **Total documents**, **Inbox**, **Approvals** and **Failed jobs** share one status
 request. Loading or unavailable counts show `—`, not zero or a healthy status.
 **Recently added** shows six newest visible documents. **Views** shows up to four
-shortcuts with live counts, including at least one shared view when available.
+shortcuts with filter summaries, including at least one shared view when available.
 **New view** starts creation; the empty message is **No saved views yet.** Read
 failures show **Retry** rather than an empty archive.
 
@@ -430,16 +430,21 @@ the sidebar. Later applications merge, without resetting existing filing.
 Validation checks supported structure, not domain correctness or rule trust.
 See [Filing trees](/jd) for destination, collision and export rules.
 
-Incomplete setup shows **Choose your filing tree** in the sidebar and above a
-narrow Dashboard, with **Continue setup**. The action opens **Archive
+Incomplete setup shows **Choose your filing tree** on Dashboard and in the
+sidebar on other screens, with **Continue setup**. The action opens **Archive
 configuration > Filing tree**. The reminder has no dismissal control and remains
 visible across navigation and browser reloads until an administrator chooses a
 preset, confirms Blank, or imports a tree. If setup status cannot be verified,
-the reminder remains visible and offers **Retry**.
+Dashboard keeps the step visible and offers **Retry setup status**.
 
 While setup is incomplete, Settings shows the same reminder and **Continue setup**
 above the ordinary content. It never replaces or locks Archive Configuration
 sections.
+
+After the filing tree is chosen, an empty archive advances to **Add your first
+document**. One document still awaiting review, filing, or processing advances
+to the final step. The guide disappears once that first document is ready; the
+normal Dashboard counters and lists remain visible throughout.
 
 ## Capabilities and sensitive documents
 

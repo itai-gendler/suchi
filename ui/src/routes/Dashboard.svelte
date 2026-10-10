@@ -2,14 +2,14 @@
 <script>
   import { scopedHash as filingHref } from '../lib/systems.svelte.js'
   import { onDestroy } from 'svelte'
-  import { listDocuments, listSavedViews } from '../lib/api.js'
+  import { listSavedViews } from '../lib/api.js'
   import { documentListHash, parseSavedViewFilters } from '../lib/documentFilters.js'
   import { fmtDate, sensDot } from '../lib/format.js'
   import Icon from '../lib/Icon.svelte'
 
   let {
     st, statsError = '', inboxCategory, taxonomyLoaded = false, taxonomyError = '', recent,
-    recentError = '', onRetryRecent,
+    recentError = '', onRetryRecent, setupNeeded = false, setupError = false, onRetrySetup,
   } = $props()
   const inboxCount = $derived(st?.inbox_count ?? 0)
   const pending = $derived((st?.pending_approvals ?? 0) + (st?.pending_intelligence ?? 0))
@@ -23,6 +23,67 @@
   let viewTotal = $state(0)
   let loadVersion = 0
   let activeController
+
+  const onboarding = $derived.by(() => {
+    if (setupNeeded) {
+      return {
+        step: 'Step 1 of 3',
+        icon: 'settings',
+        title: setupError ? 'Check archive setup' : 'Choose your filing tree',
+        body: setupError
+          ? 'Suchi could not confirm whether setup is complete. Retry, or open the filing tree settings.'
+          : 'Choose how documents will be organized before adding your first one.',
+        action: 'Continue setup',
+        href: '#/settings?tab=archive&section=filing-tree',
+      }
+    }
+    if (!st) return null
+    if (total === 0) {
+      return {
+        step: 'Step 2 of 3',
+        icon: 'upload',
+        title: 'Add your first document',
+        body: 'Start with one representative document. Suchi keeps the original and prepares it for filing.',
+        action: 'Upload a document',
+        href: '#/upload',
+      }
+    }
+    if (total === 1 && (inboxCount > 0 || pending > 0 || dead > 0)) {
+      if (pending > 0) {
+        return {
+          step: 'Step 3 of 3',
+          icon: 'tasks',
+          title: 'Finish your first document',
+          body: inboxCount > 0
+            ? 'Review the waiting suggestion or decision, then file the document from Inbox.'
+            : 'A suggestion or decision is waiting for your review.',
+          action: 'Review it',
+          href: '#/tasks',
+          secondaryAction: inboxCount > 0 ? 'Open Inbox' : '',
+          secondaryHref: '#/inbox',
+        }
+      }
+      if (inboxCount > 0) {
+        return {
+          step: 'Step 3 of 3',
+          icon: 'inbox',
+          title: 'Finish filing your first document',
+          body: 'The document is ready for a filing decision in Inbox.',
+          action: 'Open Inbox',
+          href: '#/inbox',
+        }
+      }
+      return {
+        step: 'Step 3 of 3',
+        icon: 'zap',
+        title: 'Finish processing your first document',
+        body: 'Processing stopped before the document was ready. Open the issue to retry or dismiss it.',
+        action: 'Open processing issues',
+        href: '#/tasks',
+      }
+    }
+    return null
+  })
 
   async function load() {
     const version = ++loadVersion
@@ -39,7 +100,6 @@
       const sorted = raw.map(v => ({
         ...v,
         filters: parseSavedViewFilters(v.filter_json),
-        count: null,
       })).sort((a, b) => a.position - b.position)
 
       const selected = sorted.slice(0, dashboardViewLimit)
@@ -49,13 +109,7 @@
         else selected.push(shared)
       }
 
-      const loadedViews = await Promise.all(selected.map(async (view) => {
-        try {
-          const result = await listDocuments({ ...view.filters, page_size: 1 }, controller.signal)
-          return { ...view, count: result?.count ?? 0 }
-        } catch { return view }
-      }))
-      if (version === loadVersion) views = loadedViews
+      views = selected
     } catch (ex) {
       if (version !== loadVersion) return
       views = []
@@ -82,6 +136,26 @@
     activeController?.abort()
   })
 </script>
+
+  {#if onboarding}
+    <section class="onboarding-card card" aria-labelledby="onboarding-heading">
+      <span class="onboarding-icon"><Icon name={onboarding.icon} size={20} /></span>
+      <div class="onboarding-copy">
+        <span class="onboarding-step">Getting started · {onboarding.step}</span>
+        <h2 id="onboarding-heading">{onboarding.title}</h2>
+        <p>{onboarding.body}</p>
+        <div class="onboarding-actions">
+          <a class="btn primary" href={filingHref(onboarding.href)}>{onboarding.action}</a>
+          {#if onboarding.secondaryAction}
+            <a class="btn" href={filingHref(onboarding.secondaryHref)}>{onboarding.secondaryAction}</a>
+          {/if}
+          {#if setupError}
+            <button class="btn" type="button" onclick={() => onRetrySetup?.()}>Retry setup status</button>
+          {/if}
+        </div>
+      </div>
+    </section>
+  {/if}
 
 <div class="metrics">
   <a class="metric card" href={filingHref("#/documents")}>
@@ -158,7 +232,6 @@
         {#each views as v (v.id)}
           <a class="card view" href={filingHref(documentListHash(v.filters))}>
             <span class="m-label">{v.name}</span>
-            <span class="m-value" style="font-size:1.6rem">{v.count ?? '…'}</span>
             <span class="m-sub mono" style="font-size:.68rem">{filterSummary(v.filters)}</span>
           </a>
         {/each}

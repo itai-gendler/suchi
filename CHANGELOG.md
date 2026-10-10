@@ -27,8 +27,11 @@ Notable user-visible changes to Suchi are recorded here.
   names document context, matching text, links, and model confidence directly.
   Failed processing appears as **Processing issues**, with raw job kinds and
   errors kept under **Technical details**.
-- Saved View lists no longer issue a document-count request for every view or
-  load filter choices before editing begins.
+- Dashboard now advances first-run guidance from filing-tree setup through the
+  first upload and filing, review, or processing recovery using live archive
+  state while keeping the usual counters and lists visible.
+- Dashboard View shortcuts no longer display or request per-view document
+  counts. Saved View lists also defer filter choices until editing begins.
 
 ## [0.2.1] - 2026-10-10
 
