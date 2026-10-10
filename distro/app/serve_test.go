@@ -55,6 +55,9 @@ func TestBuildHTTPHandlerPreservesRoutingAndLimiterBoundaries(t *testing.T) {
 	mux.HandleFunc("POST /api/login", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	})
+	mux.HandleFunc("GET /s/{token}", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})
 	mux.HandleFunc("GET /api/items/", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	})
@@ -73,6 +76,14 @@ func TestBuildHTTPHandlerPreservesRoutingAndLimiterBoundaries(t *testing.T) {
 		if rec.Code != want {
 			t.Fatalf("login request %d status = %d, want %d", i+1, rec.Code, want)
 		}
+	}
+
+	shareReq := httptest.NewRequest(http.MethodGet, "/s/"+strings.Repeat("a", 64), http.NoBody)
+	shareReq.RemoteAddr = "192.0.2.1:1234"
+	shareRec := httptest.NewRecorder()
+	handler.ServeHTTP(shareRec, shareReq)
+	if shareRec.Code != http.StatusNoContent {
+		t.Fatalf("share route reused exhausted login bucket: status = %d", shareRec.Code)
 	}
 
 	req := httptest.NewRequest("GET", "/api/items", nil)

@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"net"
 	"net/netip"
 	"net/url"
 	"os"
@@ -21,13 +22,15 @@ import (
 
 // Config is the fully-resolved runtime configuration.
 type Config struct {
-	PublicURL      string
-	DataDir        string
-	ListenAddr     string
-	LogLevel       string
-	PprofEnabled   bool
-	BodyLimit      int64
-	BackupInterval time.Duration
+	PublicURL       string
+	DataDir         string
+	ListenAddr      string
+	SharePublicURL  string
+	ShareListenAddr string
+	LogLevel        string
+	PprofEnabled    bool
+	BodyLimit       int64
+	BackupInterval  time.Duration
 	// TrustedProxyCIDRs enables forwarded client addresses for rate limiting
 	// only when the direct TCP peer belongs to an explicitly trusted network.
 	TrustedProxyCIDRs []netip.Prefix
@@ -181,6 +184,8 @@ func Load() (*Config, error) {
 		PublicURL:                        env("PUBLIC_URL", ""),
 		DataDir:                          env("DATA_DIR", "/data"),
 		ListenAddr:                       env("LISTEN_ADDR", ":8000"),
+		SharePublicURL:                   env("SHARE_PUBLIC_URL", ""),
+		ShareListenAddr:                  env("SHARE_LISTEN_ADDR", ""),
 		LogLevel:                         env("LOG_LEVEL", "info"),
 		PprofEnabled:                     env("SUCHI_PPROF", "") == "1",
 		OCRLanguages:                     splitCSV(env("OCR_LANGUAGES", "eng")),
@@ -325,11 +330,30 @@ func Load() (*Config, error) {
 	if c.PublicURL == "" {
 		return nil, errors.New("PUBLIC_URL is required")
 	}
-	if err := validatePublicURL(c.PublicURL); err != nil {
+	if err := validateOriginURL("PUBLIC_URL", c.PublicURL); err != nil {
 		return nil, err
 	}
 	if strings.TrimSpace(c.ListenAddr) == "" {
 		return nil, errors.New("LISTEN_ADDR must not be empty")
+	}
+	shareURLSet := strings.TrimSpace(c.SharePublicURL) != ""
+	shareListenSet := strings.TrimSpace(c.ShareListenAddr) != ""
+	if shareURLSet != shareListenSet {
+		return nil, errors.New("SHARE_PUBLIC_URL and SHARE_LISTEN_ADDR must both be set or both unset")
+	}
+	if shareURLSet {
+		if err := validateOriginURL("SHARE_PUBLIC_URL", c.SharePublicURL); err != nil {
+			return nil, err
+		}
+		shareURL, _ := url.Parse(c.SharePublicURL)
+		if !c.DevMode && !strings.EqualFold(shareURL.Scheme, "https") {
+			return nil, errors.New("SHARE_PUBLIC_URL must use https outside development mode")
+		}
+		if c.DevMode {
+			if err := validateDevShareListenAddr(c.ShareListenAddr); err != nil {
+				return nil, err
+			}
+		}
 	}
 	if (c.TLSCertFile == "") != (c.TLSKeyFile == "") {
 		return nil, errors.New("TLS_CERT_FILE and TLS_KEY_FILE must both be set or both unset")
@@ -346,26 +370,41 @@ func Load() (*Config, error) {
 	return c, nil
 }
 
-func validatePublicURL(raw string) error {
+func validateOriginURL(name, raw string) error {
 	u, err := url.Parse(raw)
 	if err != nil {
-		return fmt.Errorf("PUBLIC_URL: %w", err)
+		return fmt.Errorf("%s: %w", name, err)
 	}
 	scheme := strings.ToLower(u.Scheme)
 	if (scheme != "http" && scheme != "https") || u.Hostname() == "" || u.Opaque != "" {
-		return errors.New("PUBLIC_URL: must be an absolute http or https URL with a host")
+		return fmt.Errorf("%s: must be an absolute http or https URL with a host", name)
 	}
 	if u.User != nil {
-		return errors.New("PUBLIC_URL: userinfo is not allowed")
+		return fmt.Errorf("%s: userinfo is not allowed", name)
 	}
 	if u.RawQuery != "" || u.ForceQuery {
-		return errors.New("PUBLIC_URL: query is not allowed")
+		return fmt.Errorf("%s: query is not allowed", name)
 	}
 	if strings.Contains(raw, "#") {
-		return errors.New("PUBLIC_URL: fragment is not allowed")
+		return fmt.Errorf("%s: fragment is not allowed", name)
 	}
 	if u.EscapedPath() != "" && u.EscapedPath() != "/" {
-		return errors.New("PUBLIC_URL: path is not supported; serve Suchi at the origin root")
+		return fmt.Errorf("%s: path is not supported; serve Suchi at the origin root", name)
+	}
+	return nil
+}
+
+func validateDevShareListenAddr(raw string) error {
+	host, _, err := net.SplitHostPort(strings.TrimSpace(raw))
+	if err != nil {
+		return fmt.Errorf("SHARE_LISTEN_ADDR: %w", err)
+	}
+	if strings.EqualFold(host, "localhost") {
+		return nil
+	}
+	addr, err := netip.ParseAddr(host)
+	if err != nil || !addr.IsLoopback() {
+		return errors.New("SHARE_LISTEN_ADDR must bind a loopback address in development mode")
 	}
 	return nil
 }

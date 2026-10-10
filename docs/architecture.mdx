@@ -58,10 +58,14 @@ Follow `distro/app.Run` to diagnose runtime wiring:
 6. Invoke `Options.Configure` once with the instance DB, mux, dispatcher,
    approvals engine, action registry and logger. Callback failure closes startup
    before any worker or listener starts.
-7. Reclaim durable work; start dispatch, configured intake, backup and retention
-   loops; wrap the mux in middleware and begin listening.
-8. On context cancellation, give HTTP bounded shutdown grace and stop dispatch.
-   Subscribers and subprocesses honor cancellation; errors release the database.
+7. Build the main mux and optional share-only mux, then bind every configured
+   socket before starting runtime work. Binding failure closes every socket.
+8. Reclaim durable work; start dispatch, configured intake, backup and retention
+   loops; serve all bound listeners concurrently.
+9. On context cancellation, drain every HTTP server with one bounded grace
+   period and stop dispatch. Failure of either listener cancels and drains its
+   sibling. Subscribers and subprocesses honor cancellation; errors release the
+   database.
 
 `app.Options` contains resolved `config.Config`, logger, build identity, tagged
 `PipelineProposalVersions`, migration sets, additional action definitions and
@@ -486,13 +490,27 @@ matrix.
 
 ## HTTP and security boundaries
 
-`distro/app/serve_middleware.go: buildHTTPHandler` wraps all requests, including rate-limit
-rejections, with request IDs, security headers, access logs and metrics. Limiters
-run before body limits, authentication, token policy, Fetch Metadata checks and
-the normalized mux. Credential/pairing and demo POST limiters classify the
-**decoded URL path** consistently with API trailing-slash normalization: ordinary,
-slash and escaped aliases receive the same policy without rewriting the request.
-Share routes use matched mux patterns. Test the assembled handler.
+`distro/app/serve_middleware.go: buildHTTPHandler` wraps main-listener requests,
+including rate-limit rejections, with request IDs, security headers, access logs
+and metrics. Limiters run before body limits, authentication, token policy,
+Fetch Metadata checks and the normalized mux. Credential/pairing, main-share and
+demo POST traffic use distinct limiter instances.
+
+An optional share listener is a separate socket and fresh mux, not a Host-header
+branch. `api.ShareSurface` captures `PublicOnly` and the configured origin at
+registration. The main mux uses `PUBLIC_URL` and serves Network and Public links;
+the share mux uses `SHARE_PUBLIC_URL`, serves only valid Public links, and
+registers only recipient metadata/password/download routes. Every other route is
+404. Its middleware is limited to request ID, security headers, body limit,
+Fetch Metadata, access log, metrics and an isolated share limiter—no session
+authentication or API-token resolution. Unknown, malformed, Network-only,
+expired and revoked bearers are indistinguishable on that socket. Request Host,
+source IP and forwarded headers never select visibility or origin.
+
+Credential/pairing and demo POST limiters classify the **decoded URL path**
+consistently with API trailing-slash normalization: ordinary, slash and escaped
+aliases receive the same policy without rewriting the request. Main share routes
+use matched mux patterns. Test the assembled handlers.
 Local password hashing and verification share a process-wide two-slot bound
 across account creation, shares, login, token exchange, and account-email
 reauthentication. Login takes a slot before the account lookup, so overload
@@ -572,9 +590,11 @@ tokens and pairings; re-addition does not revive them. See [Permissions](/permis
 
 First-party clients probe public `/api/handshake` before credentials. `/api/whoami`
 reports actual scopes/build identity and, for tokens, the bound filing-system ID,
-name, and possibly-empty code. `/api/token/` creates tokens, `/api/login` creates
-sessions; mobile reads use existing ACL-filtered API projections.
-[HTTP API](/api) owns handshake, payload, scope and mobile-read details.
+name, and possibly-empty code. It reports only whether public-share ingress is
+available, never either listener address. `/api/token/` creates tokens,
+`/api/login` creates sessions; mobile reads use existing ACL-filtered API
+projections. [HTTP API](/api) owns handshake, payload, scope and mobile-read
+details.
 
 `core/api/mobile_pairing.go` transfers a browser/OIDC identity to a device.
 Creation binds the short-lived code to configured `PUBLIC_URL`, never forwarded

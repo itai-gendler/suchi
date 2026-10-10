@@ -56,22 +56,23 @@ func requireActiveAdminInTx(ctx context.Context, tx *sql.Tx, userID int64) error
 
 // UserSelf is returned by GET /api/whoami and PATCH /api/users/me.
 type UserSelf struct {
-	Kind            string   `json:"kind"`
-	UserID          int64    `json:"user_id"`
-	Email           string   `json:"email"`
-	DisplayName     string   `json:"display_name,omitempty"`
-	InstanceHost    string   `json:"instance_host,omitempty"`
-	BuildVersion    string   `json:"build_version,omitempty"`
-	BuildRevision   string   `json:"build_revision,omitempty"`
-	Role            string   `json:"role"`
-	AuthNBy         string   `json:"authn_by,omitempty"`
-	EmailChangeMode string   `json:"email_change_mode"`
-	AvatarURL       string   `json:"avatar_url,omitempty"`
-	SystemID        *int64   `json:"system_id,omitempty"`
-	SystemName      *string  `json:"system_name,omitempty"`
-	SystemCode      *string  `json:"system_code,omitempty"`
-	Capabilities    []string `json:"capabilities"`
-	Scopes          []string `json:"scopes"`
+	Kind                 string   `json:"kind"`
+	UserID               int64    `json:"user_id"`
+	Email                string   `json:"email"`
+	DisplayName          string   `json:"display_name,omitempty"`
+	InstanceHost         string   `json:"instance_host,omitempty"`
+	BuildVersion         string   `json:"build_version,omitempty"`
+	BuildRevision        string   `json:"build_revision,omitempty"`
+	PublicShareAvailable bool     `json:"public_share_available"`
+	Role                 string   `json:"role"`
+	AuthNBy              string   `json:"authn_by,omitempty"`
+	EmailChangeMode      string   `json:"email_change_mode"`
+	AvatarURL            string   `json:"avatar_url,omitempty"`
+	SystemID             *int64   `json:"system_id,omitempty"`
+	SystemName           *string  `json:"system_name,omitempty"`
+	SystemCode           *string  `json:"system_code,omitempty"`
+	Capabilities         []string `json:"capabilities"`
+	Scopes               []string `json:"scopes"`
 }
 
 // Whoami serves GET /api/whoami. Reads the current user row so
@@ -87,7 +88,8 @@ func (s *Server) Whoami(w http.ResponseWriter, r *http.Request) {
 		s.serverErr(w, "whoami.load", err)
 		return
 	}
-	self.InstanceHost = s.publicHost()
+	self.InstanceHost = shareHost(s.PublicURL)
+	self.PublicShareAvailable = strings.TrimSpace(s.SharePublicURL) != ""
 	self.BuildVersion, self.BuildRevision = s.BuildVersion, s.BuildRevision
 	s.writeJSON(w, http.StatusOK, self)
 }

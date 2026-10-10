@@ -103,14 +103,15 @@ type PreparedBrowserSession interface {
 // Jobs is optional — when set, the upload handler nudges the
 // dispatcher after enqueuing post-ingest work. Tests can leave it nil.
 type Server struct {
-	Actions   *automations.Registry
-	Approvals *approvals.Engine
-	DB        *db.DB
-	CAS       *blob.CAS
-	Log       *slog.Logger
-	Jobs      *jobs.Dispatcher
-	trash     *trash.Service
-	PublicURL string // validated external origin, wired from config at boot
+	Actions        *automations.Registry
+	Approvals      *approvals.Engine
+	DB             *db.DB
+	CAS            *blob.CAS
+	Log            *slog.Logger
+	Jobs           *jobs.Dispatcher
+	trash          *trash.Service
+	PublicURL      string // validated main-listener origin, wired from config at boot
+	SharePublicURL string // validated share-only origin; empty disables public-link creation
 	// Build identity is injected by the executable, not frontend package metadata.
 	BuildVersion  string
 	BuildRevision string
@@ -338,11 +339,10 @@ func (s *Server) Register(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/share_links/", s.CreateShareLink)
 	mux.HandleFunc("DELETE /api/share_links/{id}", s.RevokeShareLink)
 
-	// Public share surface. Unauthenticated — token in URL is the
-	// primary credential; shares may also require a password.
-	mux.HandleFunc("GET /s/{token}", s.GetSharePublic)
-	mux.HandleFunc("POST /s/{token}", s.PostSharePublic)
-	mux.HandleFunc("GET /s/{token}/{doc_id}/download", s.GetSharePublicDownload)
+	// Anonymous recipient routes on the main listener serve both network and
+	// public links. A dedicated listener registers the same surface with
+	// PublicOnly set and a separate origin.
+	s.RegisterShareSurface(mux, ShareSurface{Origin: s.PublicURL})
 
 	// Document versions (chain of previous_version_id).
 	mux.HandleFunc("GET /api/documents/{id}/versions/", s.ListVersions)

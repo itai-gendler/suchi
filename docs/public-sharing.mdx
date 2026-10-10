@@ -1,0 +1,144 @@
+---
+title: "Public sharing"
+description: "Expose expiring bearer links without exposing the Suchi application or API."
+---
+
+Suchi has two share-link surfaces:
+
+- **Network** uses the normal `PUBLIC_URL`. It is private only when that address
+  is private. The main listener serves these links and Public links.
+- **Public** uses an optional share-only listener and `SHARE_PUBLIC_URL`. Anyone
+  holding the bearer can download until its required expiry.
+
+A share is bearer access, not user authentication. Use a password for
+confidential or restricted documents, send the link and password separately,
+and revoke the link when it is no longer needed. Revocation cannot retract bytes
+already downloaded.
+
+## Boundary
+
+```text
+Private client
+  -> private proxy / VPN
+     -> LISTEN_ADDR                 main UI, API, Network + Public shares
+
+Internet recipient
+  -> public TLS proxy
+     -> SHARE_LISTEN_ADDR           Public shares only
+```
+
+The share-only socket registers exactly:
+
+```text
+GET  /s/{token}
+POST /s/{token}
+GET  /s/{token}/{doc_id}/download
+```
+
+`/`, `/api/*`, login, application assets, health, metrics and compiled extension
+routes return `404`. Suchi fixes the surface and external origin when it builds
+each listener; `Host`, source IP and forwarded headers cannot turn a Network
+link into a Public link or alter the displayed origin.
+
+Public links require an expiry of at most 365 days. Unknown, malformed,
+Network-only, expired and revoked links all return the same `404` on the public
+socket. Recipient metadata, password responses and downloads are
+`Cache-Control: no-store`.
+
+## Configure the listener
+
+Set both values or neither:
+
+```ini
+SHARE_LISTEN_ADDR=127.0.0.1:8001
+SHARE_PUBLIC_URL=https://share.example.com
+```
+
+`SHARE_PUBLIC_URL` must be an HTTPS origin outside `SUCHI_DEV=1`. A reverse
+proxy should terminate public TLS and target the loopback HTTP listener. When
+Suchi terminates TLS itself, `TLS_CERT_FILE` and `TLS_KEY_FILE` apply to both
+configured listeners.
+
+Development mode permits only `localhost` or a loopback IP for
+`SHARE_LISTEN_ADDR`. It does not broaden the development login boundary to a
+public share socket.
+
+Suchi binds the main and share sockets before starting workers or serving either
+one. A bind failure closes both. A runtime failure of either HTTP server cancels
+and drains its sibling; process shutdown drains both under the same grace
+period.
+
+Disabling both `SHARE_*` settings removes internet ingress and the Public choice
+for new links. Existing Public rows remain usable through the main/private
+listener and can become internet-reachable again if ingress is re-enabled before
+they expire. Revoke them for permanent withdrawal.
+
+## Tailscale Serve and Funnel
+
+Keep the normal application tailnet-only and expose only the share socket:
+
+```sh
+tailscale serve  --bg --https=443  http://127.0.0.1:8000
+tailscale funnel --bg --https=8443 http://127.0.0.1:8001
+```
+
+Use matching configuration:
+
+```ini
+PUBLIC_URL=https://box.example.ts.net
+LISTEN_ADDR=127.0.0.1:8000
+SHARE_LISTEN_ADDR=127.0.0.1:8001
+SHARE_PUBLIC_URL=https://box.example.ts.net:8443
+```
+
+[Tailscale Serve](https://tailscale.com/docs/reference/tailscale-cli/serve) is
+tailnet-only; [Funnel](https://tailscale.com/docs/features/tailscale-funnel) is
+public. Funnel supports ports 443, 8443 and 10000, and one port cannot be both a
+Serve and Funnel endpoint. `--bg` preserves the configuration across Tailscale
+and machine restarts. Funnel remains beta and has non-configurable bandwidth
+limits.
+
+## Cloudflare Tunnel
+
+Point one public hostname only at the share listener and retain a terminal 404:
+
+```yaml
+ingress:
+  - hostname: share.example.com
+    service: http://127.0.0.1:8001
+  - service: http_status:404
+```
+
+Then set `SHARE_PUBLIC_URL=https://share.example.com`. Do not point this ingress
+at `LISTEN_ADDR`; doing so exposes the full application boundary. See
+[Cloudflare's locally managed tunnel configuration](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/do-more-with-tunnels/local-management/configuration-file/).
+
+## Rate limits behind a proxy
+
+Login, main-listener shares and public-listener shares use separate limiter
+instances. `TRUSTED_PROXY_CIDRS` controls which direct peers may supply
+`X-Forwarded-For`; arbitrary forwarded headers are ignored.
+
+Do not assume a public proxy preserves per-recipient addresses. If a Funnel or
+other HTTP proxy presents every request as one loopback peer, all recipients
+share one public rate bucket. Measure the deployed path before relying on
+per-client throttling. Suchi does not parse Tailscale's TCP PROXY protocol.
+
+## Verify the exposed surface
+
+From outside the private network, verify the public hostname before issuing a
+real link:
+
+```sh
+curl -i https://share.example.com/
+curl -i https://share.example.com/api/whoami
+curl -i https://share.example.com/healthz
+```
+
+All three must return `404`. Create a short-lived Public link, open its landing
+page, download one document, then revoke it and confirm the same URL returns
+`404`. Also verify that a Network link returns `404` through the public hostname.
+
+See [Permissions](/permissions#share-links) for recipient authority,
+[HTTP API](/api#post-apishare_links--multi-doc-bundles) for wire contracts, and
+[Privacy](/privacy) for retention limits.

@@ -42,6 +42,50 @@ func TestPublicURLValidation(t *testing.T) {
 		})
 	}
 }
+func TestShareListenerConfigValidation(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		listen    string
+		publicURL string
+		dev       bool
+		wantErr   string
+	}{
+		{name: "both absent"},
+		{name: "listen only", listen: "127.0.0.1:9000", wantErr: "both be set"},
+		{name: "URL only", publicURL: "https://share.example.com", wantErr: "both be set"},
+		{name: "HTTP production URL", listen: "127.0.0.1:9000", publicURL: "http://share.example.com", wantErr: "must use https"},
+		{name: "URL path", listen: "127.0.0.1:9000", publicURL: "https://share.example.com/suchi", wantErr: "SHARE_PUBLIC_URL"},
+		{name: "HTTPS production", listen: ":9000", publicURL: "https://share.example.com"},
+		{name: "loopback development", listen: "127.0.0.1:9000", publicURL: "http://127.0.0.1:9000", dev: true},
+		{name: "IPv6 loopback development", listen: "[::1]:9000", publicURL: "http://[::1]:9000", dev: true},
+		{name: "localhost development", listen: "localhost:9000", publicURL: "http://localhost:9000", dev: true},
+		{name: "wildcard development", listen: ":9000", publicURL: "http://localhost:9000", dev: true, wantErr: "loopback"},
+		{name: "private development", listen: "192.168.1.5:9000", publicURL: "http://192.168.1.5:9000", dev: true, wantErr: "loopback"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			isolateConfigEnv(t)
+			t.Setenv("PUBLIC_URL", "http://localhost:8000")
+			t.Setenv("SHARE_LISTEN_ADDR", tc.listen)
+			t.Setenv("SHARE_PUBLIC_URL", tc.publicURL)
+			if tc.dev {
+				t.Setenv("SUCHI_DEV", "1")
+			}
+			cfg, err := Load()
+			if tc.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+					t.Fatalf("Load error=%v, want text %q", err, tc.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if cfg.ShareListenAddr != tc.listen || cfg.SharePublicURL != tc.publicURL {
+				t.Fatalf("share config=%q %q", cfg.ShareListenAddr, cfg.SharePublicURL)
+			}
+		})
+	}
+}
 
 func TestDemoGlobalRPSDefaultAndDisable(t *testing.T) {
 	t.Setenv("PUBLIC_URL", "http://localhost")

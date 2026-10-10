@@ -25,6 +25,10 @@ public_url: "http://127.0.0.1:8000"
 
 data_dir: "/data"
 listen_addr: ":8000"
+
+# Optional internet-facing share-only listener. Set both values or neither.
+# share_listen_addr: "127.0.0.1:8001"
+# share_public_url: "https://share.example.com"
 log_level: "info"
 body_limit: "500M"
 # trusted_proxy_cidrs: "127.0.0.1/32,::1/128"

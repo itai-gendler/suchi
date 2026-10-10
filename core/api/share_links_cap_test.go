@@ -78,7 +78,7 @@ func TestShareLinks_cap_gate(t *testing.T) {
 	// exist, but we cleared the auth gate, which is what this test asserts.
 	seedMember(t, s, 6, `["share_links"]`)
 	rec = shareCall(t, s, "POST", "/api/share_links/",
-		`{"doc_ids":[42]}`, memberPrincipal(6))
+		`{"doc_ids":[42],"visibility":"network"}`, memberPrincipal(6))
 	if rec.Code == http.StatusForbidden {
 		t.Fatalf("cap-holder should not see 403, got body=%s", rec.Body.String())
 	}
@@ -89,7 +89,7 @@ func TestShareLinkAuditOmitsBearerCredential(t *testing.T) {
 	category := seedStatsJDInbox(t, s.DB)
 	docID := seedStatsDoc(t, s.DB, 1, "share-audit-fixture", "Audit fixture", category, false, 0)
 	response := shareCall(t, s, "POST", "/api/share_links/",
-		`{"doc_ids":[`+itoa(docID)+`],"label":"audit fixture"}`,
+		`{"doc_ids":[`+itoa(docID)+`],"label":"audit fixture","visibility":"network"}`,
 		&pluginapi.Principal{Kind: "user", UserID: 1, Role: "admin"})
 	if response.Code != http.StatusCreated {
 		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
@@ -125,7 +125,7 @@ func TestCreateShareLinkReturnsRetryableErrorWhenPasswordHashingIsUnavailable(t 
 		return "", errors.New("password work is busy")
 	}
 	rec := shareCall(t, s, http.MethodPost, "/api/share_links/",
-		`{"doc_ids":[`+itoa(docID)+`],"password":"secret"}`,
+		`{"doc_ids":[`+itoa(docID)+`],"password":"secret","visibility":"network"}`,
 		&pluginapi.Principal{Kind: "user", UserID: 1, Role: "admin"})
 	if rec.Code != http.StatusServiceUnavailable || rec.Header().Get("Retry-After") != "1" ||
 		rec.Header().Get("Cache-Control") != "no-store" {
@@ -133,29 +133,6 @@ func TestCreateShareLinkReturnsRetryableErrorWhenPasswordHashingIsUnavailable(t 
 	}
 	if !strings.Contains(rec.Body.String(), `"code":"password_hash_unavailable"`) {
 		t.Fatalf("body=%s", rec.Body.String())
-	}
-}
-
-func TestRenderShareHTMLIncludesFavicon(t *testing.T) {
-	rec := httptest.NewRecorder()
-	renderShareHTML(rec, http.StatusOK, shareHTMLData{
-		Title: "Shared documents", SharedBy: "Ritesh & family", InstanceHost: "suchi.example.com",
-	})
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
-	}
-	if !strings.Contains(rec.Body.String(), `href="/assets/brand/favicon.svg"`) {
-		t.Errorf("share page should declare the branded favicon")
-	}
-	if !strings.Contains(rec.Body.String(), "Shared by <strong>Ritesh &amp; family</strong> <span aria-hidden=\"true\">·</span> suchi.example.com") {
-		t.Errorf("share page should identify and escape its creator")
-	}
-	if !strings.Contains(rec.Body.String(), "Powered by") {
-		t.Errorf("share page should keep product attribution in its footer")
-	}
-	if strings.Contains(rec.Body.String(), "document to download") {
-		t.Errorf("share page should not explain self-evident download rows")
 	}
 }
 
@@ -177,13 +154,13 @@ func TestPublicShareUsesCurrentCreatorName(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	mux := http.NewServeMux()
+	s.RegisterShareSurface(mux, ShareSurface{Origin: s.PublicURL})
 	request := func(accept string) string {
 		t.Helper()
 		rec := httptest.NewRecorder()
 		req := httptest.NewRequest(http.MethodGet, "/s/"+token, http.NoBody)
 		req.Header.Set("Accept", accept)
-		mux := http.NewServeMux()
-		mux.HandleFunc("GET /s/{token}", s.GetSharePublic)
 		mux.ServeHTTP(rec, req)
 		if rec.Code != http.StatusOK {
 			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
@@ -241,7 +218,7 @@ func TestPublicShareDownloadSupportsRanges(t *testing.T) {
 	}
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /s/{token}/{doc_id}/download", s.GetSharePublicDownload)
+	s.RegisterShareSurface(mux, ShareSurface{Origin: s.PublicURL})
 	req := httptest.NewRequest(http.MethodGet, "/s/"+token+"/"+itoa(docID)+"/download", nil)
 	req.Header.Set("Range", "bytes=7-15")
 	rec := httptest.NewRecorder()

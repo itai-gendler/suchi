@@ -26,9 +26,8 @@
 # Required
 # --------------------------------------------------------------------
 
-# The absolute URL clients hit — drives cookie domain, OIDC callbacks,
-# and share-link URLs. Behind a reverse proxy, this is what the proxy
-# exposes.
+# The absolute origin clients use for cookies, OIDC callbacks, mobile pairing,
+# and Network share links. Behind a reverse proxy, this is what the proxy exposes.
 public_url = "http://127.0.0.1:8000"
 
 # --------------------------------------------------------------------
@@ -37,6 +36,11 @@ public_url = "http://127.0.0.1:8000"
 
 data_dir = "/data"    # CAS blobs, rendered view, backups all under here
 listen_addr = ":8000" # ip:port; ":8000" listens on all interfaces
+
+# Optional internet-facing share-only listener. Set both values or neither.
+# Production share_public_url must use HTTPS.
+# share_listen_addr = "127.0.0.1:8001"
+# share_public_url = "https://share.example.com"
 log_level = "info"    # debug | info | warn | error
 body_limit = "500M"   # request-body and filesystem intake cap
 # trusted_proxy_cidrs = ["127.0.0.1/32", "::1/128"]

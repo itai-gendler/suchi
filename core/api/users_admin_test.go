@@ -949,8 +949,9 @@ func TestWhoami_capabilities(t *testing.T) {
 	d := openTestDB(t)
 	s := &Server{
 		DB: d, Log: slog.New(slog.NewTextHandler(os.Stderr, nil)),
-		PublicURL:    "https://suchi.example.com",
-		BuildVersion: "v0.1.0-beta.2", BuildRevision: "1234567890ab",
+		PublicURL:      "https://suchi.example.com",
+		SharePublicURL: "https://share.secret.example.com",
+		BuildVersion:   "v0.1.0-beta.2", BuildRevision: "1234567890ab",
 	}
 	seedMember(t, s, 5, `["mailboxes"]`)
 
@@ -967,6 +968,9 @@ func TestWhoami_capabilities(t *testing.T) {
 	}
 	if self.InstanceHost != "suchi.example.com" {
 		t.Fatalf("whoami instance_host = %q", self.InstanceHost)
+	}
+	if !self.PublicShareAvailable || strings.Contains(rec.Body.String(), s.SharePublicURL) {
+		t.Fatalf("whoami public sharing disclosure = %s", rec.Body.String())
 	}
 	if self.BuildVersion != s.BuildVersion || self.BuildRevision != s.BuildRevision {
 		t.Fatalf("whoami build identity = %q, %q", self.BuildVersion, self.BuildRevision)

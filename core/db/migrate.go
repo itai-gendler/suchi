@@ -94,6 +94,8 @@ var coreAfterExtensionObjects = []string{
 	"documents_title_revision",
 	"idx_automation_actions_aid",
 	"object_acls",
+	"share_links_visibility_immutable",
+	"share_links_visibility_replace",
 	"tags",
 	"tags_parent",
 	"tags_parent_insert",

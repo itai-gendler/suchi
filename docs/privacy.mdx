@@ -165,10 +165,12 @@ do not remove them. Whole-directory snapshots and external backups may retain
 both current and historical addresses according to their separate lifecycle.
 
 Share links are random, revocable bearer tokens containing documents from one
-system. Public requests recheck that the creator is active, can still enter that
-system and can still share each live document. Removing membership revokes that
-user's system shares, API tokens and pending mobile pairings; re-admission does
-not revive them. Revocation stops future access but cannot retract downloaded bytes.
+system. A Network link uses the normal Suchi origin; a Public link uses an
+optional share-only internet ingress and must expire within one year. Recipient
+requests recheck that the creator is active, can still enter that system and can
+still share each live document. Removing membership revokes that user's system
+shares, API tokens and pending mobile pairings; re-admission does not revive
+them. Revocation stops future access but cannot retract downloaded bytes.
 
 ## Operator checklist
 

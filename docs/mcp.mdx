@@ -106,11 +106,13 @@ the share-links capability for non-admin users; mere view permission is insuffic
 
 - `doc_ids`: required document ID array
 - `label`: optional label
-- `expires_in_sec`: optional lifetime; zero means no expiry
+- `visibility`: required `network` or `public`
+- `expires_in_sec`: optional for Network links; Public links require 1–31,536,000 seconds
 - `password`: optional recipient password
 
-The response contains an absolute `/s/<token>` URL resolved from the server's
-configured `PUBLIC_URL`.
+The response contains an absolute `/s/<token>` URL. Network links use
+`PUBLIC_URL`; Public links use the configured `SHARE_PUBLIC_URL` and fail while
+public ingress is unavailable.
 
 ## Current limits
 

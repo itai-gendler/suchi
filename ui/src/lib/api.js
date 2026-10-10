@@ -174,9 +174,9 @@ export const createAutomation = (b) => api.post('/api/automations/', b)
 export const patchAutomation = (id, b) => api.patch(`/api/automations/${id}`, b)
 export const deleteAutomation = (id) => api.del(`/api/automations/${id}`)
 
-export const listShareLinks = () => api.get('/api/share_links/')
-export const createShareLink = ({ doc_ids, label = '', expires_in_sec = 0, password = '' }) =>
-  api.post('/api/share_links/', { doc_ids, label, expires_in_sec, password })
+export const listShareLinks = (params) => api.get(`/api/share_links/${qs(params)}`)
+export const createShareLink = ({ doc_ids, label = '', visibility = 'network', expires_in_sec = 0, password = '' }) =>
+  api.post('/api/share_links/', { doc_ids, label, visibility, expires_in_sec, password })
 export const deleteShareLink = (id) => api.del(`/api/share_links/${id}`)
 
 export const stats = () => api.get('/api/stats/')

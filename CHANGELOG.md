@@ -13,6 +13,10 @@ Notable user-visible changes to Suchi are recorded here.
 - Titles renamed or approved by a person are now protected from classifier and
   rule overwrites. A lock explains the protection, and **Let Suchi rename this**
   returns naming to automatic handling without changing the current title.
+- Optional Public links now use a separate share-only listener and required
+  expiry, while Network links stay on the normal Suchi address. Public ingress
+  exposes no application, API, asset, health or metrics routes; recipient reads
+  no longer write an unused view counter.
 
 ## [0.2.1] - 2026-10-10
 

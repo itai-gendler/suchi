@@ -520,6 +520,7 @@ func Run(ctx context.Context, opts Options) error {
 		return fmt.Errorf("main.api.new: %w", err)
 	}
 	apiSrv.PublicURL = cfg.PublicURL
+	apiSrv.SharePublicURL = cfg.SharePublicURL
 	apiSrv.BuildVersion, apiSrv.BuildRevision = opts.BuildVersion, opts.BuildRevision
 	apiSrv.Approvals = apvEngine
 	apiSrv.WithDeviceOCRMinConfidence(cfg.DeviceOCRMinConfidence)
@@ -710,8 +711,30 @@ func Run(ctx context.Context, opts Options) error {
 		}
 	}
 
-	// Everything below this point starts runtime work. Configure failures return
-	// above with an idle dispatcher, supervisors, scheduler and HTTP listener.
+	oidcAuthorizationURL := ""
+	if oa != nil {
+		oidcAuthorizationURL = oa.AuthorizationEndpoint()
+	}
+	mainHandler := buildHTTPHandler(mux, cfg, authChain, oidcAuthorizationURL, demoRL, m, log)
+	var shareHandler http.Handler
+	if cfg.ShareListenAddr != "" {
+		shareMux := http.NewServeMux()
+		apiSrv.RegisterShareSurface(shareMux, api.ShareSurface{
+			PublicOnly: true,
+			Origin:     cfg.SharePublicURL,
+		})
+		shareMux.HandleFunc("/", http.NotFound)
+		shareHandler = buildShareHTTPHandler(shareMux, cfg, m, log)
+	}
+	endpoints, err := bindHTTPEndpoints(ctx, cfg, mainHandler, shareHandler)
+	if err != nil {
+		log.Error("main.listen.bind_failed", "err", err)
+		return fmt.Errorf("main.listen.bind_failed: %w", err)
+	}
+	defer closeHTTPEndpoints(endpoints)
+
+	// Both configured sockets are bound before runtime work starts. Neither
+	// accepts HTTP traffic until every worker below has initialized.
 	if _, err := disp.ReclaimOrphaned(ctx); err != nil {
 		log.Warn("jobs.boot_reclaim_failed", "err", err.Error())
 	}
@@ -745,39 +768,7 @@ func Run(ctx context.Context, opts Options) error {
 		ObjectKind: "server",
 	})
 
-	oidcAuthorizationURL := ""
-	if oa != nil {
-		oidcAuthorizationURL = oa.AuthorizationEndpoint()
-	}
-
-	server := &http.Server{
-		Addr:              cfg.ListenAddr,
-		Handler:           buildHTTPHandler(mux, cfg, authChain, oidcAuthorizationURL, demoRL, m, log),
-		ReadHeaderTimeout: 10 * time.Second,
-		IdleTimeout:       60 * time.Second,
-	}
-
-	go func() {
-		<-ctx.Done()
-		log.Info("main.shutdown.begin")
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-		defer cancel()
-		_ = server.Shutdown(shutdownCtx)
-	}()
-
-	log.Info("main.serve", "addr", cfg.ListenAddr, "public_url", cfg.PublicURL)
-	var serveErr error
-	if cfg.TLSCertFile != "" {
-		serveErr = server.ListenAndServeTLS(cfg.TLSCertFile, cfg.TLSKeyFile)
-	} else {
-		serveErr = server.ListenAndServe()
-	}
-	if serveErr != nil && serveErr != http.ErrServerClosed {
-		log.Error("main.serve.err", "err", serveErr.Error())
-		return fmt.Errorf("main.serve.err: %w", serveErr)
-	}
-	log.Info("main.shutdown.done")
-	return nil
+	return runHTTPEndpoints(ctx, cancel, endpoints, log)
 }
 
 // logEgressSurface records the effective outbound integrations gathered by

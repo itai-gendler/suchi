@@ -2102,6 +2102,7 @@ one landing page with every doc listed. API tokens need `documents:write`.
 {
   "doc_ids": [42, 91, 108],
   "label": "Everything for the accountant",
+  "visibility": "public",
   "password": "optional",
   "expires_in_sec": 604800
 }
@@ -2110,15 +2111,20 @@ one landing page with every doc listed. API tokens need `documents:write`.
 - `doc_ids`: 1–200 live documents from one enterable system. Members must own them;
   administrators bypass ownership, not an explicit request or token system ceiling.
 - `label`: optional human string shown on the landing page, up to 200 bytes.
+- `visibility`: required, immutable `network` or `public`. Change it by revoking
+  and creating another link.
 - `password`: optional, up to 1024 bytes. It is Argon2id-hashed at rest.
-- `expires_in_sec`: seconds from creation, from `0` (no expiry) through one
-  year.
+- `expires_in_sec`: seconds from creation, up to one year. Network links may use
+  `0` for no expiry. Public links require a non-zero expiry, and creation returns
+  `409 public_sharing_unavailable` while the share listener is disabled.
 
 If password hashing is temporarily unavailable, creation returns **503** with
 `Retry-After: 1`; no share row is written.
 
-**Response** carries the fresh `token`, the absolute `public_url` resolved from
-`PUBLIC_URL`, and the `shared_by` + `instance_host` identity recipients see.
+**Response** carries `visibility`, `expires_at`, the fresh `token`, and the
+absolute `public_url`. Network links use `PUBLIC_URL`; Public links use
+`SHARE_PUBLIC_URL`. `shared_by` and `instance_host` are the identity recipients
+see.
 
 **Public paths** (unauthenticated, rate-limited):
 
@@ -2131,12 +2137,12 @@ revocation, expiry, or a password change cannot be bypassed by cached content.
 
 - `GET /s/{token}` — content-negotiated on the `Accept` header. A
   browser (`Accept: text/html`) gets a small landing page with the
-  bundle label, `Shared by <display name> · <instance host>`, a password form
-  when required, and one download row per doc. The identity appears before the
-  password form. If the display name is empty, the page shows only
+  bundle label, `Shared by <display name> · <instance host>`, expiry, a password
+  form when required, and one download row per doc. The identity appears before
+  the password form. If the display name is empty, the page shows only
   `Shared from <instance host>`. Programmatic callers that accept
   `application/json` get
-  `{label, shared_by, instance_host, requires_password, docs:[{id, title, mime_type, original_size, download}]}`.
+  `{label, shared_by, instance_host, expires_at, requires_password, docs:[{id, title, mime_type, original_size, download}]}`.
 - `POST /s/{token}` — password-form submission from the HTML landing.
   Verifies the password server-side and sets a one-hour HttpOnly,
   SameSite=Strict unlock cookie scoped to `Path=/s/{token}`. The cookie
@@ -2147,8 +2153,11 @@ revocation, expiry, or a password change cannot be bypassed by cached content.
   are not accepted in URLs, where they can leak into history and proxy logs.
 
 List owned links in the selected system with `GET /api/share_links/`
-(`documents:read` for API tokens). Revoke via `DELETE /api/share_links/{id}`
-(`documents:write`) — the share token becomes 404 immediately (no soft delete).
+(`documents:read` for API tokens). Optional `doc_id` and
+`status=active|inactive` filters apply before `count` and pagination. Responses
+include visibility, expiry and password state but no view counter. Revoke via
+`DELETE /api/share_links/{id}` (`documents:write`)—the share token becomes 404
+immediately (no soft delete).
 
 ## Initial setup
 

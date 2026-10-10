@@ -28,6 +28,8 @@ func buildHTTPHandler(mux *http.ServeMux, cfg *config.Config, authChain *auth.Ch
 
 	loginLimiter := httpx.NewRateLimit(5, 10, cfg.TrustedProxyCIDRs...)
 	loginHandler := loginLimiter.Middleware(handler)
+	shareLimiter := httpx.NewRateLimit(5, 10, cfg.TrustedProxyCIDRs...)
+	shareHandler := shareLimiter.Middleware(handler)
 	demoHandler := handler
 	if demoLimiter != nil {
 		demoHandler = demoLimiter.Middleware(handler)
@@ -55,7 +57,7 @@ func buildHTTPHandler(mux *http.ServeMux, cfg *config.Config, authChain *auth.Ch
 			_, pattern := mux.Handler(r)
 			switch pattern {
 			case "GET /s/{token}", "POST /s/{token}", "GET /s/{token}/{doc_id}/download":
-				loginHandler.ServeHTTP(w, r)
+				shareHandler.ServeHTTP(w, r)
 				return
 			}
 		}
@@ -63,4 +65,11 @@ func buildHTTPHandler(mux *http.ServeMux, cfg *config.Config, authChain *auth.Ch
 	})
 	return httpx.Chain(limited, httpx.RequestID, httpx.SecurityHeaders(oidcAuthorizationURL),
 		httpx.AccessLog(log), metrics.HTTPInstrument)
+}
+
+func buildShareHTTPHandler(mux *http.ServeMux, cfg *config.Config, metrics *httpx.Metrics, log *slog.Logger) http.Handler {
+	handler := httpx.Chain(mux, httpx.BodyLimit(cfg.BodyLimit), httpx.SecFetchSite)
+	shareLimiter := httpx.NewRateLimit(5, 10, cfg.TrustedProxyCIDRs...)
+	return httpx.Chain(shareLimiter.Middleware(handler), httpx.RequestID,
+		httpx.SecurityHeaders(""), httpx.AccessLog(log), metrics.HTTPInstrument)
 }

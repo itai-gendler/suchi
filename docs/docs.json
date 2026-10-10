@@ -51,7 +51,7 @@
           },
           {
             "group": "Operations",
-            "pages": ["refile", "preconsume", "demo-instance", "backup-restore"]
+            "pages": ["refile", "preconsume", "demo-instance", "public-sharing", "backup-restore"]
           },
           {
             "group": "Guides",

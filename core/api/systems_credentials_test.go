@@ -41,7 +41,7 @@ func TestSystemsMemberReadmissionDoesNotReviveDelegatedCredentials(t *testing.T)
 		code string
 		doc  int64
 	}{{"S01", 101}, {"S02", 201}} {
-		w := systemsBoundaryRequest(mux, "POST", "/api/share_links/?system="+row.code, fmt.Sprintf(`{"doc_ids":[%d],"label":"%s private share"}`, row.doc, row.code), memberPrincipal(5))
+		w := systemsBoundaryRequest(mux, "POST", "/api/share_links/?system="+row.code, fmt.Sprintf(`{"doc_ids":[%d],"label":"%s private share","visibility":"network"}`, row.doc, row.code), memberPrincipal(5))
 		var share struct {
 			Token string `json:"token"`
 		}

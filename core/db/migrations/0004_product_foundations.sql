@@ -3,6 +3,22 @@
 ALTER TABLE documents ADD COLUMN title_owner TEXT NOT NULL DEFAULT 'auto'
     CHECK (title_owner IN ('auto', 'rule', 'human'));
 
+ALTER TABLE share_links ADD COLUMN visibility TEXT NOT NULL DEFAULT 'network'
+    CHECK (visibility IN ('network', 'public'));
+
+CREATE TRIGGER share_links_visibility_immutable
+BEFORE UPDATE OF visibility ON share_links
+WHEN NEW.visibility IS NOT OLD.visibility
+BEGIN SELECT RAISE(ABORT, 'share visibility is immutable'); END;
+
+CREATE TRIGGER share_links_visibility_replace
+BEFORE INSERT ON share_links
+WHEN EXISTS (
+    SELECT 1 FROM share_links
+    WHERE id = NEW.id AND visibility IS NOT NEW.visibility
+)
+BEGIN SELECT RAISE(ABORT, 'share visibility is immutable'); END;
+
 -- Existing explicit titles are human-owned unless they still match the first
 -- acquisition's generated filename title. Imported Paperless titles remain
 -- human-owned because their provenance cannot distinguish curated values.

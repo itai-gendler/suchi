@@ -218,18 +218,27 @@ idempotent: an identical PUT is a no-op and deleting a missing grant succeeds.
 
 ## Share links
 
-Share links are time-bounded anonymous bearer access, not ACL entries. They are
-useful for sending selected documents to someone who has no Suchi account.
-Revoking a share link does not change user or group grants.
+Share links are anonymous bearer access, not ACL entries. They are useful for
+sending selected documents to someone who has no Suchi account. Revoking a
+share link does not change user or group grants and cannot retract bytes a
+recipient already downloaded.
+
+- **Network** links use the normal `PUBLIC_URL`. They are private only when that
+  address is private and may have no expiry.
+- **Public** links use the operator's separate share ingress. Anyone with the
+  bearer can download until its required expiry. The maximum lifetime is one
+  year.
 
 A share contains documents from exactly one system and remains subject to the
-creator being active and able to enter it. Public requests return only still-
+creator being active and able to enter it. Recipient requests return only still-
 shareable live documents. Revocation, removal of membership, or loss of the
-creator's authority cannot be bypassed using the bearer link.
+creator's authority cannot be bypassed using the bearer link. Visibility is
+immutable; revoke and recreate to switch surfaces.
 
-The Documents **Shared by me** filter follows those same checks
-and only considers links created by the current user. It does not expose another
-user's sharing activity to administrators.
+The Documents **Shared by me** filter follows those same checks and only
+considers links created by the current user. It does not expose another user's
+sharing activity to administrators. See [Public sharing](/public-sharing) for
+the listener and deployment boundary.
 
 Automations can change ownership but v0.1 does not include a general ACL-grant
 automation action. Approval definitions are governed by their own task and

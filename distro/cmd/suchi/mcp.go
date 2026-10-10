@@ -331,7 +331,8 @@ func registerResolveApprovalTask(server *mcp.Server, client *suchiClient) {
 type createShareArgs struct {
 	DocIDs       []int64 `json:"doc_ids" jsonschema:"the document ids to include in the share (1..N)"`
 	Label        string  `json:"label,omitempty" jsonschema:"human-friendly label (creator sees this in their share list)"`
-	ExpiresInSec int64   `json:"expires_in_sec,omitempty" jsonschema:"seconds until the link expires; 0 means never"`
+	Visibility   string  `json:"visibility" jsonschema:"required visibility: network or public"`
+	ExpiresInSec int64   `json:"expires_in_sec,omitempty" jsonschema:"seconds until expiry; public shares require 1..31536000, network shares may use 0 for never"`
 	Password     string  `json:"password,omitempty" jsonschema:"optional password recipients must enter"`
 }
 
@@ -344,9 +345,13 @@ func registerCreateShareLink(server *mcp.Server, client *suchiClient) {
 		if len(args.DocIDs) == 0 {
 			return nil, nil, errors.New("doc_ids must be non-empty")
 		}
+		if args.Visibility != "network" && args.Visibility != "public" {
+			return nil, nil, errors.New(`visibility must be "network" or "public"`)
+		}
 		body, _ := json.Marshal(map[string]any{
 			"doc_ids":        args.DocIDs,
 			"label":          args.Label,
+			"visibility":     args.Visibility,
 			"expires_in_sec": args.ExpiresInSec,
 			"password":       args.Password,
 		})
