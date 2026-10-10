@@ -202,6 +202,26 @@ Delete action uses the same confirmation. Deleting removes document-tag links,
 re-roots surviving child tags, and cannot be undone. Creating and renaming tags
 also happen there; document screens only assign existing tags.
 
+## Share links
+
+Users with **Create share links** can share one document from Document Detail or
+one selected bundle from Documents. New links default to **Private network**:
+they use the normal Suchi address and are private only when that address is
+private. When the operator enables [public sharing](/public-sharing), **Public
+internet** creates an internet-facing link with a required expiry; seven days is
+the default and the available choices are 1, 7, 30, 90 and 365 days.
+
+Passwords are optional. Suchi recommends one for Confidential or Restricted
+documents but does not silently change access policy from sensitivity metadata.
+The link and password should travel separately.
+
+Document Detail lists active links with their surface, expiry, password state,
+and **Copy**, **Show** and **Revoke** actions. **History** expands expired and
+revoked links five at a time. Revocation stops later access immediately but
+cannot retract a file the recipient already downloaded. The recipient landing
+page shows the expiry and always offers the real download; Suchi does not claim
+that browser-delivered files can be made non-downloadable.
+
 ## Approvals
 
 Cards show decisions, confidence, evidence and deadlines. A model-backed

@@ -478,12 +478,21 @@ document details, so active jobs do not cause repeated document reads. Navigatio
 stops receipt polling and releases paste URLs while already accepted transfers
 continue for the same account.
 
-Share creation displays its URL before clipboard access. `lib/clipboard.js`
-reports failures so that URL stays manually selectable. Late creation/copy feedback
-is discarded after navigation/account changes. `LinkQR.svelte` lazily encodes
-private or existing shared links locally with escaped SVG matrix attributes;
-it issues no request, credential or new share. Document-detail full-text controls
-use already-authorized `content`, retaining Reveal for sensitive text and a
+`lib/ShareLinkForm.svelte` owns the Network/Public choice, expiry presets and
+dialog-local password state for detail and bulk creation. The screen passes only
+the server-projected `public_share_available` boolean; it never needs the Public
+listener address. Public always has a bounded expiry. Each owning screen captures
+document/account/system generation before creation and discards late feedback.
+Creation displays its URL before clipboard access; `lib/clipboard.js` reports
+failures so that URL stays manually selectable.
+
+`DocumentDetail.svelte` requests active links with `status=active`, while its
+collapsed History requests `status=inactive` in pages of five. Revocation uses a
+confirmation that distinguishes stopping future access from retracting an
+already-downloaded file. `LinkQR.svelte` lazily encodes private or existing
+shared links locally with escaped SVG matrix attributes; it issues no request,
+credential or new share. Document-detail full-text controls use
+already-authorized `content`, retaining Reveal for sensitive text and a
 selectable fallback when copying fails.
 
 Pairing secrets stay in component memory; QR/link displays disappear on expiry.

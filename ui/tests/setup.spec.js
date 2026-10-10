@@ -672,6 +672,8 @@ async function mockAPI(page, options = {}) {
       email_change_mode: options.emailChangeMode || (options.demoSession ? 'disabled' : 'password'),
       build_version: options.buildVersion,
       build_revision: options.buildRevision,
+      instance_host: options.instanceHost || 'archive.example.test',
+      public_share_available: options.publicShareAvailable ?? false,
       capabilities: options.capabilities ?? (options.demoSession ? [] : ['mailboxes']),
       kind: options.demoSession ? `demo-${options.demoSession}` : 'user',
     }
@@ -3232,19 +3234,23 @@ test('reopens an existing password-protected share QR and clears it on revocatio
     }
     if (request.method() !== 'GET') writes.push(request.method())
     return route.fulfill({ json: { results: deleted ? [] : [{
-      id: 7, doc_ids: [42], public_url: 'https://archive.example.test/s/protected', has_passwd: true,
+      id: 7, doc_ids: [42], visibility: 'network', expires_at: 1780604800,
+      public_url: 'https://archive.example.test/s/protected', has_password: true,
     }] } })
   })
   await page.goto('/#/doc/42')
   await page.getByRole('button', { name: 'Share', exact: true }).click()
   const dialog = page.getByRole('dialog', { name: 'Share document' })
-  await expect(dialog.getByText('password', { exact: true })).toBeVisible()
-  await dialog.getByRole('button', { name: 'Show link', exact: true }).click()
+  await expect(dialog.getByText('Password', { exact: true })).toBeVisible()
+  await dialog.getByRole('button', { name: 'Show', exact: true }).click()
   await expect(dialog.getByLabel('Share link', { exact: true })).toHaveValue('https://archive.example.test/s/protected')
   await dialog.getByRole('button', { name: 'Show QR code', exact: true }).click()
   await expect(dialog.getByRole('img', { name: 'QR code for the displayed link' })).toBeVisible()
   expect(writes).toEqual([])
   await dialog.getByRole('button', { name: 'Revoke', exact: true }).click()
+  const confirmation = page.getByRole('alertdialog')
+  await expect(confirmation).toContainText('cannot retract files already downloaded')
+  await confirmation.getByRole('button', { name: 'Revoke link', exact: true }).click()
   await expect(dialog.getByLabel('Share link', { exact: true })).toHaveCount(0)
   await expect(dialog.getByRole('img', { name: 'QR code for the displayed link' })).toHaveCount(0)
   expect(deleted).toBe(true)
@@ -3743,13 +3749,93 @@ test('shows share controls only with the share-links capability', async ({ page 
   await expect(page.locator('.toolbar').getByRole('button', { name: 'Share' })).toBeVisible()
 })
 
+test('creates a public share with a bounded expiry and sensitivity guidance', async ({ page }) => {
+  const documents = [{
+    id: 42, title: 'Restricted policy', created_at: 1780000000,
+    sensitivity: 'restricted', tags: [],
+  }]
+  await mockAPI(page, {
+    userRole: 'member', capabilities: ['share_links'], publicShareAvailable: true,
+    documentSensitivity: 'restricted', documents,
+  })
+  let created
+  await page.route('**/api/share_links/**', route => {
+    if (route.request().method() === 'POST') {
+      created = route.request().postDataJSON()
+      return route.fulfill({ status: 201, json: {
+        id: 8, visibility: 'public', expires_at: 1780604800,
+        public_url: 'https://share.example.test/s/public-token',
+      } })
+    }
+    return route.fulfill({ json: { count: 0, results: [] } })
+  })
+  await page.goto('/#/doc/42')
+  await page.getByRole('button', { name: 'Share', exact: true }).click()
+  const dialog = page.getByRole('dialog', { name: 'Share document' })
+  await expect(dialog.getByText('Uses your normal Suchi address. It is private only if that address is private.', { exact: true })).toBeVisible()
+  await expect(dialog.getByText('Anyone with the link can download from the internet until it expires.', { exact: true })).toBeVisible()
+  await dialog.getByRole('radio', { name: /Public internet/ }).click()
+  await expect(dialog.getByLabel('Link expiry')).toHaveValue('604800')
+  await expect(dialog.getByLabel('Link expiry').locator('option', { hasText: 'Never expires' })).toHaveCount(0)
+  await expect(dialog.getByText('Add a password for confidential or restricted documents, and send it separately.', { exact: true })).toBeVisible()
+  await dialog.getByLabel('Share password').fill('send-separately')
+  await dialog.getByRole('button', { name: 'Create & copy' }).click()
+  await expect.poll(() => created).toEqual({
+    doc_ids: [42],
+    label: 'Electricity bill',
+    visibility: 'public',
+    expires_in_sec: 604800,
+    password: 'send-separately',
+  })
+  await expect(dialog.getByLabel('Share link', { exact: true }))
+    .toHaveValue('https://share.example.test/s/public-token')
+})
+
+test('loads active share links and paginated history from server filters', async ({ page }) => {
+  await mockAPI(page, {
+    userRole: 'member', capabilities: ['share_links'],
+    documents: [{ id: 42, title: 'Electricity bill', created_at: 1780000000, tags: [] }],
+  })
+  const reads = []
+  await page.route('**/api/share_links/?*', route => {
+    const url = new URL(route.request().url())
+    reads.push(url.search)
+    if (url.searchParams.get('status') === 'active') {
+      return route.fulfill({ json: { count: 1, results: [{
+        id: 7, doc_ids: [42], visibility: 'public', expires_at: 1780604800,
+        has_password: false, public_url: 'https://share.example.test/s/active',
+      }] } })
+    }
+    const pageNumber = Number(url.searchParams.get('page') || 1)
+    return route.fulfill({ json: { count: 6, results: [{
+      id: 20 + pageNumber, doc_ids: [42], visibility: 'network',
+      expires_at: 1780000000, revoked_at: pageNumber === 1 ? 1780000100 : 0,
+      has_password: true, public_url: `https://archive.example.test/s/history-${pageNumber}`,
+    }] } })
+  })
+  await page.goto('/#/doc/42')
+  await page.getByRole('button', { name: 'Share', exact: true }).click()
+  const dialog = page.getByRole('dialog', { name: 'Share document' })
+  await expect(dialog.getByText('https://share.example.test/s/active', { exact: true })).toBeVisible()
+  await expect(dialog.getByRole('button', { name: 'Copy', exact: true })).toBeVisible()
+  await expect(dialog.getByRole('button', { name: 'Show', exact: true })).toBeVisible()
+  expect(reads[0]).toContain('doc_id=42')
+  expect(reads[0]).toContain('status=active')
+
+  await dialog.getByRole('button', { name: 'History', exact: true }).click()
+  await expect(dialog.getByText('Revoked', { exact: true })).toBeVisible()
+  await dialog.getByRole('button', { name: 'Next', exact: true }).click()
+  await expect(dialog.getByText('Expired', { exact: true })).toBeVisible()
+  expect(reads.some(query => query.includes('status=inactive') && query.includes('page=2'))).toBe(true)
+})
+
 test('does not show a previous document share link while the next list is loading', async ({ page }) => {
   await mockAPI(page)
   let reads = 0
   let pending
-  await page.route('**/api/share_links/', route => {
+  await page.route('**/api/share_links/?*', route => {
     if (++reads === 1) return route.fulfill({ json: { results: [{
-      id: 7, doc_ids: [42], public_url: 'https://archive.example.test/s/first-document-bearer',
+      id: 7, doc_ids: [42], visibility: 'network', public_url: 'https://archive.example.test/s/first-document-bearer',
     }] } })
     pending = route
   })
@@ -3762,7 +3848,7 @@ test('does not show a previous document share link while the next list is loadin
   await page.getByRole('button', { name: 'Share', exact: true }).click()
   await expect.poll(() => !!pending).toBe(true)
   await expect(page.getByText('https://archive.example.test/s/first-document-bearer', { exact: true })).toHaveCount(0)
-  await expect(page.getByRole('button', { name: 'Show link', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Show', exact: true })).toHaveCount(0)
   await pending.fulfill({ json: { results: [] } })
 })
 
@@ -3796,6 +3882,8 @@ for (const screen of ['list', 'detail']) {
       if (screen === 'list') {
         await page.getByLabel('Select Electricity bill').check()
         await page.locator('.bulkbar').getByRole('button', { name: 'Share', exact: true }).click()
+        await page.getByRole('dialog', { name: 'Share selected documents' })
+          .getByRole('button', { name: 'Create & copy' }).click()
       } else {
         await page.locator('.toolbar').getByRole('button', { name: 'Share', exact: true }).click()
         await page.getByRole('button', { name: 'Create & copy' }).click()
@@ -3810,6 +3898,8 @@ for (const screen of ['list', 'detail']) {
         : 'Share link ready. Select the link and copy it manually.')
       expect(creations).toHaveLength(1)
       expect(creations[0].doc_ids).toEqual([42])
+      expect(creations[0].visibility).toBe('network')
+      expect(creations[0].expires_in_sec).toBe(0)
       await panel.getByRole('button', { name: 'Show QR code', exact: true }).click()
       await expect(panel.getByRole('img', { name: 'QR code for the displayed link' })).toBeVisible()
       expect(creations).toHaveLength(1)
@@ -3850,11 +3940,14 @@ for (const screen of ['list', 'detail']) {
     if (screen === 'list') {
       await page.getByLabel('Select Electricity bill').check()
       await page.locator('.bulkbar').getByRole('button', { name: 'Share', exact: true }).click()
+      await page.getByRole('dialog', { name: 'Share selected documents' })
+        .getByRole('button', { name: 'Create & copy' }).click()
     } else {
       await page.locator('.toolbar').getByRole('button', { name: 'Share', exact: true }).click()
       await page.getByRole('button', { name: 'Create & copy' }).click()
     }
     await expect.poll(() => !!pendingShare).toBe(true)
+    if (screen === 'list') await page.getByRole('button', { name: 'Close sharing', exact: true }).click()
     if (screen === 'list') {
       const navigation = page.getByRole('button', { name: 'Open navigation', exact: true })
       if (await navigation.isVisible()) await navigation.click()

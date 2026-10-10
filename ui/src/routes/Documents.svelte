@@ -15,6 +15,7 @@
   import { createQueryAssistant } from '../lib/queryAssist.js'
   import { copyText } from '../lib/clipboard.js'
   import LinkQR from '../lib/LinkQR.svelte'
+  import ShareLinkForm from '../lib/ShareLinkForm.svelte'
   import ISODateInput from '../lib/ISODateInput.svelte'
 
   let { notify, inbox = null, inboxMode = false, taxonomyLoaded = true, jdCategories = [],
@@ -52,6 +53,7 @@
   const isInbox = $derived(inboxMode)
   const jdFilter = $derived(route.query.get('jd') || '')
   const canShareLinks = $derived(hasCapability(session.user, 'share_links'))
+  const publicShareAvailable = $derived(!!session.user?.public_share_available)
   let loadVersion = 0
   let disposed = false
   let activeController // cancel superseded filters, not only their UI updates
@@ -61,6 +63,7 @@
     disposed = true
     loadVersion++
     bulkTagVersion++
+    bulkShareVersion++
     queryAssistant.dispose()
     activeController?.abort()
   })
@@ -221,9 +224,13 @@
 
   // ---- selection + bulk actions ----
   let sel = $state(new Set())
+  const selectedHighSensitivity = $derived(docs.some(doc => sel.has(doc.id) && isHighSensitivity(doc.sensitivity)))
   let lastIdx = $state(-1)      // anchor for shift-range and j/k cursor
   let bulkBusy = $state(false)
   let shareURL = $state('')
+  let bulkShareOpen = $state(false)
+  let bulkShareInput = $state({ visibility: 'network', expiry: '0', password: '' })
+  let bulkShareVersion = 0
   let bulkTagOpen = $state(false)
   let bulkTags = $state([])
   let bulkTagLoading = $state(false)
@@ -317,7 +324,12 @@
     if (!next.size) clearSel()
     else { sel = next; lastIdx = i }
   }
-  function clearSel() { sel = new Set(); lastIdx = -1; closeBulkTags() }
+  function clearSel() {
+    sel = new Set()
+    lastIdx = -1
+    closeBulkTags()
+    if (!bulkBusy) bulkShareOpen = false
+  }
 
   async function bulk(label, method, parameters) {
     bulkBusy = true
@@ -334,17 +346,45 @@
   const bulkSens = (s) => bulk('Sensitivity set', 'set_sensitivity', { sensitivity: s })
   const bulkRescan = () => bulk('Rescan enqueued', 'rescan_enqueue', {})
   const bulkTrash = () => (trashRequest = { kind: 'bulk', count: sel.size })
+  function openBulkShare() {
+    if (bulkBusy || !sel.size) return
+    bulkShareVersion++
+    bulkShareInput = { visibility: 'network', expiry: '0', password: '' }
+    bulkShareOpen = true
+  }
+
+  function closeBulkShare() {
+    bulkShareVersion++
+    bulkShareOpen = false
+    bulkShareInput = { visibility: 'network', expiry: '0', password: '' }
+    bulkBusy = false
+  }
+
   async function bulkShare() {
     const user = session.user
+    const ids = [...sel]
+    const version = bulkShareVersion
     bulkBusy = true
     try {
-      const res = await createShareLink({ doc_ids: [...sel], label: `Selection of ${sel.size}` })
-      if (disposed || session.user !== user) return
+      const res = await createShareLink({
+        doc_ids: ids,
+        label: `Selection of ${ids.length}`,
+        visibility: bulkShareInput.visibility,
+        expires_in_sec: Number(bulkShareInput.expiry),
+        password: bulkShareInput.password,
+      })
+      if (disposed || !bulkShareOpen || session.user !== user || version !== bulkShareVersion) return
       shareURL = res?.public_url || `${location.origin}/s/${res?.token}`
+      bulkShareOpen = false
+      bulkShareInput = { visibility: 'network', expiry: '0', password: '' }
       await copyShareLink()
     } catch (ex) {
-      if (!disposed && session.user === user) notify?.(ex.message || 'Could not create the bundle')
-    } finally { bulkBusy = false }
+      if (!disposed && bulkShareOpen && session.user === user && version === bulkShareVersion) {
+        notify?.(ex.message || 'Could not create the bundle')
+      }
+    } finally {
+      if (!disposed && session.user === user && version === bulkShareVersion) bulkBusy = false
+    }
   }
 
   async function copyShareLink() {
@@ -491,7 +531,7 @@
       </button>
     {/if}
     {#if canShareLinks}
-      <button class="btn sm" disabled={bulkBusy} onclick={bulkShare}><Icon name="link" size={12} /> Share</button>
+      <button class="btn sm" disabled={bulkBusy} onclick={openBulkShare}><Icon name="link" size={12} /> Share</button>
     {/if}
     {#if anyLockedSelected}
       <button class="btn sm" disabled={bulkBusy} onclick={() => (bulkDecOpen = true)}
@@ -520,6 +560,24 @@
         {#if bulkTagError}<span class="err" role="alert">{bulkTagError}</span>{/if}
       </div>
     {/if}
+  </div>
+{/if}
+
+{#if bulkShareOpen}
+  <div class="modal-veil" onclick={closeBulkShare} role="presentation">
+    <div class="modal" style="width:min(560px,94vw)" onclick={(event) => event.stopPropagation()}
+         onkeydown={(event) => { if (event.key === 'Escape') closeBulkShare() }}
+         role="dialog" aria-label="Share selected documents" tabindex="-1">
+      <div class="modal-head">
+        <h3>Share {sel.size} document{sel.size === 1 ? '' : 's'}</h3>
+        <button class="btn sm" onclick={closeBulkShare} title="Close" aria-label="Close sharing">
+          <Icon name="x" size={13} />
+        </button>
+      </div>
+      <p class="sub" style="margin:0 0 12px">One link will contain every selected document. Recipients do not need a Suchi account.</p>
+      <ShareLinkForm bind:value={bulkShareInput} publicAvailable={publicShareAvailable}
+                     highSensitivity={selectedHighSensitivity} busy={bulkBusy} onSubmit={bulkShare} />
+    </div>
   </div>
 {/if}
 

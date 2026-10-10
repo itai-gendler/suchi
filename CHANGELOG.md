@@ -14,9 +14,11 @@ Notable user-visible changes to Suchi are recorded here.
   rule overwrites. A lock explains the protection, and **Let Suchi rename this**
   returns naming to automatic handling without changing the current title.
 - Optional Public links now use a separate share-only listener and required
-  expiry, while Network links stay on the normal Suchi address. Public ingress
-  exposes no application, API, asset, health or metrics routes; recipient reads
-  no longer write an unused view counter.
+  expiry, while Network links stay on the normal Suchi address. Link creation
+  names that distinction, recommends passwords for sensitive documents, and
+  separates active-link controls from paged expired/revoked history. Public
+  ingress exposes no application, API, asset, health or metrics routes;
+  recipient reads no longer write an unused view counter.
 
 ## [0.2.1] - 2026-10-10
 

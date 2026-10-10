@@ -16,6 +16,7 @@
   import { copyText } from '../lib/clipboard.js'
   import LinkQR from '../lib/LinkQR.svelte'
   import DocumentLinkDialog from '../lib/DocumentLinkDialog.svelte'
+  import ShareLinkForm from '../lib/ShareLinkForm.svelte'
   import { markUploaded } from '../lib/upload_bus.svelte.js'
   import { parseDocumentReference } from '../lib/documentReferences.js'
 
@@ -239,7 +240,17 @@
     tagsError = ''
     tagLoadError = ''
     shareOpen = false
+    shareLoadVersion++
     shareLinks = []
+    shareLoading = false
+    shareError = ''
+    shareHistory = { count: 0, results: [] }
+    shareHistoryOpen = false
+    shareHistoryLoaded = false
+    shareHistoryLoading = false
+    sharePendingRevoke = null
+    shareBusy = false
+    shareRevokeBusy = false
     documentLinkOpen = false
     shareURL = ''
     trashOpen = false
@@ -914,53 +925,148 @@
     }
   }
 
-  // ---- share dialog: expiry + optional password + existing links ----
+  // ---- share dialog: recipient surface + existing links ----
   let shareOpen = $state(false)
   let shareLinks = $state([])
-  let sh = $state({ expiry: '0', password: '' })
-  const EXPIRIES = [['0', 'Never expires'], ['86400', '1 day'], ['604800', '7 days'], ['2592000', '30 days']]
+  let shareLoading = $state(false)
+  let shareError = $state('')
+  let shareHistory = $state({ count: 0, results: [] })
+  let shareHistoryOpen = $state(false)
+  let shareHistoryLoaded = $state(false)
+  let shareHistoryLoading = $state(false)
+  let shareHistoryPage = $state(1)
+  let sharePendingRevoke = $state(null)
+  let shareRevokeBusy = $state(false)
+  let shareLoadVersion = 0
+  let shareHistoryRequest = 0
+  let sh = $state({ visibility: 'network', expiry: '0', password: '' })
+  const SHARE_HISTORY_PAGE_SIZE = 5
+  const publicShareAvailable = $derived(!!session.user?.public_share_available)
   const shareIdentity = $derived.by(() => {
     const name = session.user?.display_name?.trim() || ''
+    if (sh.visibility === 'public') return name ? `Shared by ${name}` : 'Shared document'
     const host = session.user?.instance_host?.trim() || location.host
     if (name && host) return `Shared by ${name} · ${host}`
     if (name) return `Shared by ${name}`
     return `Shared from ${host}`
   })
 
+  function shareLinkURL(link) {
+    return link.public_url || `${location.origin}/s/${link.token}`
+  }
+
+  function shareExpiry(link) {
+    return link.expires_at ? `Expires ${fmtDate(link.expires_at)}` : 'No expiry'
+  }
+
+  function closeShare() {
+    shareOpen = false
+    sharePendingRevoke = null
+    sh = { visibility: 'network', expiry: '0', password: '' }
+    shareURL = ''
+    shareLoadVersion++
+    shareHistoryRequest++
+  }
+
+  async function loadActiveShares(user, documentID, version) {
+    shareLoading = true
+    shareError = ''
+    try {
+      const response = await listShareLinks({
+        doc_id: Number(documentID), status: 'active', page_size: 50,
+      })
+      if (!disposed && shareOpen && session.user === user && id === documentID && version === shareLoadVersion) {
+        shareLinks = response?.results || response || []
+      }
+    } catch (ex) {
+      if (!disposed && shareOpen && session.user === user && id === documentID && version === shareLoadVersion) {
+        shareLinks = []
+        shareError = ex.message || 'Could not load active links.'
+      }
+    } finally {
+      if (!disposed && session.user === user && id === documentID && version === shareLoadVersion) shareLoading = false
+    }
+  }
+
   async function openShare() {
     const user = session.user
     const documentID = id
+    const version = ++shareLoadVersion
+    shareHistoryRequest++
     shareLinks = []
+    shareLoading = false
+    shareHistory = { count: 0, results: [] }
+    shareHistoryOpen = false
+    shareHistoryLoaded = false
+    shareHistoryLoading = false
+    shareHistoryPage = 1
+    sharePendingRevoke = null
+    shareBusy = false
+    shareRevokeBusy = false
+    shareError = ''
+    shareURL = ''
+    sh = { visibility: 'network', expiry: '0', password: '' }
     shareOpen = true
+    await loadActiveShares(user, documentID, version)
+  }
+
+  async function loadShareHistory(page = 1) {
+    const user = session.user
+    const documentID = id
+    const version = shareLoadVersion
+    const request = ++shareHistoryRequest
+    shareHistoryLoading = true
+    shareError = ''
     try {
-      const r = await listShareLinks()
-      if (!disposed && session.user === user && id === documentID) {
-        shareLinks = (r?.results || r || []).filter(l => (l.doc_ids || []).includes(Number(documentID)))
+      const response = await listShareLinks({
+        doc_id: Number(documentID), status: 'inactive', page, page_size: SHARE_HISTORY_PAGE_SIZE,
+      })
+      if (!disposed && shareOpen && session.user === user && id === documentID &&
+          version === shareLoadVersion && request === shareHistoryRequest) {
+        shareHistory = { count: response?.count || 0, results: response?.results || response || [] }
+        shareHistoryPage = page
+        shareHistoryLoaded = true
       }
-    } catch {
-      if (!disposed && session.user === user && id === documentID) shareLinks = []
+    } catch (ex) {
+      if (!disposed && shareOpen && session.user === user && id === documentID &&
+          version === shareLoadVersion && request === shareHistoryRequest) {
+        shareError = ex.message || 'Could not load link history.'
+      }
+    } finally {
+      if (!disposed && version === shareLoadVersion && request === shareHistoryRequest) shareHistoryLoading = false
     }
   }
+
+  async function toggleShareHistory() {
+    shareHistoryOpen = !shareHistoryOpen
+    if (shareHistoryOpen && !shareHistoryLoaded) await loadShareHistory(1)
+  }
+
   async function makeLink() {
     if (shareBusy) return
     const user = session.user
     const documentID = id
+    const version = shareLoadVersion
     shareBusy = true
     try {
       const res = await createShareLink({
         doc_ids: [Number(documentID)], label: doc?.title || '',
-        expires_in_sec: Number(sh.expiry), password: sh.password,
+        visibility: sh.visibility, expires_in_sec: Number(sh.expiry), password: sh.password,
       })
-      if (disposed || session.user !== user || id !== documentID) return
+      if (disposed || !shareOpen || session.user !== user || id !== documentID || version !== shareLoadVersion) return
       shareURL = res?.public_url || `${location.origin}/s/${res?.token}`
-      sh = { expiry: '0', password: '' }
-      openShare()
+      sh = { visibility: 'network', expiry: '0', password: '' }
+      await loadActiveShares(user, documentID, version)
       await copyShareLink()
     } catch (ex) {
-      if (!disposed && session.user === user && id === documentID) notify?.(ex.message || 'Could not create the link')
+      if (!disposed && shareOpen && session.user === user && id === documentID && version === shareLoadVersion) {
+        notify?.(ex.message || 'Could not create the link')
+      }
+    } finally {
+      if (!disposed && session.user === user && id === documentID && version === shareLoadVersion) shareBusy = false
     }
-    finally { shareBusy = false }
   }
+
   async function copyShareLink() {
     const user = session.user
     const documentID = id
@@ -969,27 +1075,49 @@
     if (disposed || session.user !== user || id !== documentID || shareURL !== url) return
     notify?.(copied ? 'Share link copied' : 'Share link ready. Select the link and copy it manually.')
   }
-  async function copyExtractedText() {
-    if (blurred || !doc?.content) return
+
+  async function copyExistingShare(link) {
     const user = session.user
     const documentID = id
+    const url = shareLinkURL(link)
+    const copied = await copyText(url)
+    if (disposed || session.user !== user || id !== documentID) return
+    notify?.(copied ? 'Share link copied' : 'Share link ready. Select the link and copy it manually.')
+  }
+
+  async function copyExtractedText() {
+    if (blurred || !doc?.content) return
+    const scope = captureScope()
+    const documentID = id
     const copied = await copyText(doc.content)
-    if (disposed || session.user !== user || id !== documentID || blurred) return
+    if (disposed || !scopeCurrent(scope) || id !== documentID || blurred) return
     textCopyFallback = !copied
     textCopyStatus = copied ? 'Text copied' : 'Select the text below and copy it manually.'
   }
-  async function revoke(l) {
+
+  async function revokeShare() {
+    const link = sharePendingRevoke
+    if (!link || shareRevokeBusy) return
     const user = session.user
     const documentID = id
+    const version = shareLoadVersion
+    shareRevokeBusy = true
     try {
-      await deleteShareLink(l.id)
-      if (disposed || session.user !== user || id !== documentID) return
-      shareLinks = shareLinks.filter(x => x.id !== l.id)
-      if (shareURL === (l.public_url || `${location.origin}/s/${l.token}`)) shareURL = ''
+      await deleteShareLink(link.id)
+      if (disposed || !shareOpen || session.user !== user || id !== documentID || version !== shareLoadVersion) return
+      if (shareURL === shareLinkURL(link)) shareURL = ''
+      sharePendingRevoke = null
+      shareHistory = { count: 0, results: [] }
+      shareHistoryOpen = false
+      shareHistoryLoaded = false
+      await loadActiveShares(user, documentID, version)
       notify?.('Link revoked')
-    }
-    catch (ex) {
-      if (!disposed && session.user === user && id === documentID) notify?.(ex.message || 'Could not revoke')
+    } catch (ex) {
+      if (!disposed && shareOpen && session.user === user && id === documentID && version === shareLoadVersion) {
+        notify?.(ex.message || 'Could not revoke')
+      }
+    } finally {
+      if (!disposed && version === shareLoadVersion) shareRevokeBusy = false
     }
   }
 
@@ -1824,53 +1952,109 @@
 {/if}
 
 {#if shareOpen}
-  <div class="modal-veil" onclick={() => (shareOpen = false)} role="presentation">
-    <div class="modal" style="width:min(520px,94vw)" onclick={(e) => e.stopPropagation()} onkeydown={(e) => { if (e.key === 'Escape') shareOpen = false }} role="dialog" aria-label="Share document" tabindex="-1">
+  <div class="modal-veil" onclick={closeShare} role="presentation">
+    <div class="modal share-modal" onclick={(e) => e.stopPropagation()} onkeydown={(e) => { if (e.key === 'Escape') closeShare() }} role="dialog" aria-label="Share document" tabindex="-1">
       <div class="modal-head">
         <h3>Share “{doc?.title || `Document #${id}`}”</h3>
-        <button class="btn sm" onclick={() => (shareOpen = false)} title="Close" aria-label="Close sharing"><Icon name="x" size={13} /></button>
+        <button class="btn sm" onclick={closeShare} title="Close" aria-label="Close sharing"><Icon name="x" size={13} /></button>
       </div>
-      <p class="sub" style="color:var(--muted);font-size:.82rem;margin:0 0 12px">
-        Anyone with the link can view and download. No account needed on their side.
-      </p>
+      <p class="sub share-intro">Choose where the link works. Recipients do not need a Suchi account.</p>
       <div class="share-preview">
         <span>Recipients will see</span>
         <strong>{doc?.title || `Document #${id}`}</strong>
         <small>{shareIdentity}</small>
         <em>Powered by suchi</em>
       </div>
-      <div class="toolbar" style="margin:0 0 10px">
-        <select class="input" bind:value={sh.expiry} aria-label="Link expiry">
-          {#each EXPIRIES as [v, label]}<option value={v}>{label}</option>{/each}
-        </select>
-        <input class="input" type="password" style="flex:1" placeholder="Password (optional)"
-               bind:value={sh.password} autocomplete="new-password" />
-        <button class="btn primary sm" disabled={shareBusy} onclick={makeLink}><Icon name="link" size={13} /> {shareBusy ? 'Creating…' : 'Create & copy'}</button>
-      </div>
+      <ShareLinkForm bind:value={sh} publicAvailable={publicShareAvailable}
+                     highSensitivity={highSensitivity} busy={shareBusy} onSubmit={makeLink} />
       {#if shareURL}
-        <div class="toolbar" style="margin-bottom:12px">
-          <input class="input mono" style="flex:1;min-width:0;font-size:.74rem" aria-label="Share link" readonly value={shareURL}
+        <div class="toolbar share-created">
+          <input class="input mono" aria-label="Share link" readonly value={shareURL}
                  onclick={(event) => event.currentTarget.select()} />
           <button class="btn sm" onclick={copyShareLink}>Copy link</button>
         </div>
         <LinkQR url={shareURL} />
       {/if}
-      {#if shareLinks.length}
-        <h3 style="font-size:.85rem;margin:6px 0 4px">Active links</h3>
-        <div class="index" style="border:0">
-          {#each shareLinks as l (l.id)}
-            <div class="irow" style="padding:7px 2px">
-              <span class="dot" class:warn={l.has_passwd || l.HasPasswd}></span>
-              <span class="title grow mono" style="font-size:.74rem">{l.public_url || `/s/${l.token}`}</span>
-              {#if l.has_passwd || l.HasPasswd}<span class="pill warn">password</span>{/if}
-              <button class="btn sm" onclick={() => (shareURL = l.public_url || `${location.origin}/s/${l.token}`)}>Show link</button>
-              <button class="btn sm" onclick={() => revoke(l)}>Revoke</button>
+
+      <section class="share-section" aria-labelledby="active-share-links">
+        <h3 id="active-share-links">Active links</h3>
+        {#if shareLoading}
+          <p class="sub" role="status">Loading active links…</p>
+        {:else if shareLinks.length}
+          <div class="share-list">
+            {#each shareLinks as link (link.id)}
+              <div class="share-row">
+                <div class="grow">
+                  <div class="share-badges">
+                    <span class="pill">{link.visibility === 'public' ? 'Public internet' : 'Private network'}</span>
+                    <span class="pill" class:warn={link.has_password}>{link.has_password ? 'Password' : 'No password'}</span>
+                  </div>
+                  <span class="mono share-link-value">{shareLinkURL(link)}</span>
+                  <small>{shareExpiry(link)}</small>
+                </div>
+                <div class="share-actions">
+                  <button class="btn sm" onclick={() => copyExistingShare(link)}>Copy</button>
+                  <button class="btn sm" onclick={() => (shareURL = shareLinkURL(link))}>Show</button>
+                  <button class="btn sm danger" onclick={() => (sharePendingRevoke = link)}>Revoke</button>
+                </div>
+              </div>
+            {/each}
+          </div>
+        {:else}
+          <p class="sub">No active links.</p>
+        {/if}
+      </section>
+
+      <section class="share-section">
+        <button class="btn sm share-history-toggle" aria-expanded={shareHistoryOpen} onclick={toggleShareHistory}>
+          History{shareHistoryLoaded ? ` (${shareHistory.count})` : ''}
+        </button>
+        {#if shareHistoryOpen}
+          {#if shareHistoryLoading}
+            <p class="sub" role="status">Loading history…</p>
+          {:else if shareHistory.results.length}
+            <div class="share-list history">
+              {#each shareHistory.results as link (link.id)}
+                <div class="share-row">
+                  <div class="grow">
+                    <div class="share-badges">
+                      <span class="pill">{link.visibility === 'public' ? 'Public internet' : 'Private network'}</span>
+                      <span class="pill">{link.revoked_at ? 'Revoked' : 'Expired'}</span>
+                      <span class="pill" class:warn={link.has_password}>{link.has_password ? 'Password' : 'No password'}</span>
+                    </div>
+                    <small>{shareExpiry(link)}</small>
+                  </div>
+                </div>
+              {/each}
             </div>
-          {/each}
-        </div>
-      {/if}
+            {#if shareHistory.count > SHARE_HISTORY_PAGE_SIZE}
+              <div class="toolbar share-history-pages">
+                <button class="btn sm" disabled={shareHistoryPage <= 1 || shareHistoryLoading}
+                        onclick={() => loadShareHistory(shareHistoryPage - 1)}>Previous</button>
+                <span class="sub">Page {shareHistoryPage}</span>
+                <button class="btn sm" disabled={shareHistoryPage * SHARE_HISTORY_PAGE_SIZE >= shareHistory.count || shareHistoryLoading}
+                        onclick={() => loadShareHistory(shareHistoryPage + 1)}>Next</button>
+              </div>
+            {/if}
+          {:else}
+            <p class="sub">No expired or revoked links.</p>
+          {/if}
+        {/if}
+      </section>
+      {#if shareError}<p class="err" role="alert">{shareError}</p>{/if}
     </div>
   </div>
+{/if}
+
+{#if sharePendingRevoke}
+  <ConfirmDialog
+    title="Revoke share link?"
+    message="Future access will stop immediately, but revocation cannot retract files already downloaded."
+    confirmLabel="Revoke link"
+    busyLabel="Revoking…"
+    busy={shareRevokeBusy}
+    onConfirm={revokeShare}
+    onCancel={() => (sharePendingRevoke = null)} />
 {/if}
 
 <style>
@@ -1988,5 +2172,24 @@
     .reference-actions { margin-left:0; }
     .reference-add-head { grid-template-columns:1fr; }
     .replacement-file { align-items:stretch; flex-direction:column; }
+  }
+  .share-modal { width:min(620px,94vw); max-height:min(88vh,760px); overflow:auto; }
+  .share-intro { color:var(--muted); font-size:.82rem; margin:0 0 12px; }
+  .share-created { margin:12px 0; }
+  .share-created input { flex:1; min-width:0; font-size:.74rem; }
+  .share-section { margin-top:14px; padding-top:12px; border-top:1px solid var(--line); }
+  .share-section > h3 { margin:0 0 7px; font-size:.85rem; }
+  .share-list { display:grid; gap:7px; }
+  .share-row { display:flex; gap:10px; align-items:center; padding:9px; border:1px solid var(--line); border-radius:9px; }
+  .share-row > .grow { display:grid; gap:5px; min-width:0; }
+  .share-row small { color:var(--muted); font-size:.7rem; }
+  .share-badges, .share-actions { display:flex; gap:5px; flex-wrap:wrap; align-items:center; }
+  .share-link-value { overflow:hidden; color:var(--muted); font-size:.7rem; text-overflow:ellipsis; white-space:nowrap; }
+  .share-actions { justify-content:flex-end; }
+  .share-history-toggle { margin-bottom:7px; }
+  .share-history-pages { justify-content:flex-end; margin-top:8px; }
+  @media (max-width: 600px) {
+    .share-row { align-items:stretch; flex-direction:column; }
+    .share-actions { justify-content:flex-start; }
   }
 </style>
