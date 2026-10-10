@@ -34,7 +34,6 @@
   let nameInput = $state()
   let tags = $state([]), corrs = $state([]), customFields = $state([])
   let visibleFilters = $state([])
-  let viewCounts = $state({})
   let matchCount = $state(null)
   let matchLoading = $state(false)
   let matchError = $state(false)
@@ -42,7 +41,6 @@
   let facetsPromise
   let facetsError = $state('')
   let loadVersion = 0
-  let countController
   let matchController
   let matchTimer
   let matchVersion = 0
@@ -81,19 +79,13 @@
 
   async function load() {
     const version = ++loadVersion
-    countController?.abort()
     loading = true
     loadError = ''
-    viewCounts = {}
     try {
       const r = await listSavedViews({ include: 'shared' })
       if (version !== loadVersion) return
       const raw = r?.results || r || []
       views = raw.map(view => ({ ...view, filters: parseSavedViewFilters(view.filter_json) }))
-      if (views.length) {
-        loadFacets()
-        void loadViewCounts(views, version)
-      }
     } catch (ex) {
       if (version === loadVersion) loadError = ex.message || 'Could not load saved views.'
     } finally {
@@ -101,27 +93,6 @@
     }
   }
 
-  async function loadViewCounts(rows, version) {
-    const controller = new AbortController()
-    countController = controller
-    const counts = {}
-    let cursor = 0
-    async function worker() {
-      while (cursor < rows.length && !controller.signal.aborted) {
-        const view = rows[cursor++]
-        try {
-          const result = await listDocuments({ ...view.filters, page_size: 1 }, controller.signal)
-          counts[view.id] = result?.count ?? 0
-        } catch (ex) {
-          if (ex?.name === 'AbortError') return
-          counts[view.id] = null
-        }
-      }
-    }
-    const workers = Array.from({ length: Math.min(4, rows.length) }, () => worker())
-    await Promise.all(workers)
-    if (version === loadVersion && countController === controller) viewCounts = counts
-  }
 
   function href(view) {
     return documentListHash(view.filters)
@@ -148,10 +119,6 @@
     return summary.join(' · ') || 'all documents'
   }
 
-  function displayedCount(id) {
-    if (!Object.prototype.hasOwnProperty.call(viewCounts, id)) return '…'
-    return viewCounts[id] ?? '—'
-  }
 
   function knownFieldPresence(value) {
     const selection = parseFieldPresenceSelection(value)
@@ -393,7 +360,6 @@
 
   onDestroy(() => {
     loadVersion++
-    countController?.abort()
     matchController?.abort()
     clearTimeout(matchTimer)
   })
@@ -424,7 +390,7 @@
             <div class="snapshot-note">
               <span class="snapshot-mark"><Icon name="docs" size={18} /></span>
               <span>
-                <strong>Exact research snapshot</strong>
+                <strong>Exact document set</strong>
                 <small>This view keeps these {nv.ids.length} documents together. Access is checked whenever it opens.</small>
               </span>
             </div>
@@ -615,9 +581,6 @@
                      actionLabel={`Edit ${view.name}`}
                      onaction={() => openEdit(view)}>
               {#snippet trailing()}
-                <span class="view-count" aria-label={`${displayedCount(view.id)} matching documents`}>
-                  {displayedCount(view.id)}
-                </span>
                 {#if view.shared}
                   <span class="shared-pill" title={view.owner_id ? `Shared by user #${view.owner_id}` : 'Shared with every user'}>Shared</span>
                 {/if}
@@ -637,13 +600,6 @@
   }
   .new-view { padding: 9px 15px; }
   .views-list { background: var(--surface); }
-  .view-count {
-    min-width: 26px;
-    color: var(--muted);
-    font-family: "Spline Sans Mono", ui-monospace, monospace;
-    font-size: .72rem;
-    text-align: right;
-  }
   .shared-pill {
     padding: 2px 7px;
     border-radius: 999px;

@@ -97,7 +97,7 @@
          onkeydown={onKey} />
 
   {#if canAsk}
-    <button type="button" class="omni-ask" aria-label="Ask the archive" title="Ask the archive"
+    <button type="button" class="omni-ask" aria-label="Ask your documents" title="Ask your documents"
             onmousedown={(e) => e.preventDefault()} onclick={ask}>
       <Icon name="ask" size={14} /><span>Ask</span>
     </button>

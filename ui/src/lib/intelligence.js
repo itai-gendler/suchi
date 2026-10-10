@@ -73,28 +73,28 @@ export function canReviewDate(candidate) {
 export function reviewFailure(error) {
   const code = typeof error === 'string' ? error : error?.code
   if (['stale_source', 'stale_proposal', 'source_changed'].includes(code)) {
-    return 'The source or current value changed. Nothing was applied; refresh and extract a fresh suggestion.'
+    return 'The document or saved value changed. Nothing was applied; refresh and Rescan the document for a new suggestion.'
   }
   if (['conflict', 'review_conflict', 'human_changed', 'already_resolved'].includes(code)) {
-    return 'This suggestion or its current value changed. Nothing was applied by this request; refresh before reviewing again.'
+    return 'This suggestion or the saved value changed. Nothing was applied; refresh before reviewing again.'
   }
   if (['invalid_evidence', 'evidence_mismatch', 'evidence_missing'].includes(code)) {
-    return 'The source evidence cannot be verified. Nothing was applied; extract a fresh suggestion.'
+    return 'The document text no longer matches this suggestion. Nothing was applied; Rescan the document for a new suggestion.'
   }
   if (['hidden', 'reveal_required', 'sensitive_reveal_required'].includes(code)) {
-    return 'The source is hidden. Open the document and use its existing reveal controls before reviewing.'
+    return 'The document text is hidden. Open the document and choose Reveal before reviewing.'
   }
   if (['forbidden', 'unauthorized', 'interactive_required', 'interactive_session_required'].includes(code) || [401, 403].includes(error?.status)) {
-    return 'Review access is no longer available. Sign in with an authorized interactive session and refresh.'
+    return 'You can no longer review this item. Sign in again with an account that can review it, then refresh.'
   }
   if (['not_found', 'no_task', 'system_unavailable', 'source_unavailable'].includes(code) || error?.status === 404) {
-    return 'This source or suggestion is no longer available to you. Refresh the review list.'
+    return 'This document or suggestion is no longer available to you. Refresh the review list.'
   }
   if (['unsupported', 'unknown_action', 'unknown_handler'].includes(code)) {
     return 'This action is not supported here. It remains read-only.'
   }
   if (error?.name === 'TypeError' || error?.status === 503) {
-    return 'The review service could not be reached. The result is unconfirmed; reconnect and refresh before trying again.'
+    return 'Suchi could not be reached. The decision may not have been saved; reconnect and refresh before trying again.'
   }
   return 'The decision could not be confirmed. Refresh before trying again.'
 }

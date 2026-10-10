@@ -23,6 +23,12 @@ Notable user-visible changes to Suchi are recorded here.
   Filters have accessible names; phones collapse them behind **Filters (n)**
   while keeping active chips and **Clear all** visible. Transient confirmations
   are now announced politely by assistive technology.
+- The document-question feature is now **Ask your documents**. Its interface
+  names document context, matching text, links, and model confidence directly.
+  Failed processing appears as **Processing issues**, with raw job kinds and
+  errors kept under **Technical details**.
+- Saved View lists no longer issue a document-count request for every view or
+  load filter choices before editing begins.
 
 ## [0.2.1] - 2026-10-10
 
@@ -65,7 +71,7 @@ version. Installations keep using the v0.2.0 artifacts.
   **Linked documents** for exact named links with incoming links listed
   separately.
 - Query qualifiers `version:`, `has-field:`, typed `field:` and read-only
-  `asn:` across Documents, Search, saved Views, Calendar and archive research.
+  `asn:` across Documents, Search, saved Views, Calendar and Ask your documents.
 - Attributed, editable notes on Document Detail.
 - **Folder layouts** under Archive configuration > Advanced, with validated
   previews and transactional rerenders.
@@ -349,14 +355,14 @@ version. Installations keep using the v0.2.0 artifacts.
   omnibox, and new saved views, with text prefixes, phrases, negation,
   filing metadata, dates, document state, qualifier suggestions, and
   apply-time validation.
-- A scoped Archive research desk with reauthorized follow-ups, structured
-  citation validation, Views made from retrieved documents, bounded model
-  traffic, and explicit sensitive-evidence consent.
+- **Ask your documents**: a scoped question drawer with reauthorized follow-ups,
+  structured document-link validation, Views made from exact document sets,
+  bounded model traffic, and explicit consent for sensitive document text.
 - A generic extracted-fact ledger with single-call date extraction,
   user-controlled confidence-based Calendar entry, optional bulk review, and
   rich-query date filters.
 - A first-visit public-demo guide for rich queries and source-backed Calendar
-  dates, plus a persistent help launcher. Archive research is clearly marked
+  dates, plus a persistent help launcher. Ask your documents is clearly marked
   private-installation-only; public model access remains denied.
 - A fixed 30-day Trash recovery window with automatic expiry, confirmed
   permanent deletion and Empty Trash actions, share-link revocation, minimal
@@ -400,7 +406,7 @@ version. Installations keep using the v0.2.0 artifacts.
   report and audit only the decision that actually changed each candidate.
 - The web app cancels superseded list, search, Calendar, and completion reads;
   caches Calendar date formatters; loads route CSS lazily; and retains at most
-  20 Archive research turns.
+  20 Ask your documents turns.
 - Sampled rescans keep memory proportional to the requested sample, idle
   research rate entries expire, and date extraction holds SQLite's writer for
   less time.
@@ -412,8 +418,8 @@ version. Installations keep using the v0.2.0 artifacts.
   preserving explicitly approved work and prompts for newer revisions.
 - Public demo Calendar now exposes read-only, source-backed example dates
   across months and years. The tour links to usable Search and Calendar screens
-  and clearly identifies Archive research as private-installation-only;
-  demo model calls, date mutations, and non-demo facts remain denied.
+  and clearly identifies Ask your documents as private-installation-only; demo
+  model calls, date mutations, and non-demo facts remain denied.
 - Demo navigation and first-visit tour detection now use the server's actual
   session identity field, including after upgrade to a scratch session.
 - Documents and Inbox preserve pagination through browser Back, Forward, and
@@ -460,21 +466,22 @@ version. Installations keep using the v0.2.0 artifacts.
   owner/admin preview, download, restore, and confirmed permanent deletion.
   Mobile rows keep document titles above their actions; sensitive reveal gates
   and public-share exclusions remain in place.
-- Archive research opens its retrieved documents' Calendar dates in an all-dates
-  agenda across months and years, with explicit scope and pagination. New date
-  links clear stale Calendar filters; the ordinary Calendar stays month-based.
-  Partial dates no longer display invented days in Calendar or Approvals;
-  Calendar keeps labeled model confidence behind Automatic/Reviewed details.
+- Ask your documents opens the matching documents' Calendar dates in an
+  all-dates agenda across months and years, with an explicit document set and
+  pagination. New date links clear stale Calendar filters; the ordinary Calendar
+  stays month-based. Partial dates no longer display invented days in Calendar
+  or Approvals; Calendar keeps labeled model confidence behind
+  Automatic/Reviewed details.
 - Calendar day links open paginated exact-day agendas, retain the month, View,
   and role in the URL, and return to the originating month. Server-side precision
   filtering excludes month/year placeholders before counting or pagination.
-- Archive research allows a bounded 4,096-token generation budget so reasoning
-  models can finish their JSON answer. Truncation has a distinct error; citation
-  validation and the 6,000-character answer limit remain unchanged. Failure logs
-  include fixed diagnostic reasons without question, evidence, or provider text.
+- Ask your documents allows a bounded 4,096-token generation budget so reasoning
+  models can finish their JSON answer. Truncation has a distinct error; document
+  link validation and the 6,000-character answer limit remain unchanged. Failure
+  logs omit the question, document text, and provider response.
 - Settings identifies the running server version and source revision for bug
   reports. JSON API errors retain their codes even with mislabeled response
-  headers, so Archive research can show the relevant failure message.
+  headers, so Ask your documents can show the relevant failure message.
 - Mail attachments with invalid or generic MIME headers are identified from
   their bytes. Explicit rescans repair existing PDFs labeled as binary files
   and restore preview and password handling without changing originals.
@@ -510,10 +517,11 @@ version. Installations keep using the v0.2.0 artifacts.
   from their own response state.
 - Calendar resolves an owned or shared saved View by ID on the server, applies
   its complete filter, and then reapplies document ACLs.
-- Archive research requests provider JSON mode, normalizes structured citations
-  into clickable answer markers, tolerates numeric citation strings, includes
-  receipt totals in bounded evidence passages, and logs only the mode, passage
-  and source counts, and bounded evidence size—never question or document text.
+- Ask your documents requests provider JSON mode, turns structured source
+  numbers into clickable document markers, tolerates numeric strings, includes
+  receipt totals in bounded document text, and logs only the reading mode,
+  matching-section and document counts, and bounded text size—never the
+  question or document text.
 - Date review uses a responsive document grid, keeps the selected-date actions
   visible, explains the decision, and renders section labels in sentence case.
 - Title-only ranked matches return an empty body snippet instead of failing,

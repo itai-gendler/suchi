@@ -224,7 +224,7 @@ func (s *Server) chatPrincipal(w http.ResponseWriter, r *http.Request) *pluginap
 		return nil
 	}
 	if isDemoCorpusKind(p.Kind) {
-		s.writeError(w, http.StatusForbidden, "public_demo_denied", "archive research is unavailable in public demo sessions")
+		s.writeError(w, http.StatusForbidden, "public_demo_denied", "document questions are unavailable in public demo sessions")
 		return nil
 	}
 	allowed, _ := s.requireCapability(w, r, authz.CapArchiveChat)
@@ -250,7 +250,7 @@ func (s *Server) PostChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if s.ChatEnabled == nil || !s.ChatEnabled() || s.ChatCompletion == nil {
-		s.writeError(w, http.StatusServiceUnavailable, "model_unavailable", "archive research is not configured")
+		s.writeError(w, http.StatusServiceUnavailable, "model_unavailable", "document questions are not configured")
 		return
 	}
 
@@ -341,7 +341,7 @@ func (s *Server) PostChat(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		seconds := max(1, int(retryAfter.Round(time.Second)/time.Second))
 		w.Header().Set("Retry-After", strconv.Itoa(seconds))
-		s.writeError(w, http.StatusTooManyRequests, "chat_rate_limited", "archive research is busy; try again shortly")
+		s.writeError(w, http.StatusTooManyRequests, "chat_rate_limited", "document questions are busy; try again shortly")
 		return
 	}
 	rateReserved := true
@@ -356,7 +356,7 @@ func (s *Server) PostChat(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		seconds := max(1, int(retryAfter.Round(time.Second)/time.Second))
 		w.Header().Set("Retry-After", strconv.Itoa(seconds))
-		s.writeError(w, http.StatusTooManyRequests, "chat_rate_limited", "archive research is busy; try again shortly")
+		s.writeError(w, http.StatusTooManyRequests, "chat_rate_limited", "document questions are busy; try again shortly")
 		return
 	}
 	sources, passageCount, err := func() ([]ChatSource, int, error) {
@@ -391,7 +391,7 @@ func (s *Server) PostChat(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		seconds := max(1, int(retryAfter.Round(time.Second)/time.Second))
 		w.Header().Set("Retry-After", strconv.Itoa(seconds))
-		s.writeError(w, http.StatusTooManyRequests, "chat_rate_limited", "archive research is busy; try again shortly")
+		s.writeError(w, http.StatusTooManyRequests, "chat_rate_limited", "document questions are busy; try again shortly")
 		return
 	}
 	defer release()
@@ -406,17 +406,17 @@ func (s *Server) PostChat(w http.ResponseWriter, r *http.Request) {
 		var truncated interface{ CompletionTruncated() bool }
 		if errors.As(err, &truncated) && truncated.CompletionTruncated() {
 			s.logChatEvidence("api.chat.provider_error", researchContext, passageCount, sources, "output_limit")
-			s.writeError(w, http.StatusBadGateway, "provider_response_truncated", "archive research provider reached its output limit before finishing; try a narrower question or another model")
+			s.writeError(w, http.StatusBadGateway, "provider_response_truncated", "the model reached its output limit before finishing; try a narrower question or another model")
 			return
 		}
 		s.logChatEvidence("api.chat.provider_error", researchContext, passageCount, sources, "provider_failure")
-		s.writeError(w, http.StatusBadGateway, "provider_failure", "archive research provider unavailable")
+		s.writeError(w, http.StatusBadGateway, "provider_failure", "the configured model is unavailable")
 		return
 	}
 	answer, citations, grounded, err := parseChatModelAnswer(rawAnswer, len(sources))
 	if err != nil {
 		s.logChatEvidence("api.chat.invalid_response", researchContext, passageCount, sources, err.Error())
-		s.writeError(w, http.StatusBadGateway, "invalid_provider_response", "archive research provider returned an invalid grounded answer")
+		s.writeError(w, http.StatusBadGateway, "invalid_provider_response", "the model returned an answer without usable document links")
 		return
 	}
 	if !grounded {

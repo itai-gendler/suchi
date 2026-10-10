@@ -8,7 +8,7 @@
 
   let {
     open = false,
-    request = { id: 0, question: '', scope: { label: 'All archive' } },
+    request = { id: 0, question: '', scope: { label: 'All documents' } },
     status = { provider: '', local: false },
     canReviewIntelligence = false,
     onClose,
@@ -128,10 +128,10 @@
       const error = canceled
         ? 'Request canceled.'
         : ex?.code === 'invalid_provider_response'
-          ? 'The model returned an answer without valid citations. Try again.'
+          ? 'The model returned an answer without usable document links. Try again.'
           : ex?.code === 'provider_response_truncated'
             ? 'The model reached its output limit before finishing. Try a narrower question or another model.'
-          : (ex?.message || 'The archive question could not be answered.')
+          : (ex?.message || 'The question could not be answered.')
       updateTurn(turn.id, { error })
       if (canceled && requestState.restoreDraft && !draft) draft = question
     } finally {
@@ -199,6 +199,13 @@
   function providerLabel() {
     if (status?.local) return status.provider ? `Local model · ${status.provider}` : 'Local model'
     return status?.provider || 'Configured hosted model'
+  }
+
+  function questionPlaceholder() {
+    const documentIDs = request?.scope?.document_ids || []
+    if (documentIDs.length === 1) return 'Ask about this document'
+    if (request?.scope?.label === 'All documents') return 'Ask about all documents'
+    return 'Ask about these documents'
   }
 
   function acceptedDateCount(turn) {
@@ -276,17 +283,17 @@
 </script>
 
 {#if open}
-  <button class="research-veil" aria-label="Close archive research" onclick={close}></button>
+  <button class="research-veil" aria-label="Close Ask your documents" onclick={close}></button>
   <div class="research-drawer" bind:this={drawer} role="dialog" aria-modal="true" aria-labelledby="research-title" tabindex="-1" onkeydown={onKey}>
     <header class="research-head">
       <div>
-        <h2 id="research-title">Archive research</h2>
-        <p class="research-intro">Ask questions about your documents.</p>
-        <span class="scope-chip"><Icon name="search" size={11} />{request?.scope?.label || 'All archive'}</span>
+        <h2 id="research-title">Ask your documents</h2>
+        <p class="research-intro">Ask questions and follow each answer back to your documents.</p>
+        <span class="scope-chip"><Icon name="search" size={11} />{request?.scope?.label || 'All documents'}</span>
       </div>
       <div class="research-head-actions">
         <button class="btn sm" onclick={clearConversation} disabled={!turns.length && !includeSensitive}>Clear</button>
-        <button class="btn sm icon-only" onclick={close} aria-label="Close archive research" title="Close"><Icon name="x" size={14} /></button>
+        <button class="btn sm icon-only" onclick={close} aria-label="Close Ask your documents" title="Close"><Icon name="x" size={14} /></button>
       </div>
     </header>
 
@@ -296,7 +303,7 @@
           <span class="empty-index">R / 01</span>
           <span class="research-empty-mark"><Icon name="ask" size={24} /></span>
           <b>Start with a question, not a search query</b>
-          <p>Suchi retrieves only documents in this scope, then keeps the evidence attached to the answer.</p>
+          <p>Suchi searches only the documents named above and links each answer back to them.</p>
           <div class="prompt-list">
             {#each prompts as prompt}
               <button onclick={() => { draft = prompt; queueMicrotask(() => composer?.focus()) }}>{prompt}<Icon name="chev" size={11} /></button>
@@ -320,7 +327,7 @@
                   {#if part.citation}
                     {@const citedSource = turn.sources[part.citation - 1]}
                     <a class="inline-citation" href={filingHref(`#/doc/${citedSource.id}`)} onclick={closeForNavigation}
-                       aria-label={`Open cited document ${part.citation}: ${citedSource.title || `Document #${citedSource.id}`}`}>{part.text}</a>
+                       aria-label={`Open document used in answer ${part.citation}: ${citedSource.title || `Document #${citedSource.id}`}`}>{part.text}</a>
                   {:else}{part.text}{/if}
                 {/each}
               </p>
@@ -336,31 +343,31 @@
 
           {#if turn.sources.length}
             {@const groups = sourceGroups(turn)}
-            <div class="research-actions" aria-label="Research actions">
+            <div class="research-actions" aria-label="Actions for these documents">
               <a class="research-action" href={filingHref(`#/views?new=1&ids=${turn.sources.map(source => source.id).join(',')}`)} onclick={closeForNavigation}>
-                <Icon name="eye" size={14} /><span><b>Save retrieved documents as a view</b><small>{turn.sources.length} document{turn.sources.length === 1 ? '' : 's'}</small></span>
+                <Icon name="eye" size={14} /><span><b>Save these documents as a view</b><small>{turn.sources.length} document{turn.sources.length === 1 ? '' : 's'}</small></span>
               </a>
               {#if canReviewIntelligence}
                 {#if pendingDateCount(turn) > 0}
                   <a class="research-action" href={filingHref("#/tasks")} onclick={closeForNavigation}>
-                    <Icon name="tasks" size={14} /><span><b>Review {pendingDateCount(turn)} date{pendingDateCount(turn) === 1 ? '' : 's'}</b><small>Validate candidates in Approvals</small></span>
+                    <Icon name="tasks" size={14} /><span><b>Review {pendingDateCount(turn)} date{pendingDateCount(turn) === 1 ? '' : 's'}</b><small>Check suggested dates in Approvals</small></span>
                   </a>
                 {:else if acceptedDateCount(turn) > 0}
                   <a class="research-action" href={filingHref(`#/calendar?document_ids=${sourceIDQuery(turn)}`)} onclick={closeForNavigation}>
-                    <Icon name="calendar" size={14} /><span><b>Open {acceptedDateCount(turn)} calendar date{acceptedDateCount(turn) === 1 ? '' : 's'}</b><small>All dates from retrieved documents</small></span>
+                    <Icon name="calendar" size={14} /><span><b>Open {acceptedDateCount(turn)} calendar date{acceptedDateCount(turn) === 1 ? '' : 's'}</b><small>Dates from these documents</small></span>
                   </a>
                 {/if}
               {/if}
             </div>
 
             <section class="evidence-stack" aria-label="From your documents">
-              <header><span>From your documents</span><small>{turn.citations.length || 0} cited / {turn.sources.length} retrieved</small></header>
+              <header><span>From your documents</span><small>{turn.citations.length || 0} used in the answer · {turn.sources.length} document{turn.sources.length === 1 ? '' : 's'} found</small></header>
               {#each groups.primary as item (item.source.id)}
                 <ArchiveChatSource {item} cited onOpen={closeForNavigation} />
               {/each}
               {#if groups.extra.length}
                 <details class="extra-sources">
-                  <summary>{groups.extra.length} additional retrieved source{groups.extra.length === 1 ? '' : 's'}</summary>
+                  <summary>{groups.extra.length} more document{groups.extra.length === 1 ? '' : 's'}</summary>
                   {#each groups.extra as item (item.source.id)}
                     <ArchiveChatSource {item} onOpen={closeForNavigation} />
                   {/each}
@@ -378,7 +385,7 @@
         <span><b>Include Confidential and Restricted</b><small>Text from the listed documents is sent to {providerLabel()} for this conversation</small></span>
       </label>
       <form onsubmit={(event) => { event.preventDefault(); send() }}>
-        <textarea bind:this={composer} bind:value={draft} maxlength="2000" rows="2" placeholder="Ask a question about this scope"
+        <textarea bind:this={composer} bind:value={draft} maxlength="2000" rows="2" placeholder={questionPlaceholder()}
                   aria-label="Question" disabled={sending}
                   onkeydown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); send() } }}></textarea>
         {#if sending}
@@ -387,7 +394,7 @@
           <button class="btn primary research-send" disabled={!draft.trim()}><Icon name="ask" size={14} /> Ask</button>
         {/if}
       </form>
-      <small class="research-note">Extracted facts can support answers; cited documents remain the source.</small>
+      <small class="research-note">Saved details can help answer questions; open the linked documents to check them.</small>
     </footer>
   </div>
 {/if}

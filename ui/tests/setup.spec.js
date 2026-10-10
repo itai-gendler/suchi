@@ -349,9 +349,9 @@ test('taxonomy import previews a named tree and refreshes setup and sidebar afte
   await importer.getByLabel('Choose taxonomy file').setInputFiles({
     name: 'personal.toml', mimeType: 'text/plain', buffer: Buffer.from(taxonomyContent),
   })
-  await expect(importer.getByRole('combobox', { name: 'Serialization', exact: true })).toHaveValue('toml')
+  await expect(importer.getByRole('combobox', { name: 'File format', exact: true })).toHaveValue('toml')
   await importer.getByRole('button', { name: 'Preview', exact: true }).click()
-  await expect(importer.getByRole('heading', { name: /Personal records.*content revision 2/ })).toBeVisible()
+  await expect(importer.getByRole('heading', { name: /Personal records.*version 2/ })).toBeVisible()
   await expect(importer.getByText('Passports and identity cards.')).toBeVisible()
   await expect(importer.getByText('00–09 System index', { exact: true })).toBeVisible()
   await expect(importer.getByText('49 Inbox', { exact: true })).toBeVisible()
@@ -378,7 +378,7 @@ test('taxonomy import renders server validation failures and never applies inval
   })
   const importer = await openTaxonomyImport(page)
   await importer.getByLabel('Paste content').fill('unsupported content')
-  await importer.getByRole('combobox', { name: 'Serialization', exact: true }).selectOption('toml')
+  await importer.getByRole('combobox', { name: 'File format', exact: true }).selectOption('toml')
   await importer.getByRole('button', { name: 'Preview', exact: true }).click()
   await expect(importer.getByRole('alert')).toHaveText('areas[0].code: area 40 is reserved')
   await expect(importer.getByLabel('Paste content')).toHaveValue('unsupported content')
@@ -404,7 +404,7 @@ test('taxonomy import requires explicit previewed collision choices and retains 
   })
   const importer = await openTaxonomyImport(page)
   await importer.getByLabel('Paste content').fill(taxonomyContent)
-  await importer.getByRole('combobox', { name: 'Serialization', exact: true }).selectOption('toml')
+  await importer.getByRole('combobox', { name: 'File format', exact: true }).selectOption('toml')
   await importer.getByRole('button', { name: 'Preview', exact: true }).click()
   await expect(importer.getByLabel('Choice for 11')).toHaveValue('')
   await expect(importer.getByRole('button', { name: 'Apply import', exact: true })).toBeDisabled()
@@ -423,7 +423,7 @@ test('taxonomy import requires explicit previewed collision choices and retains 
   await expect(importer.getByRole('button', { name: 'Apply import', exact: true })).toBeDisabled()
   await importer.getByRole('button', { name: 'Preview', exact: true }).click()
   expect(requests[3]).toMatchObject({ remaps: { 11: 0 }, skip_seeds: true })
-  await importer.getByRole('combobox', { name: 'Serialization', exact: true }).selectOption('huml')
+  await importer.getByRole('combobox', { name: 'File format', exact: true }).selectOption('huml')
   await expect(importer.getByRole('button', { name: 'Apply import', exact: true })).toBeDisabled()
   await importer.getByLabel('Paste content').fill(taxonomyContent + '\n')
   await expect(importer.getByLabel('Choice for 11')).toHaveCount(0)
@@ -445,7 +445,7 @@ test('taxonomy import preserves input after stale preview and binds apply to a f
   })
   const importer = await openTaxonomyImport(page)
   await importer.getByLabel('Paste content').fill(taxonomyContent)
-  await importer.getByRole('combobox', { name: 'Serialization', exact: true }).selectOption('toml')
+  await importer.getByRole('combobox', { name: 'File format', exact: true }).selectOption('toml')
   await importer.getByRole('button', { name: 'Preview', exact: true }).click()
   await importer.getByRole('button', { name: 'Apply import', exact: true }).click()
   await expect(importer.getByRole('alert')).toContainText('Preview again before applying')
@@ -468,7 +468,7 @@ test('taxonomy import confirms blank trees in a native modal before applying', a
   })
   const importer = await openTaxonomyImport(page)
   await importer.getByLabel('Paste content').fill(taxonomyContent.split('[[areas]]')[0] + 'areas = []\n')
-  await importer.getByRole('combobox', { name: 'Serialization', exact: true }).selectOption('toml')
+  await importer.getByRole('combobox', { name: 'File format', exact: true }).selectOption('toml')
   await importer.getByRole('button', { name: 'Preview', exact: true }).click()
   await importer.getByRole('button', { name: 'Apply import', exact: true }).click()
   const confirmation = page.getByRole('alertdialog', { name: 'Import a blank filing tree?' })
@@ -516,11 +516,11 @@ test('taxonomy import disables conflicting requests and discards a preview after
   await mockAPI(page, { taxonomyImport: async (_, route) => { pending = route } })
   const importer = await openTaxonomyImport(page)
   await importer.getByLabel('Paste content').fill(taxonomyContent)
-  await importer.getByRole('combobox', { name: 'Serialization', exact: true }).selectOption('toml')
+  await importer.getByRole('combobox', { name: 'File format', exact: true }).selectOption('toml')
   await importer.getByRole('button', { name: 'Preview', exact: true }).click()
   await expect.poll(() => !!pending).toBe(true)
   await expect(importer.getByLabel('Paste content')).toBeDisabled()
-  await expect(importer.getByRole('combobox', { name: 'Serialization', exact: true })).toBeDisabled()
+  await expect(importer.getByRole('combobox', { name: 'File format', exact: true })).toBeDisabled()
   await expect(importer.getByLabel('Include starter rules')).toBeDisabled()
   await expect(page.getByRole('button', { name: 'Close', exact: true })).toBeDisabled()
   await page.goto('/#/dashboard')
@@ -646,7 +646,7 @@ async function mockAPI(page, options = {}) {
         (request.postDataJSON().auto_apply !== undefined ? options.applicationModeSaveFailure : options.researchContextSaveFailure)) {
       await route.fulfill({
         status: 500,
-        json: { code: 'save_failed', error: options.failureMessage || 'research context unavailable' },
+        json: { code: 'save_failed', error: options.failureMessage || 'reading amount unavailable' },
       })
       return
     }
@@ -680,9 +680,11 @@ async function mockAPI(page, options = {}) {
     else if (path === '/api/jd/systems') body = options.systems || { introduced: false, default_system_code: '', results: [] }
     else if (path === '/api/stats/') body = {
       documents_total: options.documentsCount ?? options.documents?.length ?? 0,
-      inbox_count: 0,
-      pending_approvals: 0,
-      dead_jobs: 0,
+      inbox_count: options.inboxCount ?? 0,
+      pending_approvals: options.pendingApprovals ?? 0,
+      pending_intelligence: options.pendingIntelligence ?? 0,
+      dead_jobs: options.deadJobs ?? 0,
+      ingested_7d: options.ingested7d ?? 0,
     }
     else if (path === '/api/jd/categories/') body = {
       results: taxonomyApplied && options.jdCategoriesAfterPreset
@@ -785,7 +787,7 @@ async function mockAPI(page, options = {}) {
         if (unexpected.length || (!archivePatch && Object.keys(payload).length !== (payload.subscription_model ? 2 : 1)) || !valid) {
           await route.fulfill({
             status: 400,
-            json: { code: 'bad_json', error: unexpected.length ? `unknown field ${unexpected[0]}` : 'invalid research context mode' },
+            json: { code: 'bad_json', error: unexpected.length ? `unknown field ${unexpected[0]}` : 'invalid reading amount' },
           })
           return
         }
@@ -1088,8 +1090,8 @@ test('guides first-time demo visitors and keeps the help launcher available', as
   await expect(page.getByText('Rich query language', { exact: true })).toBeVisible()
   await expect(page.getByRole('link', { name: /Trace the paper trail/ }))
     .toHaveAttribute('href', '#/search?q=from%3A%22Northstar%20Cloud%22%20version%3Aall')
-  await expect(page.getByText('Archive research · Available on your own installation', { exact: true })).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Ask the archive' })).toHaveCount(0)
+  await expect(page.getByText('Ask your documents · Available on your own installation', { exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Ask your documents' })).toHaveCount(0)
   const queryLink = page.getByRole('link', { name: /Run the guided query/ })
   await expect(queryLink).toHaveAttribute('href', '#/search?q=from%3A%22Northstar%20Cloud%22%20tag%3Arenewal')
 
@@ -1121,8 +1123,8 @@ for (const demoSession of ['anon', 'scratch']) {
     await expect(page.getByRole('heading', { name: 'Calendar', exact: true, level: 2 })).toBeVisible()
     await expect(page.getByRole('heading', { name: '2 dates', exact: true })).toBeVisible()
     await expect(page.getByText('Demo example', { exact: true })).toHaveCount(2)
-    await expect(page.getByText(/LLM Classifier confidence/)).toHaveCount(0)
-    await expect(page.getByRole('button', { name: 'Ask the archive' })).toHaveCount(0)
+    await expect(page.getByText(/Model confidence/)).toHaveCount(0)
+    await expect(page.getByRole('button', { name: 'Ask your documents' })).toHaveCount(0)
     expect(intelligenceQueries.at(-1)).not.toHaveProperty('sort_from')
     expect(intelligenceQueries.at(-1)).not.toHaveProperty('sort_to')
     await page.reload()
@@ -1214,6 +1216,7 @@ test('keeps setup-state failures visible and retries them', async ({ page }) => 
   await expect(reminder.getByText('Choose your filing tree')).toBeVisible()
 })
 
+
 test('does not recognize the removed setup route', async ({ page }) => {
   await mockAPI(page, { filingTreeChosen: true })
   await page.goto('/#/setup')
@@ -1256,7 +1259,7 @@ for (const userRole of ['admin', 'member']) {
       user_id: 1, email: 'admin@example.test', role: userRole, capabilities: [], build_version: 'dev',
     } }))
     await page.reload()
-    await expect(page.getByRole('contentinfo', { name: 'Suchi build' })).toHaveText('Suchi dev · revision unavailable')
+    await expect(page.getByRole('contentinfo', { name: 'Suchi build' })).toHaveText('Suchi dev · build details unavailable')
   })
 }
 
@@ -1379,7 +1382,7 @@ test('separates completed archive administration from account settings', async (
   await expect(page).toHaveURL(/#\/settings\?tab=archive&section=llm$/)
   await expect(page.getByRole('heading', { name: 'Suggestions', exact: true })).toBeVisible()
   await page.getByRole('button', { name: 'Set up model', exact: true }).first().click()
-  await expect(page.getByRole('button', { name: 'Hosted endpoint' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Hosted model' })).toBeVisible()
   await page.getByRole('button', { name: 'Cancel', exact: true }).click()
   const overviewReload = page.waitForRequest((request) =>
     new URL(request.url()).pathname === '/api/admin/settings/preferences'
@@ -1402,7 +1405,7 @@ test('saves application mode independently and retains only saved choices after 
   await page.getByRole('button', { name: 'Change', exact: true }).click()
   const applyAuto = page.getByRole('radio', { name: /Apply when confident/ })
   const applyReview = page.getByRole('radio', { name: /Review first/ })
-  const localThreshold = page.getByLabel(/Minimum confidence to apply automatically/)
+  const localThreshold = page.getByLabel(/Minimum similarity to apply automatically/)
   const modelThreshold = page.getByLabel(/Minimum model confidence to apply automatically/)
   await expect(applyAuto).toBeChecked()
   await localThreshold.fill('0.95')
@@ -1419,7 +1422,7 @@ test('saves application mode independently and retains only saved choices after 
   if (await page.getByRole('dialog').count()) await page.getByRole('button', { name: 'Cancel', exact: true }).click()
   await page.getByRole('button', { name: 'Save application mode' }).click()
   await expect.poll(() => applicationModeRequests.length).toBe(1)
-  await expect(page.getByText('Titles, dates, tags and Archive research. Off.', { exact: true })).toBeVisible()
+  await expect(page.getByText('Document suggestions and questions. Off.', { exact: true })).toBeVisible()
   if (!await page.getByRole('dialog').count()) await page.getByRole('button', { name: /^(Set up model|Manage)$/ }).first().click()
   await expect(page.getByLabel('Model', { exact: true })).toHaveValue('unsaved-model')
   await expect(page.getByLabel('API key (blank for local)')).toHaveValue('unsaved-key')
@@ -1488,7 +1491,7 @@ test('model and matching saves preserve independent drafts and the persisted app
   await page.getByRole('button', { name: 'Change', exact: true }).click()
   const applyAuto = page.getByRole('radio', { name: /Apply when confident/ })
   const applyReview = page.getByRole('radio', { name: /Review first/ })
-  const localThreshold = page.getByLabel(/Minimum confidence to apply automatically/)
+  const localThreshold = page.getByLabel(/Minimum similarity to apply automatically/)
   const modelThreshold = page.getByLabel(/Minimum model confidence to apply automatically/)
   await localThreshold.fill('0.95')
   await page.getByRole('button', { name: /^(Set up model|Manage)$/ }).first().click()
@@ -1515,8 +1518,8 @@ test('model and matching saves preserve independent drafts and the persisted app
   await expect(page.getByLabel('Model', { exact: true })).toHaveValue('unsaved-model')
   await expect(applyReview).toBeChecked()
   if (await page.getByRole('dialog').count()) await page.getByRole('button', { name: 'Cancel', exact: true }).click()
-  await page.getByRole('button', { name: 'Save research context' }).click()
-  await expect(page.getByText('Research context saved', { exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Save reading amount' }).click()
+  await expect(page.getByText('Reading amount saved', { exact: true })).toBeVisible()
   await expect(applyReview).toBeChecked()
   await page.reload()
   await page.getByRole('button', { name: 'Adjust', exact: true }).click()
@@ -1573,7 +1576,7 @@ test('separates model-free matching saves from validated model settings', async 
   await testConnection.click()
   await expect(saveModel).toBeEnabled()
 
-  await page.getByLabel('Endpoint URL').fill('http://localhost:11435/v1')
+  await page.getByLabel('Model service URL').fill('http://localhost:11435/v1')
   await expect(saveModel).toBeDisabled()
   await testConnection.click()
   await expect(saveModel).toBeEnabled()
@@ -1587,10 +1590,10 @@ test('separates model-free matching saves from validated model settings', async 
   await expect(saveModel).toBeEnabled()
   await page.getByLabel('Clear the saved API key when saving. Config-file and environment keys are unchanged.').check()
   await expect(saveModel).toBeDisabled()
-  await page.getByRole('button', { name: 'Hosted endpoint' }).click()
-  await page.getByLabel('Endpoint URL').fill('https://models.example.test/v1')
+  await page.getByRole('button', { name: 'Hosted model' }).click()
+  await page.getByLabel('Model service URL').fill('https://models.example.test/v1')
   await page.getByLabel('Model', { exact: true }).fill('hosted-model')
-  const egress = page.getByLabel('This endpoint is not local. I acknowledge document text will leave this machine.')
+  const egress = page.getByLabel('This model runs outside this machine. I understand document text will be sent to it.')
   await egress.check()
   await testConnection.click()
   await expect(saveModel).toBeEnabled()
@@ -1615,10 +1618,10 @@ test('preserves an enabled model when saving archive matching', async ({ page })
   await page.getByRole('button', { name: 'Adjust', exact: true }).click()
   await page.getByRole('button', { name: 'Change', exact: true }).click()
 
-  await page.getByLabel(/Minimum confidence to suggest for review/).fill('0.9')
+  await page.getByLabel(/Minimum similarity to suggest for review/).fill('0.9')
   await expect(page.getByRole('button', { name: 'Save matching options' })).toBeDisabled()
   await expect(page.getByRole('alert')).toBeVisible()
-  await page.getByLabel(/Minimum confidence to suggest for review/).fill('0.85')
+  await page.getByLabel(/Minimum similarity to suggest for review/).fill('0.85')
   if (await page.getByRole('dialog').count()) await page.getByRole('button', { name: 'Cancel', exact: true }).click()
   await page.getByRole('button', { name: 'Save matching options' }).click()
   await expect.poll(() => archiveMatchingRequests.length).toBe(1)
@@ -1626,16 +1629,16 @@ test('preserves an enabled model when saving archive matching', async ({ page })
   await page.reload()
   await page.getByRole('button', { name: 'Adjust', exact: true }).click()
   await page.getByRole('button', { name: 'Change', exact: true }).click()
-  await expect(page.getByLabel(/Minimum confidence to suggest for review/)).toHaveValue('0.85')
+  await expect(page.getByLabel(/Minimum similarity to suggest for review/)).toHaveValue('0.85')
   await page.getByRole('button', { name: 'Manage', exact: true }).click()
-  await expect(page.getByLabel('Endpoint URL')).toHaveValue('https://models.example.test/v1')
+  await expect(page.getByLabel('Model service URL')).toHaveValue('https://models.example.test/v1')
   if (!await page.getByRole('dialog').count()) await page.getByRole('button', { name: /^(Set up model|Manage)$/ }).first().click()
   await expect(page.getByLabel('Model', { exact: true })).toHaveValue('archive-model')
-  await expect(page.getByLabel('This endpoint is not local. I acknowledge document text will leave this machine.')).toBeChecked()
+  await expect(page.getByLabel('This model runs outside this machine. I understand document text will be sent to it.')).toBeChecked()
   await expect(page.getByText('Active', { exact: true })).toBeVisible()
 })
 
-test('persists research context independently without enabling the model', async ({ page }) => {
+test('persists the reading amount independently without enabling the model', async ({ page }) => {
   const researchContextRequests = []
   const llmSettingsRequests = []
   await mockAPI(page, {
@@ -1648,21 +1651,21 @@ test('persists research context independently without enabling the model', async
   await page.getByRole('button', { name: 'Adjust', exact: true }).click()
   await page.getByRole('button', { name: 'Change', exact: true }).click()
 
-  const research = page.getByRole('region', { name: 'Archive research configuration' })
+  const research = page.getByRole('region', { name: 'Ask your documents settings' })
   await expect(research.getByRole('radio', { name: /Balanced/ })).toBeChecked()
 
   await research.getByRole('radio', { name: /Detailed/ }).check()
-  await research.getByRole('button', { name: 'Save research context' }).click()
+  await research.getByRole('button', { name: 'Save reading amount' }).click()
   await expect.poll(() => researchContextRequests.length).toBe(1)
   await page.reload()
   await page.getByRole('button', { name: 'Adjust', exact: true }).click()
   await page.getByRole('button', { name: 'Change', exact: true }).click()
   await expect(research.getByRole('radio', { name: /Detailed/ })).toBeChecked()
-  await expect(page.getByText('Titles, dates, tags and Archive research. Off.', { exact: true })).toBeVisible()
+  await expect(page.getByText('Document suggestions and questions. Off.', { exact: true })).toBeVisible()
   expect(llmSettingsRequests).toEqual([])
 })
 
-test('keeps research context out of model test, save, and disable payloads', async ({ page }) => {
+test('keeps the reading amount out of model test, save, and disable payloads', async ({ page }) => {
   const llmSettingsRequests = []
   const llmTestRequests = []
   await mockAPI(page, {
@@ -1692,7 +1695,7 @@ test('keeps research context out of model test, save, and disable payloads', asy
   await expect.poll(() => llmSettingsRequests.length).toBe(2)
   expect(llmSettingsRequests[1].enabled).toBe(false)
   await expect(page.getByRole('radio', { name: /Detailed/ })).toBeChecked()
-  await expect(page.getByText('Titles, dates, tags and Archive research. Off.', { exact: true })).toBeVisible()
+  await expect(page.getByText('Document suggestions and questions. Off.', { exact: true })).toBeVisible()
   for (const payload of [...llmTestRequests, ...llmSettingsRequests]) {
     expect(payload).not.toHaveProperty('research_context_mode')
   }
@@ -1702,23 +1705,23 @@ test('keeps research context out of model test, save, and disable payloads', asy
   await expect(page.getByRole('radio', { name: /Balanced/ })).toBeChecked()
 })
 
-test('keeps research context editable when its standalone save fails', async ({ page }) => {
+test('keeps the reading amount editable when its standalone save fails', async ({ page }) => {
   await mockAPI(page, {
 
     filingTreeChosen: true,
     researchContextMode: 'unexpected',
     researchContextSaveFailure: true,
-    failureMessage: 'research context unavailable',
+    failureMessage: 'reading amount unavailable',
   })
   await page.goto('/#/settings?tab=archive&section=llm')
   await page.getByRole('button', { name: 'Adjust', exact: true }).click()
   await page.getByRole('button', { name: 'Change', exact: true }).click()
 
-  const research = page.getByRole('region', { name: 'Archive research configuration' })
+  const research = page.getByRole('region', { name: 'Ask your documents settings' })
   await expect(research.getByRole('radio', { name: /Balanced/ })).toBeChecked()
   await research.getByRole('radio', { name: /Detailed/ }).check()
-  await research.getByRole('button', { name: 'Save research context' }).click()
-  await expect(page.getByText('research context unavailable')).toBeVisible()
+  await research.getByRole('button', { name: 'Save reading amount' }).click()
+  await expect(page.getByText('reading amount unavailable')).toBeVisible()
   await expect(research.getByRole('radio', { name: /Detailed/ })).toBeChecked()
 })
 
@@ -2011,7 +2014,7 @@ test('authors a bounded classifier question with answer branches', async ({ page
   await page.getByLabel('Add filter to trigger 1').selectOption('filename')
   await page.getByLabel('Filename filter 1').fill('*.pdf')
   await page.getByRole('switch', { name: 'Ask the document model' }).click()
-  await page.getByLabel('Classifier question').fill('Is this valid warranty proof?')
+  await page.getByLabel('Model question').fill('Is this valid warranty proof?')
   await page.getByLabel('Answer type').selectOption('choice')
   await page.getByLabel('Answer choice 1').fill('Warranty')
   await page.getByLabel('Answer choice 2').fill('Not warranty')
@@ -2100,7 +2103,7 @@ test('requires review and a successful apply before Blank satisfies archive setu
   await (await openBlankReview()).click()
   await expect(page.getByText('Filing tree updated.', { exact: false })).toBeVisible()
   await page.goto('/#/dashboard')
-  await expect(page.locator('.setup-reminder')).toHaveCount(0)
+  await expect(page.getByText('Choose your filing tree', { exact: true })).toHaveCount(0)
 })
 
 test('retries filing-tree workspace loading without hiding other sections', async ({ page }) => {
@@ -2854,7 +2857,7 @@ test('renaming a saved view snapshot retains its exact document scope', async ({
   await page.goto('/#/views')
   await page.getByRole('button', { name: 'Edit Research snapshot' }).click()
   const dialog = page.locator('.view-builder')
-  await expect(dialog.getByText('Exact research snapshot')).toBeVisible()
+  await expect(dialog.getByText('Exact document set')).toBeVisible()
   await expect(dialog.getByLabel('Query')).toHaveCount(0)
   await dialog.getByLabel('View name').fill('Renewal evidence')
   await dialog.getByRole('button', { name: 'Save changes' }).click()
@@ -2874,7 +2877,7 @@ test('loads recent dashboard documents once per navigation', async ({ page }) =>
   })
   await mockAPI(page)
   await page.goto('/#/dashboard')
-  await expect(page.getByText('Nothing here yet.')).toBeVisible()
+  await expect(page.getByText('No recent documents.')).toBeVisible()
   await expect.poll(() => recentRequests).toBe(1)
   await page.waitForTimeout(150)
   expect(recentRequests).toBe(1)
@@ -2911,7 +2914,7 @@ test('keeps recent dashboard documents inside the mobile content column', async 
   expect(widths.scroll).toBeLessThanOrEqual(widths.client)
 })
 
-test('limits dashboard count requests and defers empty-view facets', async ({ page }) => {
+test('avoids saved-view count requests and defers facets until editing', async ({ page }) => {
   const countRequests = []
   const facetRequests = []
   page.on('request', request => {
@@ -2935,13 +2938,14 @@ test('limits dashboard count requests and defers empty-view facets', async ({ pa
   })
   await page.goto('/#/dashboard')
   await expect(page.getByRole('link', { name: 'View all 6 saved views' })).toBeVisible()
-  await expect.poll(() => countRequests.length).toBe(4)
+  await page.waitForTimeout(100)
+  expect(countRequests).toEqual([])
+  expect(facetRequests).toEqual([])
 
-  await page.unrouteAll({ behavior: 'wait' })
-  await mockAPI(page)
   await page.goto('/#/views')
-  await expect(page.getByRole('heading', { name: 'No views yet' })).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Waiting to file' })).toBeVisible()
+  await expect(page.getByRole('link', { name: /View 1/ })).toBeVisible()
+  await page.waitForTimeout(100)
+  expect(countRequests).toEqual([])
   expect(facetRequests).toEqual([])
 
   const facets = page.waitForRequest(request => new URL(request.url()).pathname === '/api/tags/')
@@ -2981,7 +2985,6 @@ test('keeps saved views ahead of the creation form', async ({ page }) => {
   await expect(page.getByRole('link', { name: /Private investments/ })).toBeVisible()
   await expect(page.getByText('distribution advice · confidential', { exact: true })).toBeVisible()
   await expect(page.locator('.view-builder')).toHaveCount(0)
-  await expect(page.getByLabel('47 matching documents')).toBeVisible()
 
   await page.getByRole('button', { name: 'New view' }).click()
   const dialog = page.locator('.view-builder')
@@ -3145,11 +3148,11 @@ test('offers Microsoft sign-in without exposing registration controls', async ({
   await expect(page.getByTitle('Microsoft sign-in settings')).toHaveCount(0)
 })
 
-test('shows every document source and the source date', async ({ page }) => {
+test('shows every acquisition place and the original file date', async ({ page }) => {
   await mockAPI(page)
   await page.goto('/#/doc/42')
 
-  await expect(page.getByText('Sources', { exact: true })).toBeVisible()
+  await expect(page.getByText('Added from', { exact: true })).toBeVisible()
   await expect(page.getByText('user@example.test', { exact: true })).toBeVisible()
   await expect(page.getByText(/· INBOX/)).toBeVisible()
   await expect(page.getByText(/user@example\.test.*user@example\.test/)).toHaveCount(0)
@@ -3157,8 +3160,8 @@ test('shows every document source and the source date', async ({ page }) => {
   await expect(page.getByText(/archive@example\.test \/ Receipts/)).toBeVisible()
   await expect(page.getByText('Uploaded by Admin', { exact: true })).toBeVisible()
   await expect(page.getByText(/bill\.pdf/)).toBeVisible()
-  await expect(page.getByText('first seen', { exact: true })).toBeVisible()
-  await expect(page.getByText('Source date', { exact: true })).toBeVisible()
+  await expect(page.getByText('first added', { exact: true })).toBeVisible()
+  await expect(page.getByText('Original file date', { exact: true })).toBeVisible()
   await expect(page.getByText('Created', { exact: true })).toHaveCount(0)
 })
 
@@ -4710,7 +4713,6 @@ test('keeps filing reviews compact and explains sources on demand', async ({ pag
   await expect(review.locator('.metadata-transition')).toHaveText(/Inbox\s*→\s*Receipts/)
   await expect(review.getByText('Current', { exact: true })).toHaveCount(0)
   await expect(review.getByText('Proposed', { exact: true })).toHaveCount(0)
-  await expect(review.getByText('Producer detail', { exact: true })).toHaveCount(0)
 
   await expect(review.getByText('Why this was suggested', { exact: true })).toBeVisible()
   await expect(review.getByText('Archive match', { exact: true })).toBeVisible()
@@ -4750,7 +4752,7 @@ test('labels automation answer reviews without retaining the model transcript', 
   await expect(review.getByText(/Is this valid warranty proof/)).toHaveCount(0)
 })
 
-test('shows dead-job recovery only to administrators', async ({ page }) => {
+test('shows processing issue recovery only to administrators', async ({ page }) => {
   const deadJobs = [{
     id: 41, kind: 'post-ingest', doc_id: 17, state: 'dead', attempts: 4,
     last_error: 'document is unavailable', updated_at: 1780100000,
@@ -4758,7 +4760,13 @@ test('shows dead-job recovery only to administrators', async ({ page }) => {
   const adminIncludes = []
   await mockAPI(page, { deadJobs, taskIncludes: adminIncludes })
   await page.goto('/#/tasks')
-  await expect(page.getByRole('heading', { name: 'Dead jobs — needs attention' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Processing issues' })).toBeVisible()
+  await expect(page.getByText('Read and file document', { exact: true })).toBeVisible()
+  await expect(page.getByText('post-ingest', { exact: true })).not.toBeVisible()
+  await expect(page.getByText('document is unavailable', { exact: true })).not.toBeVisible()
+  await page.getByText('Technical details', { exact: true }).click()
+  await expect(page.getByText('post-ingest', { exact: true })).toBeVisible()
+  await expect(page.getByText('document is unavailable', { exact: true })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Retry', exact: true })).toBeVisible()
   expect(adminIncludes).toContain('jobs')
 
@@ -4767,7 +4775,7 @@ test('shows dead-job recovery only to administrators', async ({ page }) => {
   await mockAPI(page, { userRole: 'member', deadJobs, taskIncludes: memberIncludes })
   await page.reload()
   await expect(page.getByRole('link', { name: 'HDFC receipt.pdf', exact: true })).toBeVisible()
-  await expect(page.getByRole('heading', { name: 'Dead jobs — needs attention' })).toHaveCount(0)
+  await expect(page.getByRole('heading', { name: 'Processing issues' })).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Retry', exact: true })).toHaveCount(0)
   expect(memberIncludes).toContain('approvals')
   expect(memberIncludes).not.toContain('jobs')
@@ -4946,7 +4954,7 @@ test('edits mailbox intake on a narrow screen', async ({ page }) => {
   })
 })
 
-test('keeps search separate from scoped archive research and saves exact sources', async ({ page }, testInfo) => {
+test('keeps search separate from document questions and saves the exact document set', async ({ page }, testInfo) => {
   const chatRequests = []
   const autocompleteQueries = []
   await mockAPI(page, {
@@ -4966,7 +4974,7 @@ test('keeps search separate from scoped archive research and saves exact sources
 
   await page.goto('/#/dashboard')
   const omnibox = page.getByLabel('Search or run a command')
-  await expect(page.getByRole('button', { name: 'Ask the archive' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Ask your documents' })).toBeVisible()
   expect(await page.evaluate(() => performance.getEntriesByType('resource').some(entry => entry.name.includes('ArchiveChat')))).toBe(false)
 
   await omnibox.fill('tag:renewal')
@@ -4979,28 +4987,27 @@ test('keeps search separate from scoped archive research and saves exact sources
 
   await page.goto('/#/dashboard')
   await omnibox.fill('When does the lease renew?')
-  await page.getByRole('button', { name: 'Ask the archive' }).click()
-  await expect(page.getByRole('dialog', { name: 'Archive research' })).toBeVisible()
+  await page.getByRole('button', { name: 'Ask your documents' }).click()
+  await expect(page.getByRole('dialog', { name: 'Ask your documents' })).toBeVisible()
   if ((page.viewportSize()?.width || 0) > 640) {
-    await expect.poll(async () => Math.round((await page.getByRole('dialog', { name: 'Archive research' }).boundingBox()).width)).toBe(520)
+    await expect.poll(async () => Math.round((await page.getByRole('dialog', { name: 'Ask your documents' }).boundingBox()).width)).toBe(520)
     await expect.poll(async () => {
-      const box = await page.getByRole('dialog', { name: 'Archive research' }).boundingBox()
+      const box = await page.getByRole('dialog', { name: 'Ask your documents' }).boundingBox()
       return Math.round(box.x + box.width)
     }).toBe(page.viewportSize().width)
   } else {
-    await expect.poll(async () => Math.round((await page.getByRole('dialog', { name: 'Archive research' }).boundingBox()).x)).toBe(0)
-    await expect.poll(async () => Math.round((await page.getByRole('dialog', { name: 'Archive research' }).boundingBox()).width)).toBe(page.viewportSize().width)
+    await expect.poll(async () => Math.round((await page.getByRole('dialog', { name: 'Ask your documents' }).boundingBox()).x)).toBe(0)
+    await expect.poll(async () => Math.round((await page.getByRole('dialog', { name: 'Ask your documents' }).boundingBox()).width)).toBe(page.viewportSize().width)
   }
   await page.screenshot({ path: `/tmp/suchi-archive-chat-${testInfo.project.name}.png`, fullPage: true })
   await expect(page.getByText('The lease renews in September')).toBeVisible()
-  await expect(page.getByText('Ask questions about your documents.')).toBeVisible()
-  await expect(page.getByText('Grounded answer', { exact: true })).toHaveCount(0)
-  const citation = page.getByRole('link', { name: 'Open cited document 1: Lease agreement.pdf' })
+  await expect(page.getByText('Ask questions and follow each answer back to your documents.')).toBeVisible()
+  const citation = page.getByRole('link', { name: 'Open document used in answer 1: Lease agreement.pdf' })
   await expect(citation).toHaveAttribute('href', '#/doc/17')
   await citation.click()
   await expect(page).toHaveURL(/#\/doc\/17$/)
   await expect(page.getByRole('listbox')).toHaveCount(0)
-  await expect(page.getByRole('button', { name: 'Return to archive research' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Return to your document question' })).toBeVisible()
   await page.screenshot({ path: `/tmp/suchi-archive-chat-ribbon-${testInfo.project.name}.png`, fullPage: true })
   expect(chatRequests).toHaveLength(1)
   expect(chatRequests[0]).toMatchObject({
@@ -5012,41 +5019,41 @@ test('keeps search separate from scoped archive research and saves exact sources
   })
   expect(await page.evaluate(() => performance.getEntriesByType('resource').some(entry => entry.name.includes('ArchiveChat')))).toBe(true)
 
-  await page.getByRole('button', { name: 'Return to archive research' }).click()
-  await expect(page.getByRole('dialog', { name: 'Archive research' })).toBeVisible()
+  await page.getByRole('button', { name: 'Return to your document question' }).click()
+  await expect(page.getByRole('dialog', { name: 'Ask your documents' })).toBeVisible()
   await expect(page.getByText('The lease renews in September')).toBeVisible()
   await page.getByTitle('Close', { exact: true }).click()
-  const resumedRibbon = page.getByRole('button', { name: 'Return to archive research' })
+  const resumedRibbon = page.getByRole('button', { name: 'Return to your document question' })
   await expect(resumedRibbon).toBeVisible()
   await expect(resumedRibbon).toBeFocused()
   await resumedRibbon.click()
-  await page.getByRole('link', { name: /Save retrieved documents as a view/ }).click()
+  await page.getByRole('link', { name: /Save these documents as a view/ }).click()
   await expect(page).toHaveURL(/#\/views\?new=1&ids=17$/)
   await expect(page.locator('.view-builder').getByRole('heading', { name: 'New view' })).toBeVisible()
-  await expect(page.getByText('Exact research snapshot')).toBeVisible()
+  await expect(page.getByText('Exact document set')).toBeVisible()
   await page.locator('.view-builder').getByRole('button', { name: 'Cancel' }).click()
   await expect(page).toHaveURL(/#\/views$/)
-  await expect(page.getByRole('button', { name: 'Return to archive research' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Return to your document question' })).toBeVisible()
 
   await page.goto('/#/dashboard')
-  await page.getByRole('button', { name: 'Return to archive research' }).click()
-  await page.getByRole('link', { name: /Save retrieved documents as a view/ }).click()
+  await page.getByRole('button', { name: 'Return to your document question' }).click()
+  await page.getByRole('link', { name: /Save these documents as a view/ }).click()
   await expect(page).toHaveURL(/#\/views\?new=1&ids=17$/)
   await expect(page.locator('.view-builder').getByRole('heading', { name: 'New view' })).toBeVisible()
   await page.locator('.view-builder').getByRole('button', { name: 'Cancel' }).click()
   await expect(page).toHaveURL(/#\/views$/)
 
   await page.goto('/#/dashboard')
-  await page.getByRole('button', { name: 'Return to archive research' }).click()
+  await page.getByRole('button', { name: 'Return to your document question' }).click()
   await expect(page.getByText('The lease renews in September')).toBeVisible()
-  const source = page.getByRole('link', { name: 'Open source 1: Lease agreement.pdf' })
+  const source = page.getByRole('link', { name: 'Open document 1: Lease agreement.pdf' })
   await expect(source).toHaveAttribute('href', '#/doc/17')
   await source.click()
   await expect(page).toHaveURL(/#\/doc\/17$/)
   await expect(page.getByRole('listbox')).toHaveCount(0)
-  await expect(page.getByRole('button', { name: 'Return to archive research' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Return to your document question' })).toBeVisible()
 
-  await page.getByRole('button', { name: 'Return to archive research' }).click()
+  await page.getByRole('button', { name: 'Return to your document question' }).click()
   const sensitive = page.getByLabel('Include Confidential and Restricted')
   await sensitive.check()
   await page.getByRole('button', { name: 'Clear' }).click()
@@ -5054,7 +5061,7 @@ test('keeps search separate from scoped archive research and saves exact sources
   await expect(sensitive).not.toBeChecked()
 })
 
-test('supports cancellation, focus return, and the full-screen mobile research desk', async ({ page }) => {
+test('supports cancellation, focus return, and the full-screen mobile question drawer', async ({ page }) => {
   await mockAPI(page, {
     chatEnabled: true,
     chatRequests: [],
@@ -5066,8 +5073,8 @@ test('supports cancellation, focus return, and the full-screen mobile research d
   await page.goto('/#/dashboard')
   const omnibox = page.getByLabel('Search or run a command')
   await omnibox.fill('slow question')
-  await page.getByRole('button', { name: 'Ask the archive' }).click()
-  const dialog = page.getByRole('dialog', { name: 'Archive research' })
+  await page.getByRole('button', { name: 'Ask your documents' }).click()
+  const dialog = page.getByRole('dialog', { name: 'Ask your documents' })
   await expect(page.getByText('Reading the documents…')).toBeVisible()
   await expect(dialog).toBeVisible()
   await expect.poll(async () => (await dialog.boundingBox()).x).toBe(0)
@@ -5079,11 +5086,11 @@ test('supports cancellation, focus return, and the full-screen mobile research d
   await expect(dialog).toBeHidden()
   await expect(omnibox).toBeFocused()
   await expect(page.getByRole('listbox')).toHaveCount(0)
-  await expect(page.getByRole('button', { name: 'Return to archive research' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Return to your document question' })).toHaveCount(0)
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
 })
 
-test('closes archive research outside without reopening the Omnibox menu', async ({ page }) => {
+test('closes document questions outside without reopening the Omnibox menu', async ({ page }) => {
   await mockAPI(page, {
     chatEnabled: true,
 
@@ -5093,8 +5100,8 @@ test('closes archive research outside without reopening the Omnibox menu', async
   await page.goto('/#/dashboard')
   const omnibox = page.getByLabel('Search or run a command')
   await omnibox.fill('outside close')
-  await page.getByRole('button', { name: 'Ask the archive' }).click()
-  const dialog = page.getByRole('dialog', { name: 'Archive research' })
+  await page.getByRole('button', { name: 'Ask your documents' }).click()
+  const dialog = page.getByRole('dialog', { name: 'Ask your documents' })
   await expect(dialog).toBeVisible()
   await page.locator('.research-veil').click({ position: { x: 200, y: 200 } })
   await expect(dialog).toBeHidden()
@@ -5103,7 +5110,7 @@ test('closes archive research outside without reopening the Omnibox menu', async
 })
 
 for (const [code, message] of Object.entries({
-  invalid_provider_response: 'The model returned an answer without valid citations. Try again.',
+  invalid_provider_response: 'The model returned an answer without usable document links. Try again.',
   provider_response_truncated: 'The model reached its output limit before finishing. Try a narrower question or another model.',
 })) {
   test(`explains ${code} without exposing provider details`, async ({ page }) => {
@@ -5119,13 +5126,13 @@ for (const [code, message] of Object.entries({
     await page.goto('/#/dashboard')
     const omnibox = page.getByLabel('Search or run a command')
     await omnibox.fill('How much did I spend?')
-    await page.getByRole('button', { name: 'Ask the archive' }).click()
+    await page.getByRole('button', { name: 'Ask your documents' }).click()
     await expect(page.getByText(message)).toBeVisible()
     await expect(page.getByText('upstream service error')).toHaveCount(0)
   })
 }
 
-test('publishes exact Inbox, Documents, and Search scopes to archive research', async ({ page }, testInfo) => {
+test('sends the exact Inbox, Documents, and Search context with document questions', async ({ page }, testInfo) => {
   const chatRequests = []
   const inbox = { id: 9, area_code: 10, area_name: 'Intake', code: 10, name: 'Inbox', system: true }
   await mockAPI(page, {
@@ -5137,7 +5144,7 @@ test('publishes exact Inbox, Documents, and Search scopes to archive research', 
   })
 
   async function ask(question) {
-    await page.getByRole('button', { name: 'Ask the archive' }).click()
+    await page.getByRole('button', { name: 'Ask your documents' }).click()
     const composer = page.getByRole('textbox', { name: 'Question', exact: true })
     await composer.fill(question)
     await composer.press('Enter')
@@ -5190,7 +5197,7 @@ test('publishes exact Inbox, Documents, and Search scopes to archive research', 
   })
 })
 
-test('keeps modified research anchors in the current drawer session', async ({ page }) => {
+test('keeps modified document links in the current question drawer', async ({ page }) => {
   await mockAPI(page, {
     chatEnabled: true,
     chatRequests: [],
@@ -5198,12 +5205,12 @@ test('keeps modified research anchors in the current drawer session', async ({ p
     filingTreeChosen: true,
   })
   await page.goto('/#/dashboard')
-  await page.getByRole('button', { name: 'Ask the archive' }).click()
+  await page.getByRole('button', { name: 'Ask your documents' }).click()
   const composer = page.getByRole('textbox', { name: 'Question', exact: true })
   await composer.fill('show the evidence')
   await composer.press('Enter')
-  const dialog = page.getByRole('dialog', { name: 'Archive research' })
-  await expect(page.getByRole('link', { name: 'Open cited document 1: Archive evidence.pdf' })).toBeVisible()
+  const dialog = page.getByRole('dialog', { name: 'Ask your documents' })
+  await expect(page.getByRole('link', { name: 'Open document used in answer 1: Archive evidence.pdf' })).toBeVisible()
 
   async function modifiedClick(locator, init) {
     await locator.evaluate((element, eventInit) => {
@@ -5212,15 +5219,15 @@ test('keeps modified research anchors in the current drawer session', async ({ p
     }, init)
     await expect(dialog).toBeVisible()
     await expect(page).toHaveURL(/#\/dashboard$/)
-    await expect(page.getByRole('button', { name: 'Return to archive research' })).toHaveCount(0)
+    await expect(page.getByRole('button', { name: 'Return to your document question' })).toHaveCount(0)
   }
 
-  await modifiedClick(page.getByRole('link', { name: 'Open cited document 1: Archive evidence.pdf' }), { button: 0, ctrlKey: true })
-  await modifiedClick(page.getByRole('link', { name: 'Open source 1: Archive evidence.pdf' }), { button: 1 })
-  await modifiedClick(page.getByRole('link', { name: /Save retrieved documents as a view/ }), { button: 0, shiftKey: true })
+  await modifiedClick(page.getByRole('link', { name: 'Open document used in answer 1: Archive evidence.pdf' }), { button: 0, ctrlKey: true })
+  await modifiedClick(page.getByRole('link', { name: 'Open document 1: Archive evidence.pdf' }), { button: 1 })
+  await modifiedClick(page.getByRole('link', { name: /Save these documents as a view/ }), { button: 0, shiftKey: true })
 })
 
-test('bounds long archive research transcripts', async ({ page }) => {
+test('bounds long document-question conversations', async ({ page }) => {
   const chatRequests = []
   await mockAPI(page, {
     chatEnabled: true,
@@ -5229,7 +5236,7 @@ test('bounds long archive research transcripts', async ({ page }) => {
     filingTreeChosen: true,
   })
   await page.goto('/#/dashboard')
-  await page.getByRole('button', { name: 'Ask the archive' }).click()
+  await page.getByRole('button', { name: 'Ask your documents' }).click()
   const composer = page.getByRole('textbox', { name: 'Question', exact: true })
   for (let turn = 1; turn <= 21; turn++) {
     await composer.fill(`bounded question ${turn}`)
@@ -5242,7 +5249,7 @@ test('bounds long archive research transcripts', async ({ page }) => {
   await expect(page.getByText('bounded question 21', { exact: true })).toBeVisible()
 })
 
-test('resets research boundaries and carries only bounded cited follow-up context', async ({ page }) => {
+test('resets reading boundaries and carries only bounded linked-document context', async ({ page }) => {
   const chatRequests = []
   await mockAPI(page, {
     chatEnabled: true,
@@ -5260,11 +5267,11 @@ test('resets research boundaries and carries only bounded cited follow-up contex
   })
 
   await page.goto('/#/dashboard')
-  await page.getByRole('button', { name: 'Ask the archive' }).click()
+  await page.getByRole('button', { name: 'Ask your documents' }).click()
   let composer = page.getByRole('textbox', { name: 'Question', exact: true })
   await composer.fill('first question')
   await composer.press('Enter')
-  await expect(page.getByRole('link', { name: 'Open source 2: Cited.pdf' })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Open document 2: Cited.pdf' })).toBeVisible()
   await composer.fill('follow up')
   await composer.press('Enter')
   await expect.poll(() => chatRequests.length).toBe(2)
@@ -5281,17 +5288,17 @@ test('resets research boundaries and carries only bounded cited follow-up contex
   await composer.press('Enter')
   await expect.poll(() => chatRequests.length).toBe(3)
   await page.getByTitle('Close', { exact: true }).click()
-  await page.getByRole('button', { name: 'Ask the archive' }).click()
+  await page.getByRole('button', { name: 'Ask your documents' }).click()
   await expect(page.getByText('same scope survives close')).toBeVisible()
   await page.getByTitle('Close', { exact: true }).click()
 
   await page.goto('/#/doc/42')
-  await page.getByRole('button', { name: 'Ask the archive' }).click()
+  await page.getByRole('button', { name: 'Ask your documents' }).click()
   await expect(page.getByText('Start with a question, not a search query')).toBeVisible()
   await expect(page.getByLabel('Include Confidential and Restricted')).not.toBeChecked()
 })
 
-test('clearing an active research request invalidates it without restoring text', async ({ page }) => {
+test('clearing an active document question invalidates it without restoring text', async ({ page }) => {
   await mockAPI(page, {
     chatEnabled: true,
     chatRequests: [],
@@ -5300,7 +5307,7 @@ test('clearing an active research request invalidates it without restoring text'
     chatResponse: { delay: 1000, answer: 'late answer', sources: [], citations: [], grounded: false },
   })
   await page.goto('/#/dashboard')
-  await page.getByRole('button', { name: 'Ask the archive' }).click()
+  await page.getByRole('button', { name: 'Ask your documents' }).click()
   const composer = page.getByRole('textbox', { name: 'Question', exact: true })
   await composer.fill('clear this request')
   await composer.press('Enter')
@@ -5582,12 +5589,12 @@ test('opens research calendar links across all years and replaces stale calendar
   await expect(page.locator('.agenda-event').getByText('Unrelated current policy', { exact: true })).toBeVisible()
 
   await page.getByLabel('Search or run a command').fill('Find the dates in these documents')
-  await page.getByRole('button', { name: 'Ask the archive' }).click()
+  await page.getByRole('button', { name: 'Ask your documents' }).click()
   const action = page.getByRole('link', { name: /Open 2 calendar dates/ })
   await expect(action).toHaveAttribute('href', '#/calendar?document_ids=17,18')
   await action.click()
   await expect(page).toHaveURL(/#\/calendar\?document_ids=17,18$/)
-  await expect(page.getByRole('dialog', { name: 'Archive research' })).toBeHidden()
+  await expect(page.getByRole('dialog', { name: 'Ask your documents' })).toBeHidden()
   await expect(page.getByText('Dates from 2 selected documents · All months and years', { exact: true })).toBeVisible()
   await expect(page.locator('.month-grid')).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Next month' })).toHaveCount(0)
@@ -5755,7 +5762,7 @@ test('opens a full day agenda and preserves its month and filters across navigat
   await expect(page.locator('.agenda-event').filter({ hasText: /Month-only|Year-only|Next-day|Different date role|Outside the selected view/ })).toHaveCount(0)
   const automatic = page.locator('.agenda-event').filter({ hasText: 'Car insurance policy' })
   await automatic.locator('summary').click()
-  await expect(automatic.getByText('LLM Classifier confidence: 92%', { exact: true })).toBeVisible()
+  await expect(automatic.getByText('Model confidence: 92%', { exact: true })).toBeVisible()
   const dayURL = page.url()
   await page.reload()
   await expect(page).toHaveURL(dayURL)
@@ -6375,7 +6382,7 @@ test('filing systems first named Apply invalidates unnamed reads and selects the
   await page.getByRole('button', { name: 'Import file' }).click()
   const importer = page.getByRole('region', { name: 'Import taxonomy', exact: true })
   await importer.getByLabel('Paste content', { exact: true }).fill(`system = \"S02\"\n${taxonomyContent}`)
-  await importer.getByRole('combobox', { name: 'Serialization', exact: true }).selectOption('toml')
+  await importer.getByRole('combobox', { name: 'File format', exact: true }).selectOption('toml')
   await importer.getByRole('button', { name: 'Preview', exact: true }).click()
   await expect(importer.getByRole('group', { name: 'First system import destination' })).toBeVisible()
   await importer.getByRole('radio', { name: /Create separately/ }).check()
@@ -6529,7 +6536,7 @@ for (const completed of [false, true]) {
   })
 }
 
-test('filing systems destroys parked research and excludes old source IDs and history from the next question', async ({ page }) => {
+test('filing systems destroy a parked document question and exclude old documents and history from the next question', async ({ page }) => {
   const chatRequests = []
   await mockFilingSystems(page, {
     chatEnabled: true, chatRequests,
@@ -6541,14 +6548,14 @@ test('filing systems destroys parked research and excludes old source IDs and hi
   })
   await page.goto('/#/documents?system=S01')
   await page.getByRole('searchbox', { name: 'Search or run a command' }).fill('First private question')
-  await page.getByRole('button', { name: 'Ask the archive', exact: true }).click()
+  await page.getByRole('button', { name: 'Ask your documents', exact: true }).click()
   await expect(page.getByText('First cabinet confidential answer', { exact: false })).toBeVisible()
-  await page.getByRole('link', { name: 'Open source 1: First evidence', exact: true }).click()
-  await expect(page.getByRole('button', { name: 'Return to archive research', exact: true })).toBeVisible()
+  await page.getByRole('link', { name: 'Open document 1: First evidence', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'Return to your document question', exact: true })).toBeVisible()
   await chooseFilingSystem(page, 'S02')
-  await expect(page.getByRole('button', { name: 'Return to archive research', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Return to your document question', exact: true })).toHaveCount(0)
   await page.getByRole('searchbox', { name: 'Search or run a command' }).fill('Second question')
-  await page.getByRole('button', { name: 'Ask the archive', exact: true }).click()
+  await page.getByRole('button', { name: 'Ask your documents', exact: true }).click()
   await expect(page.getByText('Second cabinet answer', { exact: false })).toBeVisible()
   expect(chatRequests).toHaveLength(2)
   expect(chatRequests[1].history).toEqual([])
@@ -6675,7 +6682,7 @@ test('Account subscription connects with device code and requires egress and mod
   await expect(page.getByText('Experimental', { exact: true })).toBeVisible()
   await expect(page.getByLabel(/Minimum model confidence to apply automatically/)).toBeVisible()
   await expect(page.getByRole('combobox', { name: 'Provider', exact: true })).toHaveValue('openai_chatgpt')
-  await expect(page.getByLabel('Endpoint URL')).toHaveCount(0)
+  await expect(page.getByLabel('Model service URL')).toHaveCount(0)
   await expect(page.getByLabel('API key (blank for local)')).toHaveCount(0)
   await expect(page.getByRole('combobox', { name: 'Model', exact: true })).toBeDisabled()
   const testConnection = page.getByRole('button', { name: 'Test connection', exact: true })
@@ -6688,7 +6695,7 @@ test('Account subscription connects with device code and requires egress and mod
   await expect(page.getByRole('combobox', { name: 'Model', exact: true })).toHaveValue('subscription-model')
   await expect(page.getByRole('combobox', { name: 'Model', exact: true }).locator('option')).toHaveCount(2)
   await expect(testConnection).toBeDisabled()
-  await page.getByLabel('This endpoint is not local. I acknowledge document text will leave this machine.').check()
+  await page.getByLabel('This model runs outside this machine. I understand document text will be sent to it.').check()
   await expect(testConnection).toBeEnabled()
   await expect(saveModel).toBeDisabled()
   await testConnection.click()
@@ -6771,8 +6778,8 @@ test('Account subscription saves model selection across page reload without acti
   await page.reload()
   await page.getByRole('button', { name: /^(Set up model|Manage)$/ }).first().click()
   await expect(model).toHaveValue('chosen-model')
-  await expect(page.getByText('Titles, dates, tags and Archive research. Off.', { exact: true })).toBeVisible()
-  await expect(page.getByLabel('This endpoint is not local. I acknowledge document text will leave this machine.')).not.toBeChecked()
+  await expect(page.getByText('Document suggestions and questions. Off.', { exact: true })).toBeVisible()
+  await expect(page.getByLabel('This model runs outside this machine. I understand document text will be sent to it.')).not.toBeChecked()
 })
 
 
@@ -6812,7 +6819,7 @@ test('Account subscription allows local matching saves after disconnect without 
   await expect(page.getByRole('button', { name: 'Connect ChatGPT', exact: true })).toBeVisible()
   await page.getByRole('button', { name: 'Cancel', exact: true }).click()
   await page.getByRole('button', { name: 'Adjust', exact: true }).click()
-  await page.getByLabel(/Minimum confidence to suggest for review/).fill('0.6')
+  await page.getByLabel(/Minimum similarity to suggest for review/).fill('0.6')
   await page.getByRole('button', { name: 'Save matching options', exact: true }).click()
   await expect(page.getByText('Similar-document matching saved', { exact: true })).toBeVisible()
   expect(archiveMatchingRequests).toEqual([{ archive_enabled: true, archive_review_threshold: 0.6, archive_auto_threshold: 0.9 }])
@@ -6822,14 +6829,14 @@ test('Account subscription allows local matching saves after disconnect without 
   await expect(page.getByRole('button', { name: 'Enable model', exact: true })).toBeDisabled()
 })
 
-for (const [mode, endpoint] of [['Hosted endpoint', 'https://models.example.com/v1'], ['Local model', 'http://127.0.0.1:11434/v1']]) {
+for (const [mode, endpoint] of [['Hosted model', 'https://models.example.com/v1'], ['Local model', 'http://127.0.0.1:11434/v1']]) {
   test(`Account subscription preserves ${mode} draft across mode round trips`, async ({ page }) => {
     const settingsRequests = []
     await mockAPI(page, { filingTreeChosen: true, llmEnabled: true, llmActive: true,
       llmEndpoint: endpoint, llmModel: 'my-model', llmSettingsRequests: settingsRequests })
     await page.goto('/#/settings?tab=archive&section=llm')
     await page.getByRole('button', { name: 'Manage', exact: true }).first().click()
-    const endpointInput = page.getByLabel('Endpoint URL', { exact: true })
+    const endpointInput = page.getByLabel('Model service URL', { exact: true })
     const model = page.getByRole('textbox', { name: 'Model', exact: true })
     await expect(endpointInput).toHaveValue(endpoint)
     await page.getByRole('button', { name: 'Account subscription', exact: true }).click()

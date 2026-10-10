@@ -26,16 +26,16 @@ new system. [Permissions](/permissions) explains the server-enforced boundary.
 
 ## Main navigation
 
-| Label           | Opens                                                                                   |
-| --------------- | --------------------------------------------------------------------------------------- |
+| Label           | Opens                                                                                           |
+| --------------- | ----------------------------------------------------------------------------------------------- |
 | **Dashboard**   | Archive totals, Inbox/Approvals counts, failed jobs, recent documents, and saved views. |
-| **Documents**   | Search, filters, list/grid display, selections, bulk actions and filing.                |
-| **Inbox**       | Documents awaiting filing in the protected system Inbox.                                |
-| **Views**       | Saved document searches and shortcuts.                                                  |
-| **Calendar**    | Document dates for admins, members with **Manage document dates**, and demo visitors.   |
-| **Approvals**   | Human decisions and rescan proposals; admins also see **Dead jobs — needs attention**.   |
-| **Automations** | Filing/metadata rules; admins can edit, members have read-only access.                  |
-| **Trash**       | Deleted documents, restoration and confirmed permanent deletion.                        |
+| **Documents**   | Search, filters, list/grid display, selections, bulk actions and filing.                        |
+| **Inbox**       | Documents awaiting filing in the protected system Inbox.                                        |
+| **Views**       | Saved document searches and shortcuts.                                                          |
+| **Calendar**    | Document dates for admins, members with **Manage document dates**, and demo visitors.           |
+| **Approvals**   | Human decisions and rescan proposals; admins also see **Processing issues**.                     |
+| **Automations** | Filing/metadata rules; admins can edit, members have read-only access.                           |
+| **Trash**       | Deleted documents, restoration and confirmed permanent deletion.                                |
 
 The **Index** lists normal filing areas/categories after a tree is chosen. The
 protected Inbox appears only in its dedicated navigation item. Password-unlocked
@@ -56,7 +56,7 @@ card; Notes is last and the first tab is selected whenever a document opens.
 elsewhere. Ordinary custom fields stay in the metadata card with controls
 matching their declared type.
 
-The **Notes** tab adds attributed working context to this exact revision.
+The **Notes** tab adds attributed working context to this exact version.
 Authors can edit/delete their own notes and administrators can moderate any
 note; Trash shows Notes read-only. Notes and typed custom fields do not copy to a
 replacement version. **Previous archive number** appears only when retained by
@@ -103,17 +103,17 @@ computer; open Suchi through its network address first.
 
 Detail previews 2,000 characters. **Read all** expands the complete text; **Show
 less** collapses it. **Copy text** copies the whole extraction and offers a
-selectable field if copying fails. Confidential/Restricted text requires **Reveal**.
-These controls do not change stored extraction.
+selectable field if copying fails. Confidential/Restricted text requires
+**Reveal**. These controls do not change saved document text.
 
 ## Versions and document links
 
-Use **Upload replacement** on a live document to add a newer revision. The
-selected file and source timestamp remain in the form after a network or server
+Use **Upload replacement** on a live document to add a newer version. The
+selected file and original file date remain in the form after a network or server
 failure so the same upload can be retried safely. The Versions tab badge counts
-other revisions, so a document with no replacement history shows `0`. The
-history labels the newest visible revision **Latest**, the open row **Viewing**,
-and other rows **Earlier**. Opening an earlier revision never redirects to the
+other versions, so a document with no replacement history shows `0`. The
+history labels the newest visible version **Latest**, the open row **Viewing**,
+and other rows **Earlier**. Opening an earlier version never redirects to the
 newest one.
 
 Replacement preserves filing/access continuity while extraction results,
@@ -129,7 +129,7 @@ limits, permissions, and Trash/purge behavior.
 ## Dashboard behavior
 
 **Total documents**, **Inbox**, **Approvals** and **Failed jobs** share one status
-request. Loading/unavailable counts show `—`, not zero or a healthy status.
+request. Loading or unavailable counts show `—`, not zero or a healthy status.
 **Recently added** shows six newest visible documents. **Views** shows up to four
 shortcuts with live counts, including at least one shared view when available.
 **New view** starts creation; the empty message is **No saved views yet.** Read
@@ -165,10 +165,10 @@ explicit historical URLs restore their page. Invalid values become page one and
 out-of-range values become the last page without adding history. Only the newest
 request updates the screen.
 
-Live Documents, Search, Calendar, and archive research show only the newest live
-revision visible to the caller by default. The `version:` query selector can
-show all or only older revisions; direct document URLs and exact saved snapshots
-continue to address the selected row.
+Live Documents, Search, Calendar, and Ask your documents show only the newest
+live version visible to the caller by default. The `version:` query selector can
+show all or only older versions; direct document URLs and exact saved snapshots
+continue to address the selected version.
 
 The dedicated **Shared by me** toggle includes each document once while at
 least one link created by the current user is unexpired, unrevoked, and still
@@ -232,13 +232,14 @@ that browser-delivered files can be made non-downloadable.
 
 ## Approvals
 
-Cards show decisions, confidence, evidence and deadlines. A model-backed
-automation card names the automation and proposed fixed metadata effect,
-including typed custom fields, without exposing or retaining the raw
-question/answer transcript. Rescan document links are under **Affected
-documents**. Internal workflow identifiers and repetitive review boilerplate
-are omitted. See [Approvals](/approvals) for workflow behavior and [Document
-dates](/document-dates) for date review.
+Cards show the decision and deadline. Date suggestions show the exact document
+text; **How this was suggested** expands **Model confidence** and **Suggested
+by**. A model-backed automation card names the automation and suggested fixed
+metadata effect without exposing or retaining the raw question/answer
+conversation. Rescan document links are under **Affected documents**. Internal
+workflow identifiers and repetitive review boilerplate are omitted. See
+[Approvals](/approvals) for workflow behavior and [Document dates](/document-dates)
+for date review.
 
 ## Trash
 
@@ -274,11 +275,11 @@ by Search/Documents. Empty choices mean all values; date ranges use
 
 Rich filters reopen as search text for editing/removal, except the custom-field
 presence token, which reopens in its dedicated control. Older flat filters
-retain selections, multi-value scopes and ordering; exact research snapshots
-can be renamed/shared without changing their document set. New views store a
+retain selections, multiple values, and ordering; exact document snapshots can
+be renamed or shared without changing their document set. New Views store a
 normalized rich query; untouched legacy fields survive edits. Validation
-failures remain in the builder. Choices load when needed, not for an empty view
-list. See [Saved-view query rules](/query-language#saved-views).
+failures remain in the builder. Choices load when needed, not for an empty View.
+See [Saved-view query rules](/query-language#saved-views).
 
 Admins and members with **Share saved views** can select **Share this view**.
 Shared views appear within their system and still obey document ACLs. Only the
@@ -288,8 +289,8 @@ without deleting them.
 ## Settings
 
 The running version stays in a footer at the bottom of Settings, outside the
-scrolling content. Development builds add the source revision,
-with `.dirty` for modified source or **revision unavailable** when missing.
+scrolling content. Development builds add build details and append `.dirty` for
+modified source; missing details are labelled **build details unavailable**.
 Tagged releases show only their version. Include this offline status in bug
 reports; it performs no update check.
 
@@ -390,20 +391,20 @@ characters and the complete direct membership set, including off-page people.
 Codes are permanent; admin entry is implicit/read-only. New systems initially
 admit admins only. Membership and document ACLs remain separate.
 
-Filing trees, metadata, rules, views, mailboxes/password records and memberships
-use the current system. Accounts/groups, global capabilities, profiles, watched
-folders, OCR/models and backups are server-wide. **Classification** keeps its
-controls in two cards. In **Suggestions**, choose **Review first** or **Apply
-when confident**, switch **Similar documents** on or off, and use **Adjust** for
-the review and automatic confidence thresholds. **Save changes** stores the
-application choice and local-matching settings together.
+Filing trees, metadata, rules, Views, mailboxes/password records, and
+memberships use the current system. Accounts/groups, global capabilities,
+profiles, watched folders, OCR/models, and backups are server-wide.
+**Classification** keeps its controls in separate cards. Under **Suggestions**,
+choose **Review first** or **Apply when confident**, then use **Save application
+mode**. **Similar documents** and its review/automatic thresholds expand under
+**Adjust** and use **Save matching options**.
 
-The Similar documents switch controls model-free matching against already-filed
-documents; it does not send text outside the archive. **Document model** remains
-separate and opens its own setup dialog. The default model/date confidence is
-`0.70`; local automatic and review-suggestion confidence defaults are `0.90`
-and `0.50`. Explicit rules remain independent, and existing pending suggestions
-are not accepted by changing these settings.
+Similar documents uses model-free matching against already-filed documents; it
+does not send text outside the archive. **Document model** opens its own setup
+dialog. The default model/date **Model confidence** threshold is `0.70`; local
+automatic and review-suggestion thresholds default to `0.90` and `0.50`.
+Explicit rules remain independent, and changing these settings does not accept
+existing pending suggestions.
 
 Admins manage system mailboxes and owners in **Email intake**; capable members
 manage only their own under **My account > Mailboxes**.
@@ -429,53 +430,56 @@ the sidebar. Later applications merge, without resetting existing filing.
 Validation checks supported structure, not domain correctness or rule trust.
 See [Filing trees](/jd) for destination, collision and export rules.
 
-Incomplete setup shows **Choose your filing tree** in the sidebar/narrow Dashboard
-with **Continue setup**. The action opens **Archive configuration > Filing tree**.
-The reminder has no dismissal control and remains visible across navigation and
-browser reloads until an administrator chooses a preset, confirmed Blank, or
-imports a tree. If setup status cannot be verified, the reminder remains visible
-and offers **Retry**.
+Incomplete setup shows **Choose your filing tree** in the sidebar and above a
+narrow Dashboard, with **Continue setup**. The action opens **Archive
+configuration > Filing tree**. The reminder has no dismissal control and remains
+visible across navigation and browser reloads until an administrator chooses a
+preset, confirms Blank, or imports a tree. If setup status cannot be verified,
+the reminder remains visible and offers **Retry**.
 
 While setup is incomplete, Settings shows the same reminder and **Continue setup**
-above the ordinary content. It never replaces or locks Archive
-Configuration sections.
+above the ordinary content. It never replaces or locks Archive Configuration
+sections.
 
 ## Capabilities and sensitive documents
 
 Admins have all capabilities. Grant members additional access in **People >
 Users**:
 
-| Interface label           | Stored key             |
-| ------------------------- | ---------------------- |
-| **Ask the archive**       | `archive_chat`         |
-| **Manage document dates** | `archive_intelligence` |
-| **Manage mailboxes**      | `mailboxes`            |
-| **Create share links**    | `share_links`          |
-| **Share saved views**     | `share_views`          |
+| Interface label             | Stored key             |
+| --------------------------- | ---------------------- |
+| **Ask your documents**      | `archive_chat`         |
+| **Manage document dates**   | `archive_intelligence` |
+| **Manage mailboxes**        | `mailboxes`            |
+| **Create share links**      | `share_links`          |
+| **Share saved views**       | `share_views`          |
 
 [Permissions](/permissions) owns revocation and object-access rules.
 
-With a model enabled, capable users see **Ask** in the Omnibox; Enter remains
-search. **Archive research** opens a side drawer/full-screen mobile desk with its
-current scope and cited sources. Following evidence parks it as **Research active**;
-the ribbon restores it. Escape/**Close** ends the parked state; **Clear** removes
-history and resets sensitive consent. Scope/provider changes reset conversation;
-turning sensitive consent off clears history. The background is inert while open.
+With a model enabled, capable users see **Ask your documents** beside the
+Omnibox; Enter remains search. **Ask your documents** opens a side drawer, or a
+full-screen drawer on phones, and names the current document context. Following
+a document link parks it as **Question open**; the ribbon restores it.
+Escape/**Close** ends the parked state. **Clear** removes the conversation and
+resets sensitive consent. Changing the document context or model resets the
+conversation; turning sensitive consent off clears it. The background is inert
+while the drawer is open.
 
-**Save retrieved documents as a view** preserves exact source IDs. Reviewable dates
-link to Approvals; available dates open the retrieved documents' all-dates agenda.
-Research is read-only and does not itself extract/save data. See
-[Archive research](/archive-chat) for the complete workflow and contracts.
+**Save these documents as a view** preserves the exact document IDs. Suggested
+dates link to Approvals; accepted dates open the listed documents' all-dates
+agenda. Questions are read-only and do not themselves extract or save data. See
+[Ask your documents](/archive-chat) for the complete workflow and contracts.
 
 **Manage document dates** enables selection extraction, review and Calendar/query
-use. Calendar's **Document view** applies a saved View through the server; research
-links use exact documents with **Date role** and **Open full calendar**. Day links
-open exact-day agendas, preserve View/role, and return through **Back to Month YYYY**.
-Month/day/View/role survive history and reload. Partial dates appear in broader
-agendas, not exact-day cells. Expand Automatic/Previously accepted/Reviewed status
-for classifier confidence. Reviewed exact-day **Add to calendar** offers a disclosed
-local `.ics` export, not synchronization. [Document dates](/document-dates) owns
-precision, review, filtering and export rules.
+use. Calendar's **Document view** applies a saved View through the server; links
+from Ask your documents use exact documents with **Date role** and **Open full
+calendar**. Day links open exact-day agendas, preserve View/role, and return
+through **Back to Month YYYY**. Month/day/View/role survive history and reload.
+Partial dates appear in broader agendas, not exact-day cells. Expand
+Automatic/Previously accepted/Reviewed status for **Model confidence**.
+Reviewed exact-day **Add to calendar** offers a disclosed local `.ics` export,
+not synchronization. [Document dates](/document-dates) owns precision, review,
+filtering, and export rules.
 
 Sensitivity choices are Public, Internal, Confidential and Restricted; absent
 values show **Unset**. Confidential/Restricted thumbnails blur and previews/text

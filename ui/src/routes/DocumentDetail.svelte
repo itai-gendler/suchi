@@ -404,7 +404,7 @@
     if (source.kind === 'mailbox') return source.label || 'Mailbox'
     if (source.kind === 'watched_folder') return source.label || 'Watched folder'
     if (source.kind === 'import') return source.label || 'Import'
-    return source.label || 'Unknown source'
+    return source.label || 'Unknown origin'
   }
 
   function sourceDetail(source) {
@@ -543,9 +543,9 @@
     }
     if (error?.status === 413) return 'This file is larger than the configured upload limit.'
     if (error?.status === 403) return 'You no longer have permission to upload a replacement.'
-    if (error?.status === 404) return 'This revision is no longer available for replacement.'
-    if (error?.status === 409) return error.message || 'The replacement conflicts with a newer server state.'
-    return error?.message || 'The replacement could not be uploaded. Retry keeps the same request key.'
+    if (error?.status === 404) return 'This version is no longer available for replacement.'
+    if (error?.status === 409) return error.message || 'The document changed before the replacement was saved. Reload and try again.'
+    return error?.message || 'The replacement could not be uploaded. Trying again will not create a duplicate.'
   }
 
   async function uploadReplacement() {
@@ -1363,19 +1363,19 @@
           </dd>
           <dt>Added</dt><dd>{fmtDate(doc.added_at || doc.created_at)}</dd>
           {#if doc.sources?.length}
-            <dt>{doc.sources.length === 1 ? 'Source' : 'Sources'}</dt>
+            <dt>Added from</dt>
             <dd style="display:flex;flex-direction:column;gap:4px;min-width:0">
               {#each doc.sources as source, i}
                 <div style="min-width:0;overflow-wrap:anywhere">
                   <span>{sourceLabel(source)}</span>
                   {#if sourceDetail(source)}<span class="sub"> · {sourceDetail(source)}</span>{/if}
-                  {#if i === 0 && doc.sources.length > 1}<span class="pill" style="margin-left:6px;font-size:.68rem">first seen</span>{/if}
+                  {#if i === 0 && doc.sources.length > 1}<span class="pill" style="margin-left:6px;font-size:.68rem">first added</span>{/if}
                 </div>
               {/each}
             </dd>
           {/if}
           {#if doc.source_mtime || (doc.created_at && doc.created_at !== doc.added_at)}
-            <dt title="Date carried from the source at ingest">Source date</dt>
+            <dt title="Date carried from the original file when it was added">Original file date</dt>
             <dd>{fmtDate(doc.source_mtime || doc.created_at)}</dd>
           {/if}
           {#if doc.archive_serial_number != null}
@@ -1715,8 +1715,8 @@
                  aria-labelledby="related-tab-versions" tabindex="0">
               {#if versionHistory.head_id && String(versionHistory.head_id) !== String(id)}
                 <div class="version-notice">
-                  You are viewing an earlier revision.
-                  <a href={filingHref(`#/doc/${versionHistory.head_id}`)}>Open the latest visible revision</a>
+                  You are viewing an earlier version.
+                  <a href={filingHref(`#/doc/${versionHistory.head_id}`)}>Open the latest visible version</a>
                 </div>
               {/if}
               {#if versionHistory.can_upload}
@@ -1770,7 +1770,7 @@
                 <div class="notes-heading">
                   <div>
                     <h3>Notes</h3>
-                    <p class="sub">Context kept with this exact document revision.</p>
+                    <p class="sub">Context kept with this exact document version.</p>
                   </div>
                 </div>
 
@@ -1823,7 +1823,7 @@
                       {/if}
                     </article>
                   {:else}
-                    <p class="sub note-empty">{trashed ? 'No notes on this revision.' : 'No notes yet. Add context without changing the original file.'}</p>
+                    <p class="sub note-empty">{trashed ? 'No notes on this version.' : 'No notes yet. Add context without changing the original file.'}</p>
                   {/each}
                 </div>
               </section>

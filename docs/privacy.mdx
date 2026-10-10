@@ -111,40 +111,41 @@ are not downloaded, persisted, or logged by preview. The LLM connection test ret
 validated synthetic classification fields and latency, never raw model output
 or archive text.
 
-Archive research is read-only and transient. Suchi stores no conversation
-rows, and the browser retains at most the 20 newest transcript turns while the
-application is mounted. The server retrieves only non-trashed documents in the
-captured filing system that the caller may enter and view. Switching systems
-destroys the browser conversation and invalidates late responses.
+Ask your documents is read-only and transient. Suchi stores no conversation
+rows, and the browser retains at most the 20 newest turns while the application
+is mounted. The server finds only non-trashed documents in the current filing
+system that the user may enter and open. Switching systems destroys the browser
+conversation and invalidates late responses.
 When sensitive consent is off, only unset, Public, and Internal documents are
 eligible; unknown sensitivity values fail closed. Confidential and Restricted
-documents require the per-conversation option. **Clear**, scope or provider
-changes, and turning that option off clear the relevant in-memory history. The
-drawer identifies the local or hosted endpoint receiving evidence.
-The administrator-owned Research context preset changes the maximum authorized
-source text sent per question, which can affect provider cost, latency, and
-privacy exposure. See [Archive research: Research context presets](/archive-chat#research-context-presets)
+documents require the per-conversation option. **Clear**, document-context or
+model changes, and turning that option off clear the relevant in-memory history.
+The drawer identifies the local model or hosted model service receiving document text.
+The administrator-owned **Reading depth** preset changes the maximum authorized
+text sent per question, which can affect provider cost, latency, and privacy
+exposure. See
+[Ask your documents: Reading-depth presets](/archive-chat#reading-depth-presets)
 for the exact bounds and fallbacks.
 
-The model receives source text as explicitly untrusted evidence and has no
-tools or actions. Previous assistant answers provide continuity, never evidence.
-Only actually cited follow-up source IDs are reauthorized and reloaded in their
-requested order. Before rendering, Suchi checks the answer JSON and verifies
-that its citation numbers refer to supplied sources. It does not judge whether
-each written claim is correct.
+The model receives document text as explicitly untrusted data and has no tools
+or actions. Previous assistant answers provide continuity but never become
+document text. Only documents linked from the prior answer are checked and
+reloaded in their requested order. Before rendering, Suchi checks the answer
+JSON and verifies that its numbered links refer to supplied documents. It does
+not judge whether every written claim is correct.
 
-Extracted fact candidates are persistent archive metadata rather than chat
-history. They retain bounded evidence, extractor version, review state, and a
-reviewer when a person made the decision. With automatic application enabled,
+Suggested details are persistent archive metadata rather than conversation
+history. They retain a bounded quote, extractor version, review state, and a
+reviewer when a person made the decision. With **Apply when confident** enabled,
 new dates at or above the configured threshold can feed Calendar, rich queries,
-and later research context without human review; review-first mode leaves them
-pending. Existing decisions remain unchanged, and saving settings does not bulk
-accept pending dates.
+and later answers without human review; **Review first** leaves them pending.
+Existing decisions remain unchanged, and saving settings does not bulk-accept
+pending dates.
 
-Logs never include questions, answers, snippets, or extracted evidence. The
-archive-evidence assembly event contains only the selected context mode,
-passage count, source count, and bounded evidence size. Separate access logs
-contain the HTTP method, path, status, byte count, duration, and request ID;
+Logs never include questions, answers, titles, document text, or extracted
+quotes. The question-assembly event contains only the selected reading-depth
+mode, matching-section count, document count, and bounded text size. Separate
+access logs contain the HTTP method, path, status, byte count, duration, and request ID;
 hosted-model egress events contain the provider host and model name. Sanitized
 failures may also be recorded.
 

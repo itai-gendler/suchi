@@ -203,7 +203,7 @@
       const csvIDs = (value) => [...new Set(String(value || '').split(',')
         .map(item => Number(item.trim())).filter(item => Number.isInteger(item) && item > 0))]
       onScopeChange?.({
-        label: isInbox ? 'Current inbox view' : 'Current document view',
+        label: isInbox ? 'Inbox documents' : 'Documents shown here',
         query: params.q || '',
         document_ids: csvIDs(params.document_ids),
         jd_category_id: Number(params.jd_category_id) || 0,
@@ -386,7 +386,7 @@
   }
   const bulkRefile = (jdId) => bulk('Refiled', 'set_jd_category', { jd_category_id: Number(jdId) })
   const bulkSens = (s) => bulk('Sensitivity set', 'set_sensitivity', { sensitivity: s })
-  const bulkRescan = () => bulk('Rescan enqueued', 'rescan_enqueue', {})
+  const bulkRescan = () => bulk('Rescan started', 'rescan_enqueue', {})
   const bulkTrash = () => (trashRequest = { kind: 'bulk', count: sel.size })
   function openBulkShare() {
     if (bulkBusy || !sel.size) return
@@ -441,11 +441,11 @@
       const result = await extractIntelligence({ document_ids: ids, types: ['date'] })
       const failed = (result?.results || []).filter(item => !item.ok).length
       notify?.(failed
-        ? `Date extraction queued for ${result?.applied || 0}; ${failed} could not be accessed`
-        : `Date extraction queued for ${result?.applied || ids.length} document${ids.length === 1 ? '' : 's'}`)
+        ? `Date reading started for ${result?.applied || 0}; ${failed} could not be accessed`
+        : `Date reading started for ${result?.applied || ids.length} document${ids.length === 1 ? '' : 's'}`)
       clearSel()
     } catch (ex) {
-      notify?.(ex.message || 'Could not queue date extraction')
+      notify?.(ex.message || 'Could not start date reading')
     } finally {
       bulkBusy = false
     }
@@ -584,7 +584,7 @@
     <button class="btn sm danger" disabled={bulkBusy} onclick={bulkTrash}>Trash</button>
     <span class="spacer"></span>
     {#if bulkBusy}<span class="sub">working…</span>{/if}
-    <button class="btn sm" disabled={bulkBusy} onclick={bulkRescan} title="Re-run the extraction pipeline on the selected documents">
+    <button class="btn sm" disabled={bulkBusy} onclick={bulkRescan} title="Read and process the selected documents again">
       <Icon name="zap" size={12} /> Rescan
     </button>
     <button class="btn sm" disabled={bulkBusy} onclick={clearSel}>Clear</button>
@@ -747,7 +747,7 @@
   <div class="empty">
     <Icon name={isInbox ? 'inbox' : 'docs'} size={56} />
     {#if isInbox}
-      <b>Inbox zero.</b><span>Everything is filed. New low-confidence documents will wait here.</span>
+      <b>Inbox zero.</b><span>Everything is filed. New documents that need a filing decision will wait here.</span>
     {:else if fShareLink === 'active'}
       <b>No actively shared documents.</b><span>Documents appear here while one of your share links is active.</span>
     {:else}

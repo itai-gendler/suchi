@@ -59,7 +59,7 @@
       kind: a.kind, label: a.name || a.kind, description: a.description || '', params: a.params || [],
     }))
     if (sc?.ask) ASK_SCHEMA = sc.ask
-  }).catch(ex => { err = ex.message || 'Could not load the automation schema.' })
+  }).catch(ex => { err = ex.message || 'Could not load the automation options.' })
 
   const newTrigger = () => ({
     type: 2, filter_filename: '', filter_path: '', filter_title_matching: '', filter_content_matching: '',
@@ -692,7 +692,7 @@
             <div class="question-grid">
               <label class="question-field question-copy">
                 <span>Question</span>
-                <input class="input" aria-label="Classifier question" maxlength="1000"
+                <input class="input" aria-label="Model question" maxlength="1000"
                        placeholder="Is this a utility bill?"
                        bind:value={editing.ask.question} />
               </label>

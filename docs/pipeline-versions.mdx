@@ -122,11 +122,12 @@ decision.
 
 ## Failures
 
-Exhausted or terminal jobs appear under **Dead jobs — needs attention** in
-**Approvals**. Correct the underlying problem, then choose **Retry** to reset
-the same durable row and run it again. Choose **Dismiss** when the failure was
-expected or no longer needs attention. Both actions are administrator-only and
-audited; dismissing a job does not delete its document.
+Exhausted or terminal jobs appear under **Processing issues** in **Approvals**.
+Correct the underlying problem, then choose **Retry** to run the same processing
+step again. Choose **Dismiss** when the failure was expected or no longer needs
+attention. Raw job names and error text are available under **Technical details**.
+Both actions are administrator-only and audited; dismissing a processing issue
+does not delete its document.
 
 Related pages: [LLM classifier](/llm-classifier), [Approvals](/approvals),
 [CLI](/cli), and [Automations](/automations).

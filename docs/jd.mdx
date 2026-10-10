@@ -141,15 +141,15 @@ choice: replace the meaning in place, add the incoming category at the proposed
 free code in the same decade, or skip it. Apply is rejected if relevant state
 changed after Preview.
 
-Choose a `.huml` or `.toml` file, or paste content and select its serialization.
-Custom files can contain starter automations and category-keyword filing rules;
-**Include starter rules from this file** applies only to those supplied by the file.
-A tree-only file adds no rules. File Preview shows the name, story, content
-revision, user tree, generated structure, category/rule additions, preserved
-rules, skips and collisions. Changing input, format, seed choice or remaps
-requires another preview. If relevant destination state changes before Apply,
-Suchi preserves your input and asks you to preview again; unrelated system edits
-do not invalidate a preview.
+Choose a `.huml` or `.toml` file, or paste content and select its **File
+format**. Custom files can contain starter automations and category-keyword
+filing rules; **Include starter rules from this file** applies only to those
+supplied by the file. A tree-only file adds no rules. Preview shows the name,
+story, version, user tree, generated structure, category/rule additions,
+preserved rules, skips, and collisions. Changing input, file format, seed choice,
+or remaps requires another preview. If relevant destination state changes before
+Apply, Suchi preserves your input and asks you to preview again; unrelated
+system edits do not invalidate a preview.
 
 Validation checks supported structure, not domain suitability or reliable
 classification. Review imported keywords and rules against your documents.
@@ -157,10 +157,10 @@ Suchi never fetches remote taxonomy files or requires a catalog service.
 
 ## Safe import and reimport
 
-Only an initially unconfigured archive can replace a bootstrap tree, and only when no
-filed documents (including recoverable Trash) or dependent user configuration
-would be orphaned. Later imports merge additively; an empty archive alone is
-not permission to reset a chosen tree.
+Only an initially unconfigured archive can replace its first filing tree, and
+only when no filed documents (including recoverable Trash) or dependent user
+configuration would be orphaned. Later imports add to the current filing tree;
+an empty archive alone is not permission to reset a chosen tree.
 
 - Same category code and name preserves the row and local description.
 - Different names at one code need explicit skip or an unused same-decade remap.
@@ -178,8 +178,8 @@ forks are never suspended by a preset change.
 
 Use [Refile](/refile) explicitly, or select it in the reviewed tree change, to
 run the target tree's active automations and rebuild paths after Apply. Refile is
-not the taxonomy migration itself. Ordinary custom taxonomy import remains an
-additive merge and is not a document-version operation.
+not the taxonomy import itself. An ordinary custom taxonomy import adds to the
+current filing tree and is not a document-version operation.
 
 ## Authoring v1
 
@@ -269,10 +269,10 @@ It must agree with a prefixed file. Only the first prefixed import accepts
 `--existing-system-code A00` to preserve the original separately.
 
 Export creates a validated current snapshot with `id = "archive"`, `version = 1`,
-not a claim that a merged archive equals its **last imported file**. Source
-identity/revision/byte SHA-256 remain separate provenance. Equivalent HuML and
-TOML can have different hashes; schema version, content revision, source hash
-and Suchi release version have different meanings.
+not a claim that the combined archive equals its **last imported file**. Source
+identity, file version, byte SHA-256, schema version, source hash, and Suchi
+release version remain separate provenance. Equivalent HuML and TOML can have
+different hashes.
 
 Default export includes representable preset-owned starters, not all archive
 automations. Keyword-generated rules export as named explicit starters to retain

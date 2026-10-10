@@ -302,10 +302,10 @@
 
   function currentChatScope() {
     if (page === 'doc' && documentID) {
-      return { label: 'Current document', document_ids: [Number(documentID)] }
+      return { label: 'This document', document_ids: [Number(documentID)] }
     }
     if (visibleChatScope?.path === route.path) return visibleChatScope.scope
-    return { label: 'All archive' }
+    return { label: 'All documents' }
   }
 
   function publishChatScope(scope) {
@@ -324,7 +324,7 @@
         const drawer = (await import('./lib/ArchiveChat.svelte')).default
         if (scopeCurrent(requestScope)) ChatDrawer = drawer
       } catch {
-        if (scopeCurrent(requestScope)) { chatOpen = false; chatParked = false; notify('Could not open archive research') }
+        if (scopeCurrent(requestScope)) { chatOpen = false; chatParked = false; notify('Could not open document questions') }
       }
     }
   }
@@ -485,7 +485,7 @@
 
 {#if dragDepth > 0}
   <div class="dropveil" aria-hidden="true">
-    <div class="dropveil-inner"><b>Drop to upload</b><span>anywhere works — the pipeline takes it from here</span></div>
+    <div class="dropveil-inner"><b>Drop to upload</b><span>Suchi will add and process each file.</span></div>
   </div>
 {/if}
 
@@ -598,10 +598,10 @@
           : PAGES} commands={COMMANDS} canAsk={chatEnabled && canUseArchiveChat} onAsk={openArchiveChat} />{/if}
         {#if chatParked && ChatDrawer}
           <button class="research-ribbon" bind:this={chatRibbon} onclick={resumeArchiveChat}
-                  aria-label="Return to archive research" title="Return to archive research">
+                  aria-label="Return to your document question" title="Return to your document question">
             <span class="research-ribbon-dot"></span>
             <Icon name="ask" size={14} />
-            <span class="research-ribbon-label">Research active</span>
+            <span class="research-ribbon-label">Question open</span>
           </button>
         {/if}
         <button class="btn primary topbar-upload" disabled={!scopeReady} onclick={openUpload} aria-label="Upload documents">
@@ -622,6 +622,7 @@
       {#if setupNeeded && page === 'dashboard'}
         <Lazy load={lazyRoutes.setupReminder} props={{ placement: 'mobile', error: setupError, onRetry: refreshSetupState, onContinue: openSetupFromReminder }} />
       {/if}
+
 
       {#if demoMode && !demoBannerDismissed}
         <div class="setup-banner">

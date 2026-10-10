@@ -46,7 +46,7 @@
   <header class="demo-hero">
     <span class="eyebrow">Live archive · resets daily</span>
     <h1>Find the document. See what comes next.</h1>
-    <p class="lede">Search an anonymized archive, follow its deadlines back to the source, and trace a contract's paper trail. These examples open the real product so you can inspect every result.</p>
+    <p class="lede">Search an anonymized archive, follow its deadlines back to the document, and trace a contract's paper trail. These examples open the real product so you can inspect every result.</p>
     <div class="hero-note"><Icon name="help" size={14} /><span>Use the help icon in the top-right from any screen to return here.</span></div>
   </header>
 
@@ -81,7 +81,7 @@
         <div class="step-copy">
           <span class="step-kicker">Document dates</span>
           <h3>Find deadlines without opening every document</h3>
-          <p>See the Northstar renewal, quote expiry, and contract dates together—even across months and years. Open any entry to check its source.</p>
+          <p>See the Northstar renewal, quote expiry, and contract dates together—even across months and years. Open any entry to check the document text.</p>
           <a class="btn primary tour-action" href={filingHref("#/calendar")}>
             Browse document dates <Icon name="chev" size={13} />
           </a>
@@ -127,12 +127,12 @@
     </div>
   </section>
 
-  <aside class="research-note" aria-label="Archive research on private installations">
+  <aside class="research-note" aria-label="Ask your documents on private installations">
     <Icon name="ask" size={20} />
     <div>
-      <b>Archive research · Available on your own installation</b>
-      <p>Ask questions and get answers with document citations when you connect a model. Ask is disabled in this public demo.</p>
-      <a href="https://docs.suchi.page/archive-chat" target="_blank" rel="noopener">How Archive research works <Icon name="chev" size={13} /></a>
+      <b>Ask your documents · Available on your own installation</b>
+      <p>Ask questions and get answers with links to the documents used when you connect a model. Asking is disabled in this public demo.</p>
+      <a href="https://docs.suchi.page/archive-chat" target="_blank" rel="noopener">How Ask your documents works <Icon name="chev" size={13} /></a>
     </div>
   </aside>
 

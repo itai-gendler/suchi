@@ -44,7 +44,7 @@ test('groups one compact calendar entry per document and exact day, ignoring par
   assert.equal(grouped.has('2026-09-01'), false)
 })
 
-test('only fresh known pending dates can be selected, regardless of classifier confidence', () => {
+test('only fresh known pending dates can be selected, regardless of model confidence', () => {
   const candidate = { type: 'date', role: 'renewal', status: 'pending', source_current: true, reason: 'important_fact', confidence: 1 }
   assert.equal(canReviewDate(candidate), true)
   assert.equal(canReviewDate({ ...candidate, confidence: 0.1, reason: 'low_confidence' }), true)
@@ -56,11 +56,11 @@ test('only fresh known pending dates can be selected, regardless of classifier c
   assert.equal(canReviewDate({ ...candidate, role: 'transfer' }), false)
 })
 
-test('review failures distinguish changed evidence, hidden sources, revoked access and unconfirmed offline results', () => {
+test('review failures distinguish changed text, hidden documents, revoked access and unconfirmed offline results', () => {
   assert.match(reviewFailure({ code: 'stale_proposal', status: 409 }), /changed.*Nothing was applied/)
-  assert.match(reviewFailure({ code: 'invalid_evidence', status: 409 }), /evidence cannot be verified/)
-  assert.match(reviewFailure({ code: 'reveal_required', status: 403 }), /hidden.*reveal controls/)
-  assert.match(reviewFailure({ code: 'forbidden', status: 403 }), /access is no longer available/)
-  assert.match(reviewFailure(new TypeError('Failed to fetch')), /unconfirmed.*reconnect/)
+  assert.match(reviewFailure({ code: 'invalid_evidence', status: 409 }), /document text no longer matches/)
+  assert.match(reviewFailure({ code: 'reveal_required', status: 403 }), /hidden.*choose Reveal/)
+  assert.match(reviewFailure({ code: 'forbidden', status: 403 }), /no longer review.*Sign in again/)
+  assert.match(reviewFailure(new TypeError('Failed to fetch')), /may not have been saved.*reconnect/)
   assert.match(reviewFailure({ code: 'no_task', status: 404 }), /no longer available to you/)
 })

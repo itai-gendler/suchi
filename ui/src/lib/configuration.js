@@ -34,7 +34,7 @@ export const ARCHIVE_SETTINGS_GROUPS = [
     items: [
       {
         name: 'sources', label: 'Watched folder', icon: 'upload',
-        description: 'Configure filesystem intake and document ownership.',
+        description: 'Choose a server folder to watch and who owns its documents.',
         href: '#/settings?tab=archive&section=sources',
       },
       {

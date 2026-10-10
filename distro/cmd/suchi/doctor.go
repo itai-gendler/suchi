@@ -191,7 +191,7 @@ func runDoctor(args []string) int {
 			fmt.Printf("  read provenance: %v\n", err)
 			continue
 		}
-		fmt.Printf("  %s %s: last imported file %s, content revision %d (sha256 %s)\n", system.Code, system.Name, tpid, tpver, tpsha)
+		fmt.Printf("  %s %s: last imported file %s, version %d (sha256 %s)\n", system.Code, system.Name, tpid, tpver, tpsha)
 	}
 	fmt.Println()
 

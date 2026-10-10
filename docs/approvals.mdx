@@ -3,10 +3,9 @@ title: "Approvals"
 description: "Durable human decisions, document suggestions, ordered review states, and timeouts."
 ---
 
-Approvals pause a workflow for a human decision. An approval definition is a
-versioned state machine; each run records its current state, open tasks, and
-append-only transitions. Advancement and timeout checks use the existing
-durable job queue.
+Approvals pause a workflow for a human decision. A definition describes the
+allowed steps; each run records its current step, open tasks, and decision
+history. Background processing advances the next step and checks timeouts.
 
 Use [Automations](/automations) for deterministic event-driven actions. Use
 approvals when a person's explicit choice controls what happens next.
@@ -21,11 +20,11 @@ remains subject to an explicit request or token system boundary.
 
 ## Review-first mode
 
-Turn off **Automatically apply high-confidence suggestions** to require review
-of inferred dates, model metadata and local archive matches. Explicit
-user-authored rules remain independent. Suchi checks source freshness, evidence,
-field generations, access and the current reviewer credential before recording
-or applying a decision.
+Choose **Review first** under **Application mode** to require review of inferred
+dates, model metadata, and local archive matches. Explicit rules written by a
+user remain independent. Suchi checks the current document, matching text, field
+generations, access, and reviewer credentials before recording or applying a
+decision.
 
 ## Model
 
@@ -160,16 +159,16 @@ investigating a stalled run. Application logs use `component=approvals`.
 Archive matching, model metadata, detected-language suggestions, and fixed
 metadata actions selected by a classifier-backed automation question use the
 shipped `document-change` definition when review is required. The task is
-assigned to the document owner. By default, eligible high-confidence model and
-local archive changes apply automatically. Turn off **Automatically apply
-high-confidence suggestions** to use review-first mode: valid inferred changes
-need review even at confidence 1.0. Below-threshold or otherwise review-required
-changes still appear here. The card leads with current/proposed values and a
-reason; producer, score and authorized source details expand on demand. An
-ask-derived card names the automation and proposed effect, not the discarded
-question/answer transcript. Companion presents title, filing-category and tag
-suggestions from this same feed; other document-change fields, including typed
-custom fields, remain available in the web review surface.
+assigned to the document owner. By default, **Apply when confident** lets
+eligible model and local archive changes apply automatically. Choose **Review
+first** to check every valid inferred change, even at 100% model confidence.
+Below-threshold or otherwise review-required changes still appear here. The card
+leads with current and suggested values plus **Why this was suggested**.
+**How this was suggested** expands model confidence and who suggested it. An
+automation-question card names the automation and suggested effect, not the
+discarded question/answer transcript. Companion presents title, filing-category
+and tag suggestions from this same feed; other document-change fields, including
+typed custom fields, remain available in the web review surface.
 
 A title proposal is eligible only while the current title is automatically
 owned. Accepting it makes the resulting title human-owned. A person renaming
@@ -215,8 +214,8 @@ state-machine runs.
 
 Start with [Document dates](/document-dates) for the complete user workflow.
 
-The Approvals screen hosts pending `document_intelligence` candidates. Selection
-works per date, source document, or visible result set.
+The Approvals screen hosts pending `document_intelligence` suggestions. Selection
+works per date, document, or visible result set.
 
 Dates and workflow approvals share the same card grid. More than two groups use
 two desktop columns and one mobile column; one or two groups stay in a compact
@@ -242,10 +241,10 @@ creates one admin review task per affected pipeline kind. The choices are:
 
 Configuration changes alone do not create a proposal or automatically rescan
 the archive. LLM documents that have never completed classification are also
-excluded from automatic upgrade proposals. Documents already queued for
-post-ingest work, already surfaced as failed jobs, or waiting for a PDF
-password do not create a second rescan prompt. Operators can always select
-documents and run an explicit rescan. See [Pipeline versions and
+excluded from automatic upgrade proposals. Documents already being processed,
+already shown under **Processing issues**, or waiting for a PDF password do not
+create a second rescan prompt. Operators can always select documents and run an
+explicit rescan. See [Pipeline versions and
 rescans](/pipeline-versions) for tagged recommendation policy and dismissal
 behavior.
 

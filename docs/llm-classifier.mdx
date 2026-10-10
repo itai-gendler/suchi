@@ -1,21 +1,20 @@
 ---
 title: "LLM classifier"
-description: "Optional local or hosted model assistance, source-grounded research, and threshold-based suggestions with optional review."
+description: "Optional local or hosted model assistance, document questions, and model-confidence suggestions with optional review."
 ---
 
 Suchi ships deterministic automations and local archive matching. The optional
 LLM classifier adds one fixed post-extraction model call for title,
-correspondent, tags, Johnny.Decimal category, confidence, and language. Up to
-five matching administrator-authored automation questions can join that same
+correspondent, tags, Johnny.Decimal category, model confidence, and language. Up
+to five matching administrator-authored automation questions can join that same
 call; each answer maps only to fixed local metadata actions. The same configured
-transport also powers read-only, source-grounded archive questions for
-authorized users.
+model also powers read-only questions with links back to the documents used.
 
-Provider/model/OCR and classification controls are instance-wide. Each document's
-offered categories, local neighbors, metadata creation, rules and approval
-suggestions stay inside its filing system; equal labels in another system are
-not candidates. Model output cannot transfer a document or grant system access.
-Archive research additionally checks the requesting user's membership and ACLs.
+Provider/model/OCR and classification controls are instance-wide. Each
+document's offered categories, local neighbors, metadata creation, rules, and
+approval suggestions stay inside its filing system; equal labels in another
+system are not choices. Model output cannot transfer a document or grant system
+access. Ask your documents also checks the user's membership and document ACLs.
 
 The model sees each offered category as its code, area, name and description
 (descriptions are capped at 120 characters), and is asked for the most specific
@@ -32,17 +31,19 @@ compiled into Suchi and can be enabled or reconfigured from the web interface.
 Open **Settings > Archive configuration > Classification** during or after
 setup and choose:
 
-- **Local model** for Ollama or another endpoint on the trusted network
-- **Hosted endpoint** for a provider on the public internet
+- **Local model** for Ollama or another service on the trusted network
+- **Hosted model** for a provider on the public internet
 - **Account subscription**, with **Provider: OpenAI ChatGPT (Codex)** for an account with Codex access
 
-For endpoint models, configure the endpoint and optional API key. For account
-subscriptions, connect the selected provider. Both flows configure a model,
-confidence threshold, and enabled state. The same screen controls local archive matching and its automatic/review
-thresholds. **Automatically apply high-confidence suggestions** is on by default;
-turn it off for review-first behavior. **Save application mode** saves that
-choice independently. Hosted mode still requires an explicit egress
-acknowledgement; the mode does not activate a model or grant egress permission.
+For Local or Hosted model, enter the **Model service URL**, model name, and
+optional API key. For Account subscription, connect the selected provider.
+Both flows configure a model, confidence threshold, and enabled state. The same
+screen controls local archive matching and its automatic/review thresholds.
+**Automatically apply high-confidence suggestions** is on by default; turn it
+off for review-first behavior. **Save application mode** saves that choice
+independently. A Hosted model still requires explicit acknowledgement that
+document text leaves the machine; the mode does not activate a model or grant
+permission by itself.
 
 API keys are sealed before entering SQLite. Leaving the key field blank keeps
 the stored value; **Clear the stored API key** removes the web-managed value.
@@ -121,7 +122,7 @@ LLM_CONFIDENCE_THRESHOLD=0.70
 
 ## Hosted providers
 
-Hosted endpoints require `LLM_EGRESS_ACK=true` or the matching web checkbox.
+Hosted models require `LLM_EGRESS_ACK=true` or the matching web checkbox.
 
 | Provider      | Base URL                                                  | Model value                              |
 | ------------- | --------------------------------------------------------- | ---------------------------------------- |
@@ -134,7 +135,7 @@ Gemini must use its OpenAI-compatible endpoint. Azure uses the deployment name
 as the model. Set `LLM_API_KEY` or mount a key file through
 `LLM_API_KEY_FILE` for unattended startup.
 
-Classification and Archive research request OpenAI-compatible
+Classification and Ask your documents request OpenAI-compatible
 `response_format: {"type":"json_object"}` output before applying their own
 schema validation. A provider or gateway that rejects this field is not
 compatible with the configured model path. Claude requires an
@@ -152,12 +153,12 @@ For hosted model assistance, Suchi sends:
 - for each matching ask automation, its numeric ID, question text, and closed
   answer list (never its action mapping, destination IDs, or fixed values)
 
-For **Archive research**, it instead sends the question, newest complete history
-pairs within four messages/12 KB, and at most six sources selected from
-documents the caller may read. Each source contains a title, sensitivity,
-snippet, and—only with `archive_intelligence`—bounded accepted fact value and
-evidence. Only cited context is reauthorized. Sensitive snippets require
-explicit per-conversation consent.
+For **Ask your documents**, Suchi instead sends the question, newest complete
+conversation pairs within four messages/12 KB, and at most six documents that
+the user may read. Each document includes a title, sensitivity, selected text,
+and—only with `archive_intelligence`—bounded accepted detail values and quotes.
+Only documents linked from the prior answer are checked and reused. Confidential
+and Restricted text requires explicit consent for that conversation.
 
 It does not send original PDF or image bytes, unrelated archive content,
 ownership, ACLs, folder layouts, or backup information.
@@ -283,40 +284,39 @@ For an operator configuration change, explicitly select the desired documents
 in the UI and rescan them. [Refile](/refile) reruns deterministic filing but
 does not call the LLM.
 
-## Archive research and extracted facts
+## Ask your documents and suggested details
 
-Administrators have `archive_chat` and `archive_intelligence` implicitly and
-may grant either capability to members. Archive research performs bounded FTS5
-retrieval, reauthorizes follow-up source IDs, and validates a structured
-answer/citation contract. It has no model tools or write actions.
-Its citation check verifies format and source numbers, not whether each claim is
-correct. A View is saved or Approvals/Calendar is opened only after a separate
-user action.
+Administrators have `archive_chat` and `archive_intelligence` implicitly and may
+grant either capability to members. Ask your documents performs bounded FTS5
+matching, checks access to follow-up document IDs again, and validates the
+structured answer and numbered-document contract. It has no model tools or write
+actions. The document-number check verifies format and range, not whether every
+claim is correct. A View is saved or Approvals/Calendar is opened only after a
+separate user action.
 
-The same classification call may propose typed facts. Dates are the first
+The same classification call may suggest typed details. Dates are the first
 registered type, stored in the generic `document_intelligence` ledger. Only
-accepted dates reach Calendar, rich-query filters or later answers: acceptance
+accepted dates reach Calendar, rich-query filters, or later answers: acceptance
 may be automatic under the current mode and threshold, or explicitly reviewed.
 Automatic acceptance records no human reviewer and does not enable ICS export.
 
-See [Archive research](/archive-chat) for the complete retrieval, prompt,
-grounding, source-view, extracted-fact review, date-format, Calendar, API,
-privacy, rate-limit, and maintainer contracts.
+See [Ask your documents](/archive-chat) for the complete document-matching,
+prompt, answer-link, saved-View, suggested-detail review, date-format, Calendar,
+API, privacy, rate-limit, and maintainer contracts.
 
 ## Current scope
 
 The product provides fixed document classification, transient read-only
-archive research, Views made from retrieved documents, source-backed facts,
-and document-date Calendar/query workflows. It does not
+document questions, Views made from exact document sets, suggested details tied
+to document text, and document-date Calendar/query workflows. It does not
 provide arbitrary model tools, custom code in the ingest pipeline, persistent
 chat, timed calendar events, or implicit rule learning from approvals.
 
 ## Troubleshooting
 
-- **Disabled:** configure both endpoint and model. Hosted endpoints also need
-  egress acknowledgement and usually a key.
-- **401 or 403:** verify the provider key, Azure deployment, or endpoint base
-  URL.
+- **Disabled:** configure both Model service URL and model. Hosted models also
+  need permission to send document text and usually an API key.
+- **401 or 403:** verify the provider key, Azure deployment, or service URL.
 - **404:** verify the model name against the provider's current model list and
   confirm that the endpoint is its OpenAI-compatible base URL.
 - **Invalid result:** use an instruction-tuned model that reliably returns one

@@ -360,7 +360,7 @@
             <span>{preview.rules_preserved?.length || 0} rules preserved</span>
           </div>
           {#if applied}
-            <div class="success" role="status">Filing tree updated.{#if applied.refile} Refile scanned {applied.refile.documents_scanned} documents and queued {applied.refile.renders_queued} renders.{/if}</div>
+            <div class="success" role="status">Filing tree updated.{#if applied.refile} Refile checked {applied.refile.documents_scanned} documents and scheduled {applied.refile.renders_queued} folder updates.{/if}</div>
           {:else}
             <button class="btn primary apply-button" disabled={busy || (blankTarget && !confirmBlank)} onclick={applyChange}>{busy ? 'Applying…' : 'Apply reviewed change'}</button>
           {/if}

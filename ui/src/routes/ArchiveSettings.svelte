@@ -54,7 +54,7 @@
     }
     if (ingest.status === 'fulfilled') {
       const directory = ingest.value?.fs_watch_dir || ''
-      next.sources = status(directory ? 'Active' : 'Not set', directory || 'Uploads and API remain available', directory ? 'ok' : 'warn')
+      next.sources = status(directory ? 'Active' : 'Not set', directory || 'Browser uploads and connected apps remain available', directory ? 'ok' : 'warn')
     }
     if (mail.status === 'fulfilled') {
       const accounts = rows(mail.value, 'accounts')
@@ -72,7 +72,7 @@
     if (preferences.status === 'fulfilled') {
       const languages = preferences.value?.ocr_languages || []
       const interval = Number(preferences.value?.backup_interval_hours || 0)
-      next.preferences = status(interval ? 'Scheduled' : 'Backups off', `${languages.join(', ') || 'No OCR languages'} · ${interval ? `every ${interval}h` : 'no snapshots'}`, interval ? 'ok' : 'warn')
+      next.preferences = status(interval ? 'Scheduled' : 'Backups off', `${languages.join(', ') || 'No OCR languages'} · ${interval ? `every ${interval}h` : 'no scheduled backups'}`, interval ? 'ok' : 'warn')
     }
     statuses = next
   }

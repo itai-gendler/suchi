@@ -39,15 +39,14 @@ API. Its name comes from Sanskrit _suchi_: an index, catalog, or list.
   system codes and `SYS.AC.documentID` addresses. Direct membership admits a user
   to a filing system; document ACLs still control what they can open there.
 - **Broad intake.** Uploads, watched folders, IMAP mailboxes, common office and
-  image formats, OCR, encrypted PDFs, and portable bundles feed one durable
-  pipeline.
-- **Search and workflow.** Rich FTS5 queries, saved source snapshots,
-  automations, approval reviews, document-date Calendar, rescans, and rendered
-  filesystem views are built in.
+  image formats, text recognition (OCR), encrypted PDFs, and portable bundles
+  use one reliable processing queue.
+- **Search and workflow.** Full-text queries, saved document sets, automations,
+  approval reviews, document-date Calendar, rescans, and rendered filesystem
+  views are built in.
 - **Optional model assistance.** Local or hosted OpenAI-compatible models can
-  apply high-confidence metadata and dates under the configured policy, leave
-  other proposals for review, and answer authorized archive research questions
-  with validated citations.
+  apply metadata and dates under the configured policy, leave other suggestions
+  for review, and answer questions with links back to the documents used.
 - **Controlled sharing and integration.** Shared users/groups and global roles,
   system-bound tokens, object ACLs, share links, OIDC, HTTP APIs and MCP retain
   the same membership and document-permission boundaries. SQLite/CAS, server
@@ -67,8 +66,8 @@ API. Its name comes from Sanskrit _suchi_: an index, catalog, or list.
     Choose a preset, understand its starters, or import a custom taxonomy.
   </Card>
   <Card title="Search" icon="magnifying-glass" href="/search">
-    Understand FTS5, ranking, recency, rich queries, similarity, and RAG
-    retrieval.
+    Learn full-text search, ranking, recent results, filters, similar documents,
+    and how questions find matching documents.
   </Card>
   <Card title="Mail intake" icon="envelope" href="/guides/mail-intake">
     Connect Outlook, Gmail, Fastmail, iCloud, Zoho, or another IMAP server.
@@ -80,8 +79,9 @@ API. Its name comes from Sanskrit _suchi_: an index, catalog, or list.
   >
     Configure the shared classification and completion transport.
   </Card>
-  <Card title="Archive research" icon="magnifying-glass" href="/archive-chat">
-    Ask document questions with citations and save retrieved documents as Views.
+  <Card title="Ask your documents" icon="magnifying-glass" href="/archive-chat">
+    Ask questions, follow each answer back to its documents, and save the
+    document set as a View.
   </Card>
   <Card title="Document dates" icon="calendar" href="/document-dates">
     Review source-backed date suggestions before adding them to Calendar.

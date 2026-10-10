@@ -1727,11 +1727,11 @@ The hash is a consistency check, not a permission token or signed session.
 
 | Field | Meaning |
 | --- | --- |
-| `format` | Declared schema, `suchi-taxonomy/v1`, not serialization |
-| `preset_id`, `preset_version`, `name`, `story` | Submitted author identity, content revision and explanation |
+| `format` | Declared `suchi-taxonomy/v1` schema; HuML/TOML is the separate file format |
+| `preset_id`, `preset_version`, `name`, `story` | Submitted author identity, file version, name, and explanation |
 | `content_sha256` | SHA-256 of exact submitted bytes |
 | `state_hash` | Binding of source hash, seed choice, remaps and relevant current configuration |
-| `mode` | `replace` only for safe unconfigured bootstrap setup; otherwise additive `merge` |
+| `mode` | `replace` only for safe first setup; otherwise `merge`, which adds to the current filing tree |
 | `system_code`, `system_name` | Proposed destination code/display name |
 | `system_created`, `systems_introduced` | Whether Apply creates a destination or introduces the system layer |
 | `existing_system_code` | Optional code preserving the original separately on first introduction |
@@ -1806,7 +1806,7 @@ code in the browser's `#/documents?jd=49&system=S01` route after introduction.
 `pending_intelligence` is its visible extracted-fact review count for callers with
 `archive_intelligence`. `dead_jobs` is system-scoped and admin-only (members see `0`);
 `pending_approvals` is scoped to the member's assignee or all open work in that
-system for admins. `ingested_7d` counts live docs created in the last 7 days —
+system for admins. `ingested_7d` counts live documents created in the last 7 days —
 useful for a sparkline; not a filing-date metric.
 
 ### `GET /api/events/`
@@ -2193,9 +2193,9 @@ An empty preset string and absent start time are omitted.
 }
 ```
 
-## Archive research
+## Ask your documents
 
-Chat endpoints require authentication, `documents:read`, and `archive_chat`
+Question endpoints require authentication, `documents:read`, and `archive_chat`
 (implicit for administrators). Public demo sessions are denied.
 
 ### `GET /api/chat/status`
@@ -2238,12 +2238,12 @@ sensitivity, tag IDs, correspondent IDs, inclusive created-time bounds, and
 language fields. Every source and context ID is reauthorized with
 fresh ACL, trash, sensitivity, and scope checks.
 
-The response contains at most six sources, structurally validated citations,
-grounding state, and complete extracted-fact counts. Suchi adds missing inline
-markers from the provider's structured citation list. Provider evidence is
-bounded to 300 Unicode characters per title and the active 1,600–4,800
-Unicode-character [Research context preset](/archive-chat#research-context-presets)
-per snippet, plus three approved facts per source and twelve facts total:
+The response contains at most six documents, structurally validated `citations`,
+grounding state, and complete suggested-detail counts. Suchi adds missing inline
+markers from the provider's structured citation list. Text sent to the provider
+is bounded to 300 Unicode characters per title and the active 1,600–4,800
+Unicode-character [Reading-depth preset](/archive-chat#reading-depth-presets)
+per snippet, plus three approved details per document and twelve details total:
 
 ```json
 {
@@ -2273,17 +2273,16 @@ per snippet, plus three approved facts per source and twelve facts total:
 }
 ```
 
-No evidence returns the stable no-evidence answer without a provider call.
-Insufficient evidence, including an answer with no source numbers, returns the
-stable insufficient answer. Malformed or out-of-range citations return
-`502 invalid_provider_response`; provider failures return
-`502 provider_failure`; a disabled runtime returns
-`503 model_unavailable`; the per-user rate or retrieval/provider concurrency
-gates return
-`429 chat_rate_limited` with `Retry-After`.
+No matching document text returns the stable no-answer response without a model
+call. Insufficient text, including an answer with no document numbers, returns
+the stable insufficient answer. Malformed or out-of-range `citations` return
+`502 invalid_provider_response`; model failures return `502 provider_failure`;
+a disabled runtime returns `503 model_unavailable`; the per-user rate or
+document-matching/model concurrency gates return `429 chat_rate_limited` with
+`Retry-After`.
 
-Q&A is read-only. Saving the retrieved documents as a View or opening
-Approvals or Calendar is a separate browser workflow.
+Q&A is read-only. Saving these documents as a View or opening Approvals or
+Calendar is a separate browser workflow.
 
 ## Extracted facts (`archive_intelligence`)
 
@@ -2478,7 +2477,7 @@ Updates one standalone global settings group. Choose application mode:
 { "auto_apply": false }
 ```
 
-or the Archive research source-text preset:
+or the Ask your documents reading-depth preset:
 
 ```json
 { "research_context_mode": "detailed" }
@@ -2510,12 +2509,12 @@ the saved policy field, subscription provider/model pair, or all three matching
 fields.
 
 Application mode is read again under the writer before automatic effects; the
-research preset applies to the next question. These standalone saves do not rewrite
-the endpoint, model, API key, egress acknowledgement or model confidence
+reading-depth preset applies to the next question. These standalone saves do not
+rewrite the endpoint, model, API key, egress acknowledgement, or model confidence
 threshold. Only matching PATCH updates local similarity thresholds. They do not
 enable or test a model, reload the provider, accept pending suggestions, or start
-a backfill. See [Archive research: Research context presets](/archive-chat#research-context-presets)
-for passage assembly and exact payload bounds.
+a backfill. See [Ask your documents: Reading-depth presets](/archive-chat#reading-depth-presets)
+for text assembly and exact payload bounds.
 
 ### `POST /api/admin/settings/llm/test`
 

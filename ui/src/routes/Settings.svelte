@@ -45,7 +45,7 @@
     <footer class="build-info" aria-label="Suchi build">
       Suchi {session.user.build_version}
       {#if session.user.build_version === 'dev' || session.user.build_version.endsWith('-dev') || session.user.build_version.startsWith('snapshot-')}
-        · {session.user.build_revision || 'revision unavailable'}
+        · {session.user.build_revision || 'build details unavailable'}
       {/if}
     </footer>
   {/if}

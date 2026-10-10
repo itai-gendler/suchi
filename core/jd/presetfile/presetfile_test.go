@@ -22,7 +22,7 @@ func TestV1Compatibility(t *testing.T) {
 	a := mustParseFile(t, "testdata/valid.toml", FormatTOML)
 	b := mustParseFile(t, "testdata/valid.huml", FormatHuML)
 	if !reflect.DeepEqual(a, b) {
-		t.Fatalf("serialization changes meaning:\n%+v\n%+v", a, b)
+		t.Fatalf("file format changes meaning:\n%+v\n%+v", a, b)
 	}
 	if a.Inbox != 49 || len(a.Areas) != 2 || a.Areas[1].Code != 40 {
 		t.Fatalf("generated structure: %+v", a)
@@ -193,7 +193,7 @@ func TestMarshalRefusesLegacyReservedContent(t *testing.T) {
 	}
 }
 
-func TestSerializationAndReadBoundaries(t *testing.T) {
+func TestFileFormatAndReadBoundaries(t *testing.T) {
 	for _, ext := range []string{".yaml", ".yml", ".json", "", ".txt"} {
 		if _, err := ParseFromExt(readFile(t, "testdata/valid.toml"), ext); err == nil {
 			t.Fatalf("accepted %q", ext)

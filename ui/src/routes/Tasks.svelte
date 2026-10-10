@@ -60,10 +60,10 @@
       tasks = tasks.filter(x => x.id !== t.id)
       onCount?.(tasks.length + jobs.length + intelligence.length)
       reviewNotice = choice === 'apply'
-        ? 'Decision recorded. The change is queued, not yet applied; its source and current value will be checked again before application.'
+        ? 'Decision recorded. The document and current value will be checked again before the change is applied.'
         : choice === 'reject' || choice === 'dismiss'
           ? 'Suggestion dismissed.'
-          : 'Decision recorded. Any requested processing is queued, not yet complete.'
+          : 'Decision recorded. Any requested processing will continue shortly.'
       notify?.(reviewNotice)
     } catch (ex) {
       taskErrors = { ...taskErrors, [t.id]: reviewFailure(ex) }
@@ -123,7 +123,30 @@
   }
 
   function pipelineLabel(kind) {
-    return { llm: 'LLM classification', ocr: 'OCR', content: 'Text extraction' }[kind] || kind
+    return { llm: 'Document suggestions', ocr: 'Text recognition (OCR)', content: 'Document text' }[kind] || kind
+  }
+
+  function producerLabel(producer) {
+    return {
+      'llm-classifier': 'Document model',
+      'demo-corpus': 'Demo example',
+      legacy: 'Earlier Suchi version',
+    }[producer] || String(producer || '').replace(/[-_:]+/g, ' ')
+  }
+
+  function jobKindLabel(kind) {
+    const labels = {
+      'post-ingest': 'Read and file document',
+      'post-classify': 'Suggest document details',
+      render: 'Update filed copy',
+      'approval:advance': 'Apply approval',
+      'approval:timeout-sweep': 'Update expired approvals',
+      taxonomy_index: 'Update filing index',
+      retention: 'Empty expired Trash',
+      maintenance: 'Archive maintenance',
+    }
+    const plain = labels[kind] || String(kind || '').replace(/[-_:]+/g, ' ').trim()
+    return plain ? plain.charAt(0).toUpperCase() + plain.slice(1) : 'Processing step'
   }
 
   function rescanTargets(t) {
@@ -138,13 +161,13 @@
     return {
       archive: 'Archive match',
       llm: 'Model suggestion',
-      'language-detector': 'Language detector',
+      'language-detector': 'Language detection',
     }[source] || source
   }
 
   function supportingContextLabel(vars) {
     const count = Array.isArray(vars?.sources) ? vars.sources.length : 0
-    return count ? `Similar documents (${count})` : 'Supporting context'
+    return count ? `Similar documents (${count})` : 'Text behind this suggestion'
   }
 
   function decisionPrompt(t) {
@@ -284,10 +307,10 @@
     try {
       if (action === 'retry') await retryDeadJob(job.id)
       else await dismissDeadJob(job.id)
-      notify?.(action === 'retry' ? 'Job queued again' : 'Job dismissed')
+      notify?.(action === 'retry' ? 'Processing started again' : 'Processing issue dismissed')
       await load()
     } catch (ex) {
-      notify?.(ex.message || `Could not ${action} the job`)
+      notify?.(ex.message || `Could not ${action} this processing item`)
     } finally {
       const next = new Set(busyJobs)
       next.delete(job.id)
@@ -351,7 +374,7 @@
           {@const groupSelection = selectionState(group.candidates)}
           <article class="approval-card intelligence-card">
             <header class="approval-card-header intelligence-document">
-              <input type="checkbox" aria-label={`Select every candidate from ${group.title || `document ${group.documentID}`}`}
+              <input type="checkbox" aria-label={`Select every suggested date from ${group.title || `document ${group.documentID}`}`}
                      disabled={intelligenceBusy || !groupSelection.available} checked={groupSelection.all} use:indeterminate={groupSelection.some}
                      onchange={(event) => setCandidateSelection(group.candidates.map(candidate => candidate.id), event.currentTarget.checked)} />
               <a class="task-thumb intelligence-thumb" class:placeholder={!group.thumbnail}
@@ -370,27 +393,27 @@
             <div class="approval-card-body intelligence-candidates">
               {#each group.candidates as candidate (candidate.id)}
                 <div class="intelligence-candidate">
-                  <input type="checkbox" aria-label={`Select proposed ${formatIntelligenceValue(candidate)}`}
+                  <input type="checkbox" aria-label={`Select suggested ${formatIntelligenceValue(candidate)}`}
                          checked={intelligenceSelection.has(candidate.id)}
                          disabled={intelligenceBusy || !canReviewDate(candidate) || !!dateErrors[candidate.id]}
                          onchange={(event) => setCandidateSelection([candidate.id], event.currentTarget.checked)} />
                   <div class="intelligence-copy">
                     <div class="intelligence-value">
-                      <strong>Proposed: {formatIntelligenceValue(candidate)}</strong>
+                      <strong>Suggested: {formatIntelligenceValue(candidate)}</strong>
                       <span class="pill">{candidate.type === 'date' ? 'Date' : 'Read-only'}</span>
                     </div>
-                    {#if candidate.source_current === false}<span class="pill warn">Source changed</span>{/if}
+                    {#if candidate.source_current === false}<span class="pill warn">Document changed</span>{/if}
                     {#if candidate.evidence_text}
                       <blockquote class="intelligence-evidence">“{candidate.evidence_text}”</blockquote>
-                      <small>{candidate.source_current === true ? 'Exact text from the linked document' : 'Stored extraction quote; not verified against the current document'}{Number.isInteger(candidate.evidence_start) ? ` · UTF-8 byte ${candidate.evidence_start}` : ''}</small>
+                      <small>{candidate.source_current === true ? 'Exact text from the linked document' : 'This saved quote no longer matches the document.'}</small>
                     {:else}
-                      <small>The document passage is unavailable here. Open the source document; sensitive text uses its existing reveal controls.</small>
+                      <small>The matching text is not shown here. Open the document to reveal sensitive text.</small>
                     {/if}
                     {#if typeof candidate.confidence === 'number'}
                       <details class="task-details">
-                        <summary>Producer detail</summary>
-                        <p>Confidence: {Math.round(candidate.confidence * 100)}%</p>
-                        {#if candidate.extractor}<p>Producer: {candidate.extractor}</p>{/if}
+                        <summary>How this was suggested</summary>
+                        <p>Model confidence: {Math.round(candidate.confidence * 100)}%</p>
+                        {#if candidate.extractor}<p>Suggested by: {producerLabel(candidate.extractor)}</p>{/if}
                       </details>
                     {/if}
                     {#if dateErrors[candidate.id]}<p class="review-error" role="alert">{dateErrors[candidate.id]}</p>{/if}
@@ -459,7 +482,7 @@
               {/if}
               {#if t.approval_name === 'document-change' && t.vars}
                 <div class="metadata-transition"
-                     aria-label={`Current ${typeof t.vars.current_value === 'string' ? (t.vars.current_value || 'Not set') : 'Unavailable'}; proposed ${suggestionValue(t.vars)}`}>
+                     aria-label={`Current ${typeof t.vars.current_value === 'string' ? (t.vars.current_value || 'Not set') : 'Unavailable'}; suggested ${suggestionValue(t.vars)}`}>
                   <span>{typeof t.vars.current_value === 'string' ? (t.vars.current_value || 'Not set') : 'Unavailable'}</span>
                   <span class="transition-arrow" aria-hidden="true">→</span>
                   <strong>{suggestionValue(t.vars)}</strong>
@@ -477,7 +500,7 @@
                     {#if t.vars.sources?.length}
                       <ul class="review-sources">
                         {#each t.vars.sources as source}
-                          <li><a href={filingHref(`#/doc/${source.document_id}`)}>{source.title || 'Open source document'}</a></li>
+                          <li><a href={filingHref(`#/doc/${source.document_id}`)}>{source.title || 'Open document'}</a></li>
                         {/each}
                       </ul>
                     {/if}
@@ -518,21 +541,26 @@
   {/if}
 
   {#if canManageJobs && jobs.length}
-    <h3 style="font-size:.9rem;color:var(--muted);margin:0 0 8px">Dead jobs — needs attention</h3>
+    <h3 style="font-size:.9rem;color:var(--muted);margin:0 0 8px">Processing issues</h3>
     <div class="index">
       {#each jobs as j (j.id)}
-        <div class="irow">
+        <div class="irow processing-issue">
           <span class="dot danger"></span>
-          <span class="grow">
-            <span class="title mono" style="display:block;font-size:.8rem">{j.kind}</span>
-            {#if j.last_error}<span class="sub" title={j.last_error}>{j.last_error.slice(0, 90)}</span>{/if}
-          </span>
+          <div class="grow processing-issue-copy">
+            <span class="title" style="display:block;font-size:.8rem">{jobKindLabel(j.kind)}</span>
+            <span class="sub">Processing stopped before this step completed.</span>
+            <details class="processing-details">
+              <summary>Technical details</summary>
+              <code>{j.kind}</code>
+              {#if j.last_error}<pre>{j.last_error}</pre>{/if}
+            </details>
+          </div>
           <span class="sub">{retryLabel(j)}</span>
-          {#if j.doc_id}<a class="btn sm" href={filingHref(`#/doc/${j.doc_id}`)}>Doc #{j.doc_id}</a>{/if}
-          <button class="btn sm" disabled={busyJobs.has(j.id)} onclick={() => actOnDeadJob(j, 'retry')} title="Run this job again">
+          {#if j.doc_id}<a class="btn sm" href={filingHref(`#/doc/${j.doc_id}`)}>Document #{j.doc_id}</a>{/if}
+          <button class="btn sm" disabled={busyJobs.has(j.id)} onclick={() => actOnDeadJob(j, 'retry')} title="Try this processing step again">
             <Icon name="refresh" size={13} /> Retry
           </button>
-          <button class="btn sm" disabled={busyJobs.has(j.id)} onclick={() => actOnDeadJob(j, 'dismiss')} title="Remove this alert without retrying">
+          <button class="btn sm" disabled={busyJobs.has(j.id)} onclick={() => actOnDeadJob(j, 'dismiss')} title="Remove this issue without retrying">
             <Icon name="x" size={13} /> Dismiss
           </button>
         </div>
@@ -616,6 +644,12 @@
   .intelligence-evidence { margin:8px 0 6px;white-space:pre-wrap;overflow-wrap:anywhere }
   .review-sources { margin:8px 0;padding-left:18px;font-size:.78rem;overflow-wrap:anywhere }
   .review-error { color:var(--danger);font-size:.8rem;line-height:1.45;overflow-wrap:anywhere }
+  .processing-issue { align-items:flex-start;flex-wrap:wrap;cursor:default }
+  .processing-issue-copy { display:flex;flex:1 1 260px;min-width:0;flex-direction:column;gap:3px }
+  .processing-details { color:var(--muted);font-size:.7rem }
+  .processing-details summary { width:max-content;cursor:pointer }
+  .processing-details code { display:block;margin-top:6px;color:var(--faint) }
+  .processing-details pre { max-width:720px;margin:6px 0 0;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;color:var(--muted);font:inherit }
   @media (max-width: 1050px) {
     .approval-grid.approval-grid-many { grid-template-columns: 1fr; }
   }

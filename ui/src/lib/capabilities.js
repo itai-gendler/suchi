@@ -3,8 +3,8 @@
 export const USER_CAPABILITIES = Object.freeze([
   Object.freeze({
     key: 'archive_chat',
-    label: 'Ask the archive',
-    description: 'Ask grounded questions across documents they can read.',
+    label: 'Ask your documents',
+    description: 'Ask questions across documents they can read, with links back to each document.',
   }),
   Object.freeze({
     key: 'archive_intelligence',

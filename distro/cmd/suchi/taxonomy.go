@@ -173,7 +173,7 @@ func runTaxonomyImport(args []string) int {
 		fmt.Fprintf(os.Stderr, "preview: %v\n", err)
 		return 1
 	}
-	fmt.Printf("%s · %s · content revision %d\n%s\n", preview.Name, preview.PresetID, preview.PresetVersion, preview.Story)
+	fmt.Printf("%s · %s · version %d\n%s\n", preview.Name, preview.PresetID, preview.PresetVersion, preview.Story)
 	if preview.SystemCode == "" {
 		fmt.Println("destination: original archive (filing systems remain hidden)")
 	} else {

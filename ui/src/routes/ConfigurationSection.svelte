@@ -11,9 +11,9 @@
 
   let { section, notify } = $props()
   const RESEARCH_CONTEXT_MODES = [
-    { id: 'focused', label: 'Focused', bound: '1 matching passage · up to 1,600 characters', description: 'Less text for smaller local models and faster answers.' },
-    { id: 'balanced', label: 'Balanced', bound: '2 matching passages · up to 3,200 characters', description: 'Recommended for most archives and models.' },
-    { id: 'detailed', label: 'Detailed', bound: '3 matching passages · up to 4,800 characters', description: 'Checks more places in long documents; may be slower and send more text.' },
+    { id: 'focused', label: 'Focused', bound: '1 matching section · up to 1,600 characters', description: 'Less text for smaller local models and faster answers.' },
+    { id: 'balanced', label: 'Balanced', bound: '2 matching sections · up to 3,200 characters', description: 'Recommended for most archives and models.' },
+    { id: 'detailed', label: 'Detailed', bound: '3 matching sections · up to 4,800 characters', description: 'Checks more places in long documents; may be slower and send more text.' },
   ]
   let loaded = $state(new Set())
   let loading = $state(new Set())
@@ -356,7 +356,7 @@
       llmTestResult = result?.result || null
       notify?.(result?.message || 'Model connection and response format checked')
     } catch (ex) {
-      if (!disposed && generation === llmTestGeneration) llmTestError = ex.message || 'The classifier did not return a valid response.'
+      if (!disposed && generation === llmTestGeneration) llmTestError = ex.message || 'The document model did not return a valid response.'
     } finally { llmTesting = false }
   }
 
@@ -403,7 +403,7 @@
 
     {#if section === 'sources'}
       <h3>Watched folder</h3>
-      <p class="wiz-p">Point suchi at a folder (a scanner target, a synced directory) and everything dropped there becomes a document. Uploads and the API work regardless.</p>
+      <p class="wiz-p">Point suchi at a folder (a scanner target or synced directory) and everything dropped there becomes a document. Browser uploads and connected apps work regardless.</p>
       <div class="field"><label for="i-dir">Watched directory (on the server)</label>
         <input id="i-dir" class="input mono" placeholder="/data/staging" bind:value={ingest.fs_watch_dir} /></div>
       <div class="field"><label for="i-owner">Documents from it belong to</label>
@@ -440,7 +440,7 @@
             <label class="apply-opt"><input type="radio" name="application-mode" value="review" checked={!autoApply} disabled={busy} onchange={() => (autoApply = false)} />
               <span><b>Review first</b><small>Every suggestion waits in Approvals.</small></span></label>
             <label class="apply-opt"><input type="radio" name="application-mode" value="auto" checked={autoApply} disabled={busy} onchange={() => (autoApply = true)} />
-              <span><b>Apply when confident</b><small>High-confidence suggestions file themselves; the rest wait in Approvals.</small></span></label>
+              <span><b>Apply when confident</b><small>Suggestions at or above your threshold apply; the rest wait in Approvals.</small></span></label>
           </div>
           <p class="cls-note" id="application-mode-help">Dates follow the same choice, into Calendar or Approvals.</p>
           <button class="btn sm" disabled={busy} onclick={() => saveAnd(saveApplicationMode, 'Application mode saved')}>Save application mode</button>
@@ -455,19 +455,19 @@
         </div>
         {#if thresholdsOpen}
           <div class="cls-disc">
-            <div class="field"><label for="archive-review">Minimum confidence to suggest for review · {Math.round(Number(llm.archive_review_threshold) * 100)}%</label>
+            <div class="field"><label for="archive-review">Minimum similarity to suggest for review · {Math.round(Number(llm.archive_review_threshold) * 100)}%</label>
               <input id="archive-review" class="range" type="range" min="0.5" max="0.9" step="0.05" bind:value={llm.archive_review_threshold} /></div>
-            <div class="field"><label for="archive-auto">Minimum confidence to apply automatically · {Math.round(Number(llm.archive_auto_threshold) * 100)}%</label>
+            <div class="field"><label for="archive-auto">Minimum similarity to apply automatically · {Math.round(Number(llm.archive_auto_threshold) * 100)}%</label>
               <input id="archive-auto" class="range" type="range" min="0.55" max="0.95" step="0.05" bind:value={llm.archive_auto_threshold} disabled={!autoApply} /></div>
-            <p class="cls-note">Automatic must stay above the review floor.</p>
-            {#if Number(llm.archive_review_threshold) >= Number(llm.archive_auto_threshold)}<p role="alert">The review floor must be below the automatic threshold.</p>{/if}
+            <p class="cls-note">The automatic level must stay above the review level.</p>
+            {#if Number(llm.archive_review_threshold) >= Number(llm.archive_auto_threshold)}<p role="alert">The review level must be below the automatic level.</p>{/if}
           </div>
         {/if}
         <div class="cls-row">
           <div class="cls-main">
             <b>Document model{#if llmStatus?.active}<span class="mdot"></span><em>Active</em>{/if}</b>
-            {#if llmStatus?.active}<small><span class="mono">{llm.model}</span> · {llmMode === 'subscription' ? 'account subscription' : llmMode === 'hosted' ? 'hosted endpoint' : 'local model'}</small>
-            {:else}<small>Titles, dates, tags and Archive research. Off.</small>{/if}
+            {#if llmStatus?.active}<small><span class="mono">{llm.model}</span> · {llmMode === 'subscription' ? 'account subscription' : llmMode === 'hosted' ? 'hosted model' : 'local model'}</small>
+            {:else}<small>Document suggestions and questions. Off.</small>{/if}
           </div>
           <div class="cls-right">{#if llmStatus?.active}<button class="act-link" onclick={() => (modelDialogOpen = true)}>Manage</button>
             {:else}<button class="btn sm" onclick={() => (modelDialogOpen = true)}>Set up model</button>{/if}</div>
@@ -476,14 +476,14 @@
           <button class="btn primary sm" disabled={busy || Number(llm.archive_review_threshold) >= Number(llm.archive_auto_threshold)}
                   onclick={() => saveAnd(saveMatching, 'Similar-document matching saved')}>Save matching options</button></div>
       </div>
-      <div class="cls-card" role="region" aria-label="Archive research configuration">
-        <div class="cls-head"><h3 id="research-context-title">Archive research</h3><p>Answers questions from your documents.</p><span class="cls-when">Applies to the next question</span></div>
+      <div class="cls-card" role="region" aria-label="Ask your documents settings">
+        <div class="cls-head"><h3 id="research-context-title">Ask your documents</h3><p>Answers questions from your documents.</p><span class="cls-when">Applies to the next question</span></div>
         <div class="cls-row"><div class="cls-main"><b>Reading per document</b>
             {#if llmStatus?.active}<small style="text-transform:capitalize">{researchContextMode}</small>
             {:else}<small>Needs the document model.</small>{/if}</div>
           <div class="cls-right">{#if llmStatus?.active}<button class="act-link" onclick={() => (researchOpen = !researchOpen)}>{researchOpen ? 'Hide' : 'Change'}</button>
             {:else}<button class="act-link" onclick={() => (researchOpen = !researchOpen)}>{researchOpen ? 'Hide' : 'Change'}</button>{/if}</div></div>
-        {#if researchOpen}<div class="cls-disc"><div class="context-presets" role="radiogroup" aria-label="Research context">
+        {#if researchOpen}<div class="cls-disc"><div class="context-presets" role="radiogroup" aria-label="How much to read">
           {#each RESEARCH_CONTEXT_MODES as mode, index (mode.id)}
             <label class="context-preset" class:on={researchContextMode === mode.id}>
               <input type="radio" name="research-context-mode" bind:group={researchContextMode} value={mode.id} />
@@ -503,7 +503,7 @@
         </div>
         <div class="toolbar option-save">
           <button class="btn primary sm" disabled={busy || llmTesting}
-                  onclick={() => saveAnd(saveResearchContext, 'Research context saved')}>Save research context</button>
+                  onclick={() => saveAnd(saveResearchContext, 'Reading amount saved')}>Save reading amount</button>
         </div>
       </div>{/if}
       </div>
@@ -514,7 +514,7 @@
           <div class="mdl-body">
       <span class="seg" style="margin-bottom:14px">
         <button disabled={modelSaving || loginBusy} class:on={llmMode === 'local'} onclick={() => setLLMMode('local')}>Local model</button>
-        <button disabled={modelSaving || loginBusy} class:on={llmMode === 'hosted'} onclick={() => setLLMMode('hosted')}>Hosted endpoint</button>
+        <button disabled={modelSaving || loginBusy} class:on={llmMode === 'hosted'} onclick={() => setLLMMode('hosted')}>Hosted model</button>
         <button disabled={modelSaving || loginBusy} class:on={llmMode === 'subscription'} onclick={() => setLLMMode('subscription')}>Account subscription</button>
       </span>
       {#if llmMode === 'subscription'}
@@ -530,7 +530,7 @@
             </span>
             <span>{llmStatus?.subscription_connected
               ? 'Subscription limits apply to this archive.'
-              : 'Powers suggestions and Archive research for this archive.'}</span>
+              : 'Powers document suggestions and questions for this archive.'}</span>
           </div>
           <div class="subscription-account-actions">
             {#if llmStatus?.subscription_connected}
@@ -555,7 +555,7 @@
         <p class="wiz-p sub" style="font-size:.8rem">Use the OpenAI-compatible base URL from your provider. Suchi sends extracted text, never the original file.</p>
       {/if}
       {#if llmMode !== 'subscription'}
-      <div class="field"><label for="l-url">Endpoint URL</label>
+      <div class="field"><label for="l-url">Model service URL</label>
         <input id="l-url" class="input mono" placeholder="http://host.suchi.local:11434/v1" bind:value={llm.endpoint_url} oninput={invalidateLLMTest} /></div>
       {/if}
       <div class="field model-field">
@@ -591,7 +591,7 @@
       {/if}
       {#if llmIsRemote}
         <label class="wiz-check attn" class:subscription-ack={llmMode === 'subscription'}><input type="checkbox" bind:checked={llm.egress_ack} onchange={invalidateLLMTest} />
-          This endpoint is not local. I acknowledge document text will leave this machine.</label>
+          This model runs outside this machine. I understand document text will be sent to it.</label>
       {/if}
 
       <div class="field model-confidence"><label for="l-confidence">Minimum model confidence to apply automatically · {Math.round(Number(llm.confidence_threshold) * 100)}%</label>
@@ -609,7 +609,7 @@
             {:else if llmTestResult}
               <span class="subscription-test-verdict" role="status">
                 <span class="verdict-mark" aria-hidden="true">✓</span>
-                Responded in {elapsedLabel(llmTestResult.elapsed_ms)} · self-reported confidence {Math.round(Number(llmTestResult.confidence) * 100)}%
+                Responded in {elapsedLabel(llmTestResult.elapsed_ms)} · Model confidence {Math.round(Number(llmTestResult.confidence) * 100)}% (self-reported)
               </span>
             {/if}
           </div>
@@ -628,7 +628,7 @@
         {:else if llmTestResult}
           <div class="test-result">
             <b>Connection responded in {llmTestResult.elapsed_ms} ms</b>
-            <span>{llmTestResult.title || 'No title'} · self-reported score {Number(llmTestResult.confidence).toFixed(2)}</span>
+            <span>{llmTestResult.title || 'No title'} · Model confidence {Math.round(Number(llmTestResult.confidence) * 100)}% (self-reported)</span>
             {#if llmTestResult.tags?.length}<span class="sub">Tags: {llmTestResult.tags.join(', ')}</span>{/if}
           </div>
         {/if}

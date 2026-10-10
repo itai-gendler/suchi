@@ -427,15 +427,16 @@ file only when your own relay exposes a TLS listener.
 
 ## Model assistance (optional; egress on)
 
-The model is off by default. Setting these turns on model-backed classification,
-authorized archive research, and extracted facts; non-local endpoints require
-the egress ack. The separate application mode defaults on without enabling a model.
+The model is off by default. These settings turn on model-backed classification,
+Ask your documents, and suggested dates and details. Non-local endpoints require
+the egress acknowledgement. The separate application mode defaults to
+**Apply when confident** without enabling a model.
 
-Archive research sends only the question, bounded transient history, and
-authorized source title, sensitivity, snippet, plus capability-gated extracted
-fact value/evidence. It stores no live conversation. Administrators can choose
-the bounded source-text depth independently of provider configuration; see
-[Archive research: Research context presets](/archive-chat#research-context-presets).
+Ask your documents sends only the question, bounded recent conversation, and
+selected document title, sensitivity, text, plus permitted reviewed details. It
+stores no live conversation. Administrators can choose the bounded reading
+depth independently of provider configuration; see
+[Ask your documents: Reading-depth presets](/archive-chat#reading-depth-presets).
 
 | Env var                             | Purpose                                                                                                                                                 |
 | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -450,15 +451,15 @@ never reads plaintext keys back. It exposes masked status, a synthetic
 connection test with validated fields and latency, and an explicit key-clear
 action. The classification options separate model-free archive matching from
 model/date thresholds. **Save matching options** preserves the model's enabled
-state. After a successful connection test, **Enable model and save options**
-activates the configuration.
+state. After a successful connection test, **Enable model** activates the
+configuration.
 
-**Automatically apply high-confidence suggestions** defaults on and covers new
-dates, model metadata and local matches. Turn it off for review-first behavior.
-**Save application mode** saves only this choice, independently of
-model activation, credentials, egress and explicit user-authored rules. Neither
-startup nor settings saves bulk-accept pending suggestions; new ingests and
-explicit rescans use the current policy.
+**Apply when confident** is the default application mode and covers new dates,
+model metadata, and local matches. Choose **Review first** to send inferred
+changes to Approvals. **Save application mode** saves only this choice,
+independently of model activation, credentials, egress, and explicit rules
+written by a user. Neither startup nor settings saves bulk-accept pending
+suggestions; new ingests and explicit rescans use the current policy.
 
 Compose installs can reach host Ollama at
 `http://host.suchi.local:11434/v1`.

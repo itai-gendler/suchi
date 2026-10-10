@@ -131,6 +131,6 @@ func TestTaxonomyApplyRequiresCurrentPreview(t *testing.T) {
 	}
 	input = TaxonomyImportReq{Content: replacementTaxonomy}
 	if response := taxonomyRequest(t, s, input); response.Code != 400 {
-		t.Fatalf("omitted serialization guessed TOML: %s", response.Body.String())
+		t.Fatalf("omitted file format guessed TOML: %s", response.Body.String())
 	}
 }

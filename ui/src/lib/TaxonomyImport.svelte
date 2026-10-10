@@ -52,7 +52,7 @@
     content = ''
     const extension = file.name.split('.').pop()?.toLowerCase()
     if (!['huml', 'toml'].includes(extension)) {
-      err = 'Choose a .huml or .toml file, or paste content and select its serialization.'
+      err = 'Choose a .huml or .toml file, or paste content and select its file format.'
       return
     }
     format = extension
@@ -93,7 +93,7 @@
       collisions = result.collisions || []
       if (apply && result.applied) {
         confirmBlank = false
-        notify?.(`Imported ${result.name}: content revision ${result.preset_version}.`)
+        notify?.(`Imported ${result.name}: version ${result.preset_version}.`)
         try {
           if (!result.system_code) await onApplied?.(result)
           if (!scopeCurrent(scope)) return
@@ -135,7 +135,7 @@
       <input type="file" aria-label="Choose taxonomy file" accept=".huml,.toml" disabled={busy} onchange={pick} />
     </label>
     {#if fileName}<span class="file-name sub">{fileName}</span>{/if}
-    <label class="serialization">Serialization
+    <label class="serialization">File format
       <select class="input" bind:value={format} disabled={busy} onchange={() => invalidate()}>
         <option value="huml">HuML</option><option value="toml">TOML</option>
       </select>
@@ -167,16 +167,16 @@
 
   {#if diff}
     <div class="card preview" aria-label="Taxonomy preview">
-      <h4>{diff.name} · {diff.preset_id} · content revision {diff.preset_version}</h4>
+      <h4>{diff.name} · {diff.preset_id} · version {diff.preset_version}</h4>
       <p>{diff.story}</p>
-      <p class="sub">{diff.format} · {diff.mode === 'replace' ? 'Initial setup replacement' : 'Additive merge'}</p>
+      <p class="sub">{diff.format} · {diff.mode === 'replace' ? 'Replace the initial filing tree' : 'Add to the current filing tree'}</p>
       {#if diff.system_code}
         <p><b>{diff.system_code} · {diff.system_name}</b> — {diff.system_created ? 'Create a new filing system' : 'Import into the existing archive'}.</p>
         {#if diff.systems_introduced}
           <p>{diff.existing_system_code ? `Existing documents, memberships and permissions stay in ${diff.existing_system_code}.` : `Existing documents keep their IDs, memberships and permissions in ${diff.system_code}.`} Full filing addresses and system-rooted rendered paths are introduced by this Apply.</p>
         {/if}
-        {#if diff.system_created}<p>Initially only server administrators can enter the new system. Grant direct membership in Settings after import.</p>{/if}
-        <p class="sub">Filing-index and render-only path refreshes are queued; import does not rerun document extraction or classification.</p>
+        {#if diff.system_created}<p>Initially, only server administrators can open the new filing system. Add members in Settings after import.</p>{/if}
+        <p class="sub">Suchi will update the filing index and local folders in the background. It will not reread or reclassify existing documents.</p>
       {/if}
       <div class="trees">
         <div>
@@ -204,8 +204,8 @@
       {#if diff.rules_preserved?.length}<h4>Existing rules preserved</h4><ul>{#each diff.rules_preserved as rule}<li>{rule.name} — {rule.enabled ? 'enabled' : 'disabled (stays disabled)'}</li>{/each}</ul>{/if}
       {#if diff.rules_skipped?.length}<h4>Rules skipped</h4><ul>{#each diff.rules_skipped as rule}<li>{rule.name} — {rule.reason}</li>{/each}</ul>{/if}
       <p class="sub">{skipSeeds ? 'Starter rules excluded.' : `Starter additions: ${diff.keywords_to_seed} keyword phrases · ${diff.automations_to_seed} explicit automations.`}</p>
-      <p class="sub hash">Source SHA-256: <code>{diff.content_sha256}</code></p>
-      {#if diff.applied && diff.index_refresh_pending}<p role="status">Filing-index refresh queued. The on-disk index updates when the server processes the job.</p>{/if}
+      <p class="sub hash">File fingerprint (SHA-256): <code>{diff.content_sha256}</code></p>
+      {#if diff.applied && diff.index_refresh_pending}<p role="status">The filing map will update in the archive folder shortly.</p>{/if}
     </div>
   {/if}
 

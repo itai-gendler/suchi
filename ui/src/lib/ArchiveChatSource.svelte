@@ -15,7 +15,7 @@
 
 <a class="source-card" class:cited
    href={filingHref(`#/doc/${item.source.id}`)} onclick={(event) => onOpen?.(event)}
-   aria-label={`Open source ${item.number}: ${item.source.title || `Document #${item.source.id}`}`}>
+   aria-label={`Open document ${item.number}: ${item.source.title || `Document #${item.source.id}`}`}>
   <span class="source-number">[{item.number}]</span>
   <span class="source-copy">
     <strong>{item.source.title || `Document #${item.source.id}`}</strong>

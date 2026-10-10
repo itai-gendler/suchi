@@ -9,32 +9,32 @@ Suchi models a replacement version and a link as different facts:
 
 | Relationship | Meaning | What happens to the other row |
 | --- | --- | --- |
-| Version | “This file supersedes that earlier file.” | Both exact revisions remain addressable. Normal discovery shows the newest visible live revision. |
+| Version | “This file supersedes that earlier file.” | Both exact versions remain available. Normal discovery shows the newest visible live version. |
 | Document link | “This exact document is related to that exact document.” | Both documents remain peers. Neither supersedes the other. |
-| Acquisition source | “These bytes entered the archive here.” | It records provenance only; it creates neither a version nor a link. |
+| How it was added | “This exact file entered Suchi here.” | Records its origin without creating a version or link. |
 
 These distinctions keep immutable originals, human metadata, permissions, and
 retrieval behavior explicit.
 
-## Notes on an exact revision
+## Notes on an exact version
 
 The **Notes** card on Document Detail keeps attributed working context beside one
-exact file revision. A user who can change the document can add a note of up to
+exact file version. A user who can change the document can add a note of up to
 16 KiB. Each row shows its author and created or edited time. The author may edit
 or delete their own note; an administrator may moderate any note.
 
-Notes are deliberately revision-owned. Uploading a replacement starts its Notes
-card empty, while the earlier revision keeps its history. Trash makes the card
+Notes belong to one version. Uploading a replacement starts its Notes card
+empty, while the earlier version keeps its history. Trash makes the card
 read-only until restore. The API rechecks both document change permission and
 note ownership in the write transaction, and records create, update, and delete
 audit events.
 
 ## Replacement versions
 
-Open a live document and use **Upload replacement** to add a newer revision. The
-new upload becomes another document row with its own immutable original, source,
-extracted text, processing state, and direct URL. The version history remains
-available from every visible member of the family.
+Open a live document and use **Upload replacement** to add a newer version. The
+new upload has its own immutable original, origin, extracted text, processing
+state, and direct URL. The version history remains available from every visible
+version.
 
 For example, suppose document 120 is `Lease agreement — signed 2024`. Uploading
 an amended PDF creates document 184 and records 120 as its predecessor:
@@ -45,27 +45,29 @@ an amended PDF creates document 184 and records 120 as its predecessor:
 ```
 
 Opening `#/documents/120` still opens the 2024 file. Documents, ranked Search,
-Calendar, and archive research normally return 184 instead because it is the
-newest live revision visible to that caller.
+Calendar, and Ask your documents normally return 184 instead because it is the
+newest live version visible to that user.
 
-A replacement must extend the current family head. Uploading from an earlier
-revision returns a generic conflict, and only one of two concurrent replacements
-can win. A trashed newest revision still reserves that position until it is
-restored or permanently deleted. These rules keep replacement history linear
-instead of silently creating sibling branches; the conflict never identifies a
-newer revision the caller cannot view.
+A replacement must extend the latest version. Uploading from an earlier version
+returns a generic conflict, and only one of two concurrent replacements can win.
+A trashed newest version still reserves that position until it is restored or
+permanently deleted. These rules keep replacement history linear instead of
+silently creating branches; the conflict never identifies a newer version the
+caller cannot view.
 
 Use the query language when the task needs a different view:
 
 ```text
 version:latest       # explicit form of the default
-version:all          # every visible live revision
-version:older        # only visible revisions superseded for this caller
+version:all          # every visible live version
+version:older        # only visible superseded versions
 ```
 
-Currentness is permission-aware. If a caller can view 120 but not 184, 120 is
-still their latest visible revision. A hidden or trashed newer revision never
-suppresses the older visible row or reveals that another revision exists.
+### What each person sees
+
+If a person can view 120 but not 184, 120 is still their latest visible version.
+A hidden or trashed newer version never suppresses the older visible row or
+reveals that another version exists.
 
 ### What replacement carries forward
 
@@ -77,16 +79,16 @@ filed and accessible:
 - tags assigned by a person or deterministic rule; and
 - correspondent relationships.
 
-Revision-owned or generated state starts fresh:
+Version-specific or generated state starts fresh:
 
-- the immutable original and acquisition source;
+- the immutable original and how it was added;
 - extracted content, detected languages, thumbnails, and processing results;
-- classifier-owned tags and accepted or pending document dates;
+- model-added tags and accepted or pending document dates;
 - every custom-field value, including document links;
 - notes and the previous archive number.
 
-This prevents a new file from silently claiming metadata that described only the
-older evidence. Edit the new revision after upload when an exact value still
+This prevents a new file from silently claiming metadata that described only
+the older version. Edit the new version after upload when an exact value still
 applies.
 
 ## Exact document links
@@ -106,8 +108,8 @@ The receipt detail shows the invoice under **Linked documents**:
 Invoice 287 --Payment receipt--> Receipt 312
 ```
 
-The value always names revision 312. If receipt 350 later replaces 312, the
-invoice still points to 312 and labels it as an earlier revision. If invoice 401
+The value always names version 312. If receipt 350 later replaces 312, the
+invoice still points to 312 and labels it as an earlier version. If invoice 401
 replaces 287, the new invoice starts without that link. Suchi never copies,
 promotes, or retargets a link during replacement.
 
@@ -117,10 +119,10 @@ links to** and keeps unused link types in the **Add link** chooser. Outgoing row
 use **Change link** and **Remove link**.
 
 
-**Documents linking to this version** is an independently paged projection of
-current values; each row says **Linked here as “link type”**. These rows are
-navigation, not reciprocal metadata stored on the target. A titled document
-omits its raw numeric ID; **Earlier version** identifies a non-current endpoint.
+**Documents linking to this version** is an independently paged list of current
+values; each row says **Linked here as “link type”**. These rows are navigation,
+not a second link stored on the target. A titled document omits its raw numeric
+ID; **Earlier version** identifies an older linked file.
 
 ### Deliberate relationship limits
 
@@ -128,7 +130,7 @@ These limits are intentional. They prevent **Versions** and **Linked documents**
 from becoming two overlapping ways to build an ambiguous document graph:
 
 - a document cannot link to itself;
-- one revision cannot link to another revision in its own version family; use
+- one version cannot link to another version in its own version history; use
   **Versions** for that relationship; and
 - replacement never copies or retargets a link.
 
@@ -169,7 +171,7 @@ field pickers and the selected field's real value control.
 ## Find documents by field presence or value
 
 `has-field:` resolves an exact custom-field name in the selected filing system.
-It works in Documents, ranked Search, saved Views, Calendar, and archive research:
+It works in Documents, ranked Search, saved Views, Calendar, and Ask your documents:
 
 ```text
 has-field:"Payment receipt"
@@ -209,9 +211,9 @@ Permanent deletion removes every incoming Document link whose exact target is
 the purged row. Restoring is no longer possible. CAS blobs remain governed by
 offline garbage collection, independently of the relationship row.
 
-Trashing one version does not merge or renumber its family. Live discovery picks
-the newest remaining revision visible to the caller; direct Trash recovery stays
-an exact-row operation.
+Trashing one version does not merge or renumber its history. Live discovery picks
+the newest remaining version visible to the caller; Trash restores one exact
+version at a time.
 
 ## API entry points
 

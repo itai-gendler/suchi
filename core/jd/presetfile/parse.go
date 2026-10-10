@@ -25,7 +25,7 @@ const (
 )
 
 // Parse validates author input before expanding flat categories or generating Inbox.
-// An omitted serialization means HuML; content is never sniffed.
+// An omitted file format means HuML; content is never sniffed.
 func Parse(data []byte, format SerFormat) (*PresetFile, error) {
 	if len(data) == 0 {
 		return nil, Errors{noPos("empty document")}
@@ -47,7 +47,7 @@ func Parse(data []byte, format SerFormat) (*PresetFile, error) {
 			return nil, Errors{syntaxError("toml", err)}
 		}
 	default:
-		return nil, Errors{noPos("unsupported serialization %q; use huml or toml", format)}
+		return nil, Errors{noPos("unsupported file format %q; use huml or toml", format)}
 	}
 	// Format dispatch precedes v1 shape diagnostics, including unknown keys.
 	if raw["format"] != Format {
@@ -221,7 +221,7 @@ func Marshal(pf *PresetFile, format SerFormat) ([]byte, error) {
 		err = toml.NewEncoder(&b).Encode(m)
 		data = b.Bytes()
 	default:
-		return nil, Errors{noPos("unsupported serialization %q; use huml or toml", format)}
+		return nil, Errors{noPos("unsupported file format %q; use huml or toml", format)}
 	}
 	if err != nil {
 		return nil, err

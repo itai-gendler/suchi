@@ -33,7 +33,7 @@
 
   function publishEmptyScope() {
     onScopeChange?.({
-      label: lang ? 'Current search filters' : 'All archive', query: '', document_ids: [], jd_category_id: 0,
+      label: lang ? 'Current search results' : 'All documents', query: '', document_ids: [], jd_category_id: 0,
       sensitivity: '', tag_ids: [], correspondent_ids: [],
       created_at_gte: null, created_at_lte: null, language: lang,
     })

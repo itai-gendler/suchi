@@ -83,9 +83,10 @@ also show the source revision. The CLI's `developmentVersion` owns the default
 source version line when no release version was injected.
 
 `App.svelte` loads every route, including login and dashboard, through the existing
-`Lazy.svelte` component. There are no route re-export wrappers. A native Rolldown
-group keeps the shell, API client, filing context and their static dependencies
-together. A separate group combines small document controls (including the
+`Lazy.svelte` component. There are no route
+re-export wrappers. A native Rolldown group keeps the shell, API client, filing
+context and their static dependencies together. A separate group combines small
+document controls (including the
 shared tag picker), link display, clipboard/query helpers, upload-list refresh
 state and the shared configuration link inventory; other shared dependencies
 use normal chunking.
@@ -188,10 +189,10 @@ visible through ACLs. At narrow widths, the tag, correspondent, share,
 sensitivity and date controls sit behind one screen-local disclosure; URL-derived
 chips remain visible and **Clear all** removes only those controls.
 
-The route publishes that same normalized hash scope to archive research before
-issuing its list request. The shell clears a published scope only when its route
-path no longer matches; same-path query updates replace it rather than briefly
-falling back to all-archive scope.
+The route publishes that same normalized hash context to Ask your documents
+before issuing its list request. The shell clears a published context only when
+its route path no longer matches; same-path query updates replace it rather than
+briefly falling back to all documents.
 
 Document result containers are noninteractive. Each has one title-labelled
 document link plus sibling selection and quick-action controls; per-row filing
@@ -249,12 +250,12 @@ draft values. Helpers in `lib/documentFilters.js` extract one generated
 `has-field:` token when reopening the editor and serialize it back into the
 canonical rich query. The saved contract remains `filters.q`, so Documents
 navigation, copied hashes, and Back/Forward need no second state channel.
-List counts use the existing visibility-scoped document list endpoint with four
-bounded workers; the editor debounces the same endpoint for its live match
-count. Count failures stay local and never hide or broaden a saved view. Verify
-the combined surface with `cd ui && bun run e2e
-tests/document-versions-references.spec.js` and the saved-view cases in
-`tests/setup.spec.js`.
+Saved-view lists do not issue per-view document requests.
+Filter vocabularies load only after the editor opens; until then, list summaries
+use the saved query and generic filter labels. The editor debounces the
+visibility-scoped document list endpoint for its one live match count. A count
+failure stays local and never hides or broadens a saved view. Verify the surface
+with the saved-view cases in `ui/tests/setup.spec.js`.
 
 Above the single-column breakpoint, `DocumentDetail.svelte` consumes the
 available content height, fixes the preview and detail sidebar to the same
@@ -312,7 +313,7 @@ replace new input, and conflicting actions are disabled in flight.
 Preset/composer Preview renders the complete target tree and document counts for
 each collision. The screen proposes replacement, free same-decade remap or skip,
 then re-previews changed choices before Apply sends `expected_state_hash`.
-Taxonomy-file Preview renders the declared schema/content revision, source story,
+Taxonomy-file Preview renders the declared file format/version, source story,
 destination, `user_areas`, separate System/49 `generated_areas`, additions,
 preserved disabled rules and dependency skips. 00–09 is explanatory, not a row.
 First prefixed import offers using the original archive or preserving it under an
@@ -335,9 +336,10 @@ sections. User/Group tabs update `people`; metadata type changes update
 `metadata`, so reload and history restore the selected panel.
 
 `App.svelte` owns the administrator's filing-tree reminder state.
-`SetupReminder.svelte` renders it in the sidebar, narrow Dashboard and Settings.
-Failures remain visible with Retry. Choosing a preset, confirmed Blank, or an
-imported tree refreshes the state; visiting Filing tree alone does not dismiss it.
+`SetupReminder.svelte` renders it in the sidebar, above a narrow Dashboard, and
+in Settings. Failures remain visible with Retry. Choosing a preset, confirmed
+Blank, or an imported tree refreshes the state; visiting Filing tree alone does
+not dismiss it.
 
 `ConfigurationSection.svelte` owns the remaining direct Archive Configuration
 forms and their required-load/retry gates. Mailbox editing delegates to
@@ -345,11 +347,12 @@ forms and their required-load/retry gates. Mailbox editing delegates to
 `Automations.svelte` editor.
 
 `ConfigurationSection.svelte` owns the model dialog and separate drafts for
-Local, Hosted endpoint, and Account subscription. The subscription panel marks
-the feature **Experimental** above its Provider control and composes connection
-state, model catalog, egress acknowledgement, retained confidence slider, and
-connection-test verdict. Provider ID `openai_chatgpt` is explicit server state;
-the browser never infers subscription mode from an endpoint URL.
+Local model, Hosted model, and Account subscription. The subscription panel
+marks the feature **Experimental** above its Provider control and composes
+connection state, model catalog, permission to send document text, the retained
+confidence slider, and the connection-test result. Provider ID
+`openai_chatgpt` is explicit server state; the browser never infers subscription
+mode from a service URL.
 
 Device authorization exposes only its code and verification URL, polls through
 `subscriptionLoginAction(provider, action)`, and cancels timers on disposal or
@@ -362,7 +365,7 @@ late login, catalog, and test results. Connecting still requires explicit egress
 acknowledgement, a successful test, and **Enable model**; tokens remain
 server-side. Verify with `bun run e2e --grep 'Account subscription'`.
 
-Classification uses the same Suggestions and Archive research cards in both shells.
+Classification uses the same Suggestions and Ask your documents cards in both shells.
 The Suggestion application radio group defaults to **Apply when confident** and
 saves independently through **Save application mode**, using a standalone
 `auto_apply` PATCH. **Review first** disables automatic application. Local thresholds
