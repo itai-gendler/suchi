@@ -595,7 +595,7 @@
 
 <style>
   .views-page {
-    width: min(100%, 1080px);
+    width: min(100%, 1240px);
     margin: 0 auto;
   }
   .new-view { padding: 9px 15px; }

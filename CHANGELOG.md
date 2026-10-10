@@ -32,6 +32,10 @@ Notable user-visible changes to Suchi are recorded here.
   state while keeping the usual counters and lists visible.
 - Dashboard View shortcuts no longer display or request per-view document
   counts. Saved View lists also defer filter choices until editing begins.
+- Calendar now defaults to the current month, offers rolling **30 Days** and
+  **2 Weeks** ranges, and keeps its controls, grid, and date feed in one wider
+  workspace. Day selection scrolls the feed; automatic dates omit a redundant
+  status label. Views and Automations now match Calendar's workspace width.
 
 ## [0.2.1] - 2026-10-10
 

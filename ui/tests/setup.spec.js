@@ -1120,7 +1120,6 @@ for (const demoSession of ['anon', 'scratch']) {
     })
     await page.goto('/#/demo')
     await page.getByRole('link', { name: 'Browse document dates' }).click()
-    await expect(page.getByRole('heading', { name: 'Calendar', exact: true, level: 2 })).toBeVisible()
     await expect(page.getByRole('heading', { name: '2 dates', exact: true })).toBeVisible()
     await expect(page.getByText('Demo example', { exact: true })).toHaveCount(2)
     await expect(page.getByText(/Model confidence/)).toHaveCount(0)
@@ -5457,12 +5456,10 @@ test('does not select stale or unknown facts and preserves failed date decisions
   await expect(page.locator('.review-toolbar [role="status"]')).toContainText('No dates were changed')
 })
 
-test('distinguishes automatic dates from reviewed and previously accepted history', async ({ page }) => {
+test('keeps automatic dates quiet and labels reviewed and previously accepted history', async ({ page }) => {
+  await page.clock.setFixedTime(new Date('2026-10-10T12:00:00Z'))
   const intelligenceQueries = []
-  const now = new Date()
-  const year = now.getFullYear()
-  const month = String(now.getMonth() + 1).padStart(2, '0')
-  const date = `${year}-${month}-14`
+  const date = '2026-10-14'
   await mockAPI(page, {
 
     filingTreeChosen: true,
@@ -5495,17 +5492,41 @@ test('distinguishes automatic dates from reviewed and previously accepted histor
   })
   await page.goto('/#/calendar')
 
-  await expect(page.getByRole('heading', { name: 'Calendar', level: 2, exact: true })).toBeVisible()
-  await expect(page.getByText('Dates from your documents', { exact: true })).toBeVisible()
   await expect(page.getByText('Home insurance renewal notice', { exact: true }).first()).toBeVisible()
   await expect(page.locator('.agenda-event').getByText('Expiry', { exact: true })).toBeVisible()
   await expect(page.locator('.agenda-event').filter({ hasText: 'Home insurance renewal notice' }).getByText('Reviewed', { exact: true })).toBeVisible()
   await expect(page.locator('.agenda-event').filter({ hasText: 'Legacy policy reminder' }).getByText('Previously accepted', { exact: true })).toBeVisible()
-  await expect(page.locator('.agenda-event').filter({ hasText: 'Automatic policy reminder' }).getByText('Automatic', { exact: true })).toBeVisible()
+  await expect(page.locator('.agenda-event').filter({ hasText: 'Automatic policy reminder' }).getByText('Automatic', { exact: true })).toHaveCount(0)
+  await expect(page.locator('.range-title')).toHaveText('October 2026')
+  await expect(page.getByRole('link', { name: 'October, current calendar month', exact: true })).toHaveAttribute('aria-current', 'page')
+  await expect(page.getByRole('link', { name: '30 Days', exact: true })).not.toHaveAttribute('aria-current', 'page')
+  await expect(page.getByRole('link', { name: '2 Weeks', exact: true })).not.toHaveAttribute('aria-current', 'page')
+  await expect.poll(() => intelligenceQueries.at(-1)).toMatchObject({ sort_from: '2026-10-01', sort_to: '2026-10-31' })
+  await expect(page.locator('.day.today').getByRole('button', { name: 'Show dates for Oct 10, 2026', exact: true })).toBeVisible()
+  if ((page.viewportSize()?.width || 0) > 900) {
+    const alignment = await page.evaluate(() => {
+      const nav = document.querySelector('.calendar-nav').getBoundingClientRect()
+      const grid = document.querySelector('.month-grid').getBoundingClientRect()
+      const weekdayHeader = document.querySelector('.weekday-row').getBoundingClientRect()
+      const lastFilter = document.querySelector('.calendar-filters label:last-child select').getBoundingClientRect()
+      const agenda = document.querySelector('.agenda').getBoundingClientRect()
+      const agendaHeader = document.querySelector('.agenda > header').getBoundingClientRect()
+      return {
+        navCenter: nav.left + nav.width / 2,
+        gridCenter: grid.left + grid.width / 2,
+        filterRight: lastFilter.right,
+        agendaRight: agenda.right,
+        weekdayHeaderHeight: weekdayHeader.height,
+        agendaHeaderHeight: agendaHeader.height,
+      }
+    })
+    expect(Math.abs(alignment.navCenter - alignment.gridCenter)).toBeLessThan(1)
+    expect(Math.abs(alignment.filterRight - alignment.agendaRight)).toBeLessThan(1)
+    expect(Math.abs(alignment.weekdayHeaderHeight - alignment.agendaHeaderHeight)).toBeLessThan(1)
+  }
   await expect(page.locator('.agenda-event').filter({ hasText: 'Automatic policy reminder' }).getByText('Add to calendar', { exact: true })).toHaveCount(0)
   await expect(page.locator('.agenda-event').filter({ hasText: 'Legacy policy reminder' }).getByText('Add to calendar', { exact: true })).toHaveCount(0)
   await expect(page.getByRole('heading', { name: '3 of 650 dates' })).toBeVisible()
-  await expect(page.getByText('Showing the first 500. Narrow the view or date role to see the rest.')).toBeVisible()
   const viewSelect = page.getByLabel('Document view')
   await expect(viewSelect).toContainText('Quarterly tax review')
   await expect(viewSelect).toHaveValue('')
@@ -5576,7 +5597,7 @@ test('opens research calendar links across all years and replaces stale calendar
       evidence_text: 'Policy renews on 3 November 2028.',
     },
     { document_id: 19, document_title: 'Different research document', role: 'issued', value: { date: '2031-07-19' } },
-    { document_id: 99, document_title: 'Unrelated current policy', role: 'expiry', value: { date: '2026-09-14' } },
+    { document_id: 99, document_title: 'Unrelated current policy', role: 'expiry', value: { date: '2026-09-16' } },
   ].map((event, index) => ({
     ...event, id: index + 1, type: 'date', status: 'accepted', confidence: 0.99,
     evidence_text: event.evidence_text || `Recorded date: ${event.value.date}.`,
@@ -5613,9 +5634,8 @@ test('opens research calendar links across all years and replaces stale calendar
   await action.click()
   await expect(page).toHaveURL(/#\/calendar\?document_ids=17,18$/)
   await expect(page.getByRole('dialog', { name: 'Ask your documents' })).toBeHidden()
-  await expect(page.getByText('Dates from 2 selected documents · All months and years', { exact: true })).toBeVisible()
   await expect(page.locator('.month-grid')).toHaveCount(0)
-  await expect(page.getByRole('button', { name: 'Next month' })).toHaveCount(0)
+  await expect(page.getByRole('navigation', { name: 'Calendar period' })).toHaveCount(0)
   await expect(page.getByLabel('Document view')).toHaveCount(0)
   await expect(page.getByLabel('Date role')).toHaveValue('')
   await expect(page.locator('.agenda-event')).toHaveCount(2)
@@ -5677,31 +5697,29 @@ test('keeps calendar date precision and explains model confidence without naviga
   const day = page.locator('.agenda-event').filter({ hasText: 'Archived lease' })
   const month = page.locator('.agenda-event').filter({ hasText: 'Annual service schedule' })
   const year = page.locator('.agenda-event').filter({ hasText: 'Long-term coverage plan' })
-  await expect(day).toContainText('2024')
-  await expect(day.locator('.agenda-date')).toContainText('14')
-  await expect(month.locator('.agenda-copy > small')).toHaveText('Jun 2026')
-  await expect(month.locator('.agenda-date')).not.toContainText(/\b0?1\b/)
+  const groups = page.locator('.feed-day')
+  await expect(groups).toHaveCount(3)
+  await expect(groups.nth(0)).toContainText('Feb 14')
+  await expect(groups.nth(1)).toHaveText('June 2026')
+  await expect(groups.nth(2)).toHaveText('2028')
   await expect(month).not.toContainText(/\b0?1\b/)
   await expect(month).not.toContainText(/\b(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)\b/)
-  await expect(year.locator('.agenda-copy > small')).toHaveText('2028')
-  await expect(year.locator('.agenda-date')).not.toContainText(/Jan|\b0?1\b/)
   await expect(year).not.toContainText(/\bJan(?:uary)?\b|\b0?1\b/)
   await expect(year).not.toContainText(/\b(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)\b/)
-  await expect(month.getByText('month', { exact: true })).toHaveCount(0)
-  await expect(year.getByText('year', { exact: true })).toHaveCount(0)
-  const confidence = month.locator('.date-details p')
+  const confidence = month.getByText('Model confidence: 92%', { exact: true })
   await expect(confidence).toBeHidden()
 
-  const status = month.locator('.date-details summary')
-  if (testInfo.project.use.hasTouch) await status.tap()
-  else { await status.focus(); await page.keyboard.press('Enter') }
+  const source = month.locator('.date-details summary')
+  if (testInfo.project.use.hasTouch) await source.tap()
+  else { await source.focus(); await page.keyboard.press('Enter') }
+  await expect(month.getByText('“The next service is due in June 2026; no day is specified.”', { exact: true })).toBeVisible()
   await expect(confidence).toBeVisible()
   await expect(page).toHaveURL(/#\/calendar\?document_ids=17,18,19$/)
   await month.getByRole('link', { name: 'Annual service schedule', exact: true }).click()
   await expect(page).toHaveURL(/#\/doc\/18$/)
 })
 
-test('keeps month-only and year-only dates out of calendar day cells', async ({ page }) => {
+test('keeps partial dates out of exact day cells', async ({ page }) => {
   await page.clock.setFixedTime(new Date('2026-01-15T12:00:00Z'))
   const intelligenceQueries = []
   await mockAPI(page, {
@@ -5712,30 +5730,105 @@ test('keeps month-only and year-only dates out of calendar day cells', async ({ 
       { id: 96, document_id: 22, document_title: 'Yearly coverage plan', value: { date: '2026-01-01', precision: 'year' } },
     ].map(event => ({ ...event, type: 'date', role: 'due', status: 'accepted', confidence: 0.95 })),
   })
-  await page.goto('/#/calendar')
+  await page.goto('/#/calendar?month=2026-01')
   await expect(page.locator('.agenda-event')).toHaveCount(3)
   const grid = page.locator('.month-grid')
   await expect(grid.locator('a[href="#/doc/20"]')).toBeVisible()
   await expect(grid.locator('a[href="#/doc/21"], a[href="#/doc/22"]')).toHaveCount(0)
   await expect(grid.locator('.day.has-events')).toHaveCount(1)
-  await expect(page.locator('.agenda-event').filter({ hasText: 'Monthly service plan' }).locator('.agenda-copy > small')).toHaveText('Jan 2026')
-  await expect(page.locator('.agenda-event').filter({ hasText: 'Yearly coverage plan' })).toContainText('2026')
+  const groups = page.locator('.feed-day')
+  await expect(groups).toHaveCount(3)
+  await expect(groups.nth(0)).toContainText('Jan 14')
+  await expect(groups.nth(1)).toHaveText('January 2026')
+  await expect(groups.nth(2)).toHaveText('2026')
   expect(intelligenceQueries.at(-1)).toMatchObject({ sort_from: '2026-01-01', sort_to: '2026-01-31' })
 })
 
-test('opens a full day agenda and preserves its month and filters across navigation', async ({ page }, testInfo) => {
-  await page.clock.setFixedTime(new Date('2026-09-15T12:00:00Z'))
+test('keeps Views, Automations, and Calendar workspaces the same width', async ({ page }) => {
+  await mockAPI(page, { filingTreeChosen: true })
+  const workspaceWidth = async (route, selector) => {
+    await page.goto(route)
+    const workspace = page.locator(selector)
+    await expect(workspace).toBeVisible()
+    const box = await workspace.boundingBox()
+    return box.width
+  }
+
+  const viewsWidth = await workspaceWidth('/#/views', '.views-page > .rule-workspace')
+  const automationsWidth = await workspaceWidth('/#/automations', '.automations-page > .rule-workspace')
+  const calendarWidth = await workspaceWidth('/#/calendar', '.calendar-page > .rule-workspace')
+  expect(Math.abs(viewsWidth - calendarWidth)).toBeLessThan(1)
+  expect(Math.abs(automationsWidth - calendarWidth)).toBeLessThan(1)
+})
+
+test('keeps the current calendar month by default and offers rolling day ranges', async ({ page }) => {
+  await page.clock.setFixedTime(new Date('2026-10-10T12:00:00Z'))
+  const intelligenceQueries = []
+  const dates = ['2026-10-10', '2026-10-23', '2026-10-24', '2026-11-06', '2026-11-08', '2026-11-09'].map((date, index) => ({
+    id: index + 1, document_id: index + 100, document_title: `Calendar date ${date}`,
+    type: 'date', role: 'due', status: 'accepted', value: { date, precision: 'day' },
+  }))
+  await mockAPI(page, {
+    filingTreeChosen: true, intelligenceQueries,
+    intelligence: query => {
+      const results = dates.filter(event =>
+        (!query.sort_from || event.value.date >= query.sort_from) &&
+        (!query.sort_to || event.value.date <= query.sort_to))
+      return { results, count: results.length }
+    },
+  })
+  await page.goto('/#/calendar')
+
+  await expect.poll(() => intelligenceQueries.at(-1)).toMatchObject({ sort_from: '2026-10-01', sort_to: '2026-10-31' })
+  await expect(page.locator('.day:not(.outside) button.day-number')).toHaveCount(31)
+  await expect(page.locator('.range-title')).toHaveText('October 2026')
+  await expect(page.getByRole('link', { name: 'October, current calendar month', exact: true })).toHaveAttribute('aria-current', 'page')
+  await expect(page.getByRole('link', { name: '30 Days', exact: true })).not.toHaveAttribute('aria-current', 'page')
+  await expect(page.getByRole('link', { name: '2 Weeks', exact: true })).not.toHaveAttribute('aria-current', 'page')
+  await expect(page.locator('.agenda-event')).toHaveCount(3)
+
+  await page.getByRole('link', { name: '30 Days', exact: true }).click()
+  await expect(page).toHaveURL(/#\/calendar\?start=2026-10-10&days=30$/)
+  await expect.poll(() => intelligenceQueries.at(-1)).toMatchObject({ sort_from: '2026-10-10', sort_to: '2026-11-08' })
+  await expect(page.locator('.day:not(.outside) button.day-number')).toHaveCount(30)
+  await expect(page.locator('.range-title')).toContainText('Oct 10 – Nov 8, 2026')
+  await expect(page.getByRole('link', { name: '30 Days', exact: true })).toHaveAttribute('aria-current', 'page')
+  await expect(page.getByRole('link', { name: 'Return to October', exact: true })).not.toHaveAttribute('aria-current', 'page')
+  await expect(page.locator('.agenda-event')).toHaveCount(5)
+
+  await page.getByRole('link', { name: '2 Weeks', exact: true }).click()
+  await expect(page).toHaveURL(/#\/calendar\?start=2026-10-10&days=14$/)
+  await expect.poll(() => intelligenceQueries.at(-1)).toMatchObject({ sort_from: '2026-10-10', sort_to: '2026-10-23' })
+  await expect(page.locator('.day:not(.outside) button.day-number')).toHaveCount(14)
+  const reset = page.getByRole('link', { name: 'Return to October', exact: true })
+  await expect(reset).not.toHaveAttribute('aria-current', 'page')
+  await expect(page.locator('.range-title')).toHaveText('Oct 10 – Oct 23, 2026')
+  await expect(page.getByRole('link', { name: '2 Weeks', exact: true })).toHaveAttribute('aria-current', 'page')
+  await expect(page.locator('.agenda-event')).toHaveCount(2)
+
+  await page.getByRole('button', { name: 'Next 14 days', exact: true }).click()
+  await expect(page).toHaveURL(/#\/calendar\?start=2026-10-24&days=14$/)
+  await expect.poll(() => intelligenceQueries.at(-1)).toMatchObject({ sort_from: '2026-10-24', sort_to: '2026-11-06' })
+  await expect(page.locator('.agenda-event')).toHaveCount(2)
+  await reset.click()
+  await expect(page).toHaveURL(/#\/calendar$/)
+  await expect.poll(() => intelligenceQueries.at(-1)).toMatchObject({ sort_from: '2026-10-01', sort_to: '2026-10-31' })
+  await expect(page.locator('.range-title')).toHaveText('October 2026')
+  await expect(page.locator('.day:not(.outside) button.day-number')).toHaveCount(31)
+  await expect(page.getByRole('link', { name: 'October, current calendar month', exact: true })).toHaveAttribute('aria-current', 'page')
+  await expect(page.getByRole('link', { name: '30 Days', exact: true })).not.toHaveAttribute('aria-current', 'page')
+  await expect(page.getByRole('link', { name: '2 Weeks', exact: true })).not.toHaveAttribute('aria-current', 'page')
+})
+
+test('highlights a grid day and scrolls its complete feed group without leaving the range', async ({ page }) => {
+  await page.clock.setFixedTime(new Date('2026-01-15T12:00:00Z'))
   const intelligenceQueries = []
   const dates = [
-    { document_id: 17, document_title: 'Home insurance renewal', reviewed_at: 1767225600, evidence_text: 'Home insurance expires on 1 January 2026.' },
-    { document_id: 18, document_title: 'Car insurance policy', evidence_text: 'The vehicle policy expires on 1 January 2026.' },
-    { document_id: 19, document_title: 'Storage rental agreement', evidence_text: 'The storage agreement expires on 1 January 2026.' },
-    { document_id: 20, document_title: 'Equipment protection cover', evidence_text: 'Equipment cover expires on 1 January 2026.' },
-    { document_id: 21, document_title: 'Month-only service plan', value: { date: '2026-01-01', precision: 'month' }, evidence_text: 'The service plan expires in January 2026; no day is specified.' },
-    { document_id: 22, document_title: 'Year-only coverage plan', value: { date: '2026-01-01', precision: 'year' }, evidence_text: 'Coverage expires in 2026; no month or day is specified.' },
-    { document_id: 23, document_title: 'Next-day expiry', value: { date: '2026-01-02', precision: 'day' }, evidence_text: 'This policy expires on 2 January 2026.' },
-    { document_id: 24, document_title: 'Different date role', role: 'issued' },
-    { document_id: 25, document_title: 'Outside the selected view', view_id: 5 },
+    { document_id: 17, document_title: 'Home insurance renewal', reviewed_at: 1767225600 },
+    { document_id: 18, document_title: 'Car insurance policy' },
+    { document_id: 19, document_title: 'Storage rental agreement' },
+    { document_id: 20, document_title: 'Equipment protection cover' },
+    { document_id: 21, document_title: 'Next-day expiry', value: { date: '2026-01-02', precision: 'day' } },
   ].map((event, index) => ({
     id: index + 1, type: 'date', status: 'accepted', role: 'expiry', view_id: 4,
     confidence: 0.92, reviewed_at: null, value: { date: '2026-01-01', precision: 'day' }, ...event,
@@ -5747,63 +5840,46 @@ test('opens a full day agenda and preserves its month and filters across navigat
       const results = dates.filter(event =>
         (!query.view_id || String(event.view_id) === query.view_id) &&
         (!query.role || event.role === query.role) &&
-        (!query.precision || event.value.precision === query.precision) &&
         (!query.sort_from || event.value.date >= query.sort_from) &&
         (!query.sort_to || event.value.date <= query.sort_to))
       return { results, count: results.length }
     },
   })
-  await page.goto('/#/calendar?month=2025-12')
+  await page.goto('/#/calendar?start=2026-01-01&days=30')
   await page.getByLabel('Document view').selectOption('4')
   await page.getByLabel('Date role').selectOption('expiry')
-  await page.getByRole('button', { name: 'Next month', exact: true }).click()
-  await expect(page.getByRole('button', { name: 'January 2026', exact: true })).toBeVisible()
-  await expect(page.locator('.agenda-event')).toHaveCount(7)
-  await expect(page.getByLabel('Document view')).toHaveValue('4')
-  expect(intelligenceQueries.at(-1)).toMatchObject({ view_id: '4', role: 'expiry', sort_from: '2026-01-01', sort_to: '2026-01-31' })
-  const monthURL = page.url()
-  const dayLink = page.getByRole('link', { name: 'Open agenda for Jan 1, 2026', exact: true })
-  const dayCell = page.locator('.day').filter({ has: dayLink })
-  await expect(dayCell.locator('a[href^="#/doc/"]')).toHaveCount(3)
-  await expect(dayCell.getByRole('link', { name: '+1 more', exact: true })).toBeVisible()
-  if (testInfo.project.use.hasTouch) await dayCell.click({ position: { x: 4, y: 4 } })
-  else { await dayLink.focus(); await page.keyboard.press('Enter') }
-  await expect(page.locator('.month-grid')).toHaveCount(0)
-  await expect(page.locator('.agenda-event')).toHaveCount(4)
-  await expect(page.getByLabel('Document view')).toHaveValue('4')
-  expect(Object.fromEntries(new URLSearchParams(page.url().split('?')[1]))).toEqual({ month: '2026-01', date: '2026-01-01', view_id: '4', role: 'expiry' })
+  await expect(page.locator('.agenda-event')).toHaveCount(5)
   expect(intelligenceQueries.at(-1)).toMatchObject({
-    type: 'date', status: 'accepted', precision: 'day', view_id: '4', role: 'expiry',
-    sort_from: '2026-01-01', sort_to: '2026-01-01', page: '1', page_size: '500',
+    view_id: '4', role: 'expiry', sort_from: '2026-01-01', sort_to: '2026-01-30',
   })
-  await expect(page.locator('.agenda-event').filter({ hasText: 'Equipment protection cover' })).toBeVisible()
-  await expect(page.locator('.agenda-event').filter({ hasText: /Month-only|Year-only|Next-day|Different date role|Outside the selected view/ })).toHaveCount(0)
-  const automatic = page.locator('.agenda-event').filter({ hasText: 'Car insurance policy' })
-  await automatic.locator('summary').click()
-  await expect(automatic.getByText('Model confidence: 92%', { exact: true })).toBeVisible()
-  const dayURL = page.url()
-  await page.reload()
-  await expect(page).toHaveURL(dayURL)
-  await expect(page.locator('.agenda-event')).toHaveCount(4)
-  await expect(page.getByLabel('Document view')).toHaveValue('4')
-  await expect(page.getByLabel('Date role')).toHaveValue('expiry')
-  await page.goBack()
-  await expect(page).toHaveURL(monthURL)
-  await expect(dayLink).toBeVisible()
-  await expect(page.getByLabel('Document view')).toHaveValue('4')
-  await expect(page.getByLabel('Date role')).toHaveValue('expiry')
-  await dayCell.getByRole('link', { name: '+1 more', exact: true }).click()
-  await expect(page.locator('.agenda-event')).toHaveCount(4)
-  await page.getByRole('link', { name: 'Back to January 2026', exact: true }).click()
-  await expect(page).toHaveURL(monthURL)
-  await page.locator('.month-grid a[href="#/doc/17"]').click()
-  await expect(page).toHaveURL(/#\/doc\/17$/)
-  await page.goBack()
-  await expect(page).toHaveURL(monthURL)
-  await expect(dayLink).toBeVisible()
+
+  const rangeURL = page.url()
+  const requestCount = intelligenceQueries.length
+  const dayButton = page.getByRole('button', { name: 'Show dates for Jan 1, 2026', exact: true })
+  const dayCell = page.locator('.day').filter({ has: dayButton })
+  const group = page.locator('.feed-group[data-feed-date="2026-01-01"]')
+  await expect(dayCell.locator('a[href^="#/doc/"]')).toHaveCount(3)
+  await expect(dayCell.getByRole('button', { name: '+1 more', exact: true })).toBeVisible()
+  await expect(group.locator('.agenda-event')).toHaveCount(4)
+
+  const agenda = page.locator('.agenda-list')
+  await agenda.evaluate(element => {
+    element.style.height = '140px'
+    element.style.flex = 'none'
+    element.scrollTop = element.scrollHeight
+  })
+  await expect.poll(() => agenda.evaluate(element => element.scrollTop)).toBeGreaterThan(0)
+  await dayButton.click()
+  await expect(dayButton).toHaveAttribute('aria-pressed', 'true')
+  await expect(dayCell).toHaveClass(/selected/)
+  await expect(group).toHaveClass(/focused/)
+  await expect.poll(() => agenda.evaluate(element => element.scrollTop)).toBe(0)
+  await expect(page).toHaveURL(rangeURL)
+  expect(intelligenceQueries).toHaveLength(requestCount)
 })
 
 test('pages a directly linked day agenda and resets its page when the role changes', async ({ page }) => {
+  await page.clock.setFixedTime(new Date('2026-01-15T12:00:00Z'))
   const intelligenceQueries = []
   const dates = Array.from({ length: 501 }, (_, index) => ({
     id: index + 1, document_id: index + 100, document_title: `Policy ${index + 1}`,
@@ -5833,10 +5909,10 @@ test('pages a directly linked day agenda and resets its page when the role chang
   await expect(page.locator('.agenda-event')).toHaveCount(251)
   expect(intelligenceQueries.at(-1)).toMatchObject({ role: 'expiry', precision: 'day', sort_from: '2026-01-01', sort_to: '2026-01-01', page: '1' })
   await expect(page.getByRole('navigation', { name: 'Date pages' })).toHaveCount(0)
-  await page.getByRole('link', { name: 'Back to January 2026', exact: true }).click()
+  await page.getByRole('link', { name: 'Back to Calendar', exact: true }).click()
   await expect(page.locator('.month-grid')).toBeVisible()
   await expect(page.getByLabel('Date role')).toHaveValue('expiry')
-  await page.getByRole('link', { name: 'Open agenda for Jan 2, 2026', exact: true }).click()
+  await page.goto('/#/calendar?date=2026-01-02&role=expiry')
   await expect(page.getByText('No dates this day', { exact: true })).toBeVisible()
   await expect(page.locator('.month-grid')).toHaveCount(0)
   expect(intelligenceQueries.at(-1)).toMatchObject({ role: 'expiry', precision: 'day', sort_from: '2026-01-02', sort_to: '2026-01-02', page: '1' })

@@ -116,11 +116,10 @@ Calendar distinguishes how each date got there:
 - A **reviewed** date records the person's decision and review time. Rejected
   dates do not appear on Calendar.
 
-Calendar's agenda shows the date role and **Automatic**, **Previously accepted**
-or **Reviewed** status. Expand it to see **Model confidence**. Automatic
-means an accepted, unreviewed date with policy version `threshold-auto-v1`, not
-simply any date without a reviewer. The date itself conveys its precision,
-without a separate `day`, `month`, or `year` label.
+Calendar leaves automatic dates unlabeled. Previously accepted dates keep a
+manila chip and reviewed dates a green one. **From the document** holds matching
+text and **Model confidence**. Automatic still means accepted without review
+under `threshold-auto-v1`, not merely a missing reviewer.
 
 Rescanning replaces pending model suggestions, not accepted or rejected dates.
 New suggestion IDs are never reused. Older pending suggestions without a
@@ -155,52 +154,32 @@ not live model results and do not show **Model confidence**. Its default
 Calendar lists all example dates across months and years. Model calls,
 date extraction, and date review remain unavailable to demo visitors.
 
-Calendar shows reviewed dates alongside previously accepted dates. It
-supports:
+Calendar pairs a grid with a date-grouped agenda. It defaults to the current
+fixed month; **30 Days** and **2 Weeks** select rolling ranges beginning today.
+Arrows move one complete month or rolling range, and the current-month control
+resets the default. Range, saved View, and date-role state stays in the URL.
+The **All documents** scope still enforces document access rules.
 
-- a month grid, a full-width day agenda, or an all-dates agenda for
-  document-scoped links;
-- date-role filtering;
-- all accessible documents or one saved View; and
-- direct links back to each document.
+Only exact-day dates populate grid cells. Month-only and year-only dates remain
+in the agenda when their sorting date falls in the range. Research links omit
+range bounds and include all dates.
 
-Calendar always reapplies document access rules. A date cannot reveal a document
-the viewer is not allowed to read.
+### Focus a day's dates
 
-Only exact-day dates appear in day cells. Month-only and year-only dates stay in
-the agenda. Month filtering still uses the stored sorting date: a month-only
-date appears in that month's agenda, and a year-only date in January's agenda.
-It does not repeat a year-only date in every month. Research links below avoid
-this month filter and include all months and years.
-
-### Open a day's dates
-
-Select a day number in the month grid to open its full-width agenda. This lists
-every exact-day date for that day, keeping the selected **Document view** and
-**Date role**. Month/year placeholders never appear as dates on the first day.
-More than 500 matching facts use **Previous** and **Next** pages.
-
-**Back to Month YYYY** returns to the month you came from with those filters
-intact. Calendar keeps its month, selected day, View, and role in the URL, so
-reload and browser Back/Forward retain that context. A day agenda can be linked
-directly, for example `#/calendar?month=2026-08&date=2026-08-06&role=due`.
+Selecting a day highlights its cell and scrolls the adjacent feed to its full
+group without changing the URL, filters, or query. A direct exact-day URL instead
+opens a paged full-width agenda, for example
+`#/calendar?date=2026-08-06&role=due`; **Back to Calendar** returns to the current
+month with View and role intact.
 
 ### Dates linked from Ask your documents
 
-**Open N calendar dates** in Ask your documents opens an agenda for all documents
-found for that answer, across every month and year. The banner reads **Dates
-from N selected documents · All months and years**. Entries appear in
-chronological order with the full year, document, and supporting text. The
-document count in the banner is separate from the number of dates.
-
-**Date role** still filters the agenda. The month controls and **Document view**
-selector are hidden because the link already names the exact documents. Opening
-a different exact-document link clears the previous saved View, date role, and
-page. More than 500 matching dates use **Previous** and **Next** pages; they are
-not limited to the current month.
-
-**Open full calendar** removes the exact-document filter and returns to the
-unfiltered current-month grid.
+**Open N calendar dates** opens every accepted date for the answer's documents.
+The **Dates from N selected documents · All dates** banner counts documents,
+not dates. **Date role** still filters the agenda; range controls and **Document
+view** stay hidden because the route already names the documents. Results over
+500 use **Previous** and **Next**. **Open full calendar** clears the document
+scope and returns to the current fixed month.
 
 ### Add a reviewed date to another calendar
 

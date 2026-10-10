@@ -965,7 +965,7 @@
 
 <style>
   .automations-page {
-    width: min(100%, 1080px);
+    width: min(100%, 1240px);
     margin: 0 auto;
   }
   .page-error { margin-bottom: 12px; }

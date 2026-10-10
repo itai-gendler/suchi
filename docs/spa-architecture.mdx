@@ -262,13 +262,18 @@ available content height, fixes the preview and detail sidebar to the same
 bounds, and gives overflow ownership to the sidebar. Narrow layouts retain
 normal document flow.
 
-Calendar derives `month`, `date`, `view_id`, `role` and document scope from the
-hash. `document_ids` opens an all-dates agenda; ordinary routes use the month grid.
-Day links preserve originating month/View/role. Exact-day requests use equal date
-bounds and `precision=day`; filtering precedes server counts/pagination. Day and
-all-dates agendas page by 500; research links omit month bounds and reset prior
-scope. `lib/intelligence.js` preserves recorded precision; partial dates never
-populate day cells. [Document dates](/document-dates) owns review/display behavior.
+Calendar derives `month`, `start`, `days`, `date`, `view_id`, `role` and
+document scope from the hash. It defaults to the browser's current local month;
+`days=30` and `days=14` use rolling ranges beginning at `start` or today. Range
+navigation preserves View/role, and the current-month link resets the default.
+Calendar uses `RuleWorkspace.svelte` and the 1,240-pixel cap shared by Views and
+Automations. Grid selection is local UI state: it highlights a day and scrolls
+the adjacent grouped feed without a request.
+
+`document_ids` opens an all-dates agenda. Exact-day requests use equal bounds
+and `precision=day`; exact-day and all-dates agendas page by 500.
+`lib/intelligence.js` preserves precision, so partial dates never populate day
+cells. [Document dates](/document-dates) owns review/display behavior.
 
 Calendar exports use `lib/calendarExport.js` for explicitly requested, reviewed
 exact-day `.ics` files: escape text, fold UTF-8 lines, preserve stable event IDs
@@ -543,12 +548,12 @@ resolution reports queued work rather than claiming the field changed. Date
 mutation results clear only successful rows; failures remain distinguishable
 and refreshable.
 
-`Calendar.svelte` preserves accepted facts and distinguishes reviewed, automatic
-and previously accepted legacy values. **Automatic** requires accepted status,
-no human review and `policy_version=threshold-auto-v1`; missing reviewer alone
-is not enough. New inference follows current mode and threshold, never a bulk
-promotion on settings save. Local ICS export remains reviewed-only and exact-day.
-These screens reuse the existing tasks, intelligence and document APIs.
+`Calendar.svelte` preserves accepted facts and recognizes reviewed, automatic
+and previously accepted legacy values. Automatic dates are unlabeled; the other
+states retain distinct chips. Automatic acceptance still requires no human
+review and `policy_version=threshold-auto-v1`. Evidence and confidence remain
+behind **From the document**; local ICS export remains reviewed-only and
+exact-day. These screens reuse the tasks, intelligence and document APIs.
 
 ## Security
 
