@@ -154,6 +154,12 @@
     }
     return [...fields.values()].sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')))
   })
+  const displayedOrdinaryCustomFields = $derived(ordinaryCustomFields.filter(field =>
+    field.is_set || customFieldEditors[field.field_id]?.open
+  ))
+  const availableOrdinaryCustomFields = $derived(ordinaryCustomFields.filter(field =>
+    !field.is_set && !customFieldEditors[field.field_id]?.open
+  ))
   const documentLinkFields = $derived.by(() => {
     const fields = new Map()
     for (const field of customFieldDefinitions) {
@@ -459,6 +465,14 @@
       busy: false,
       error: '',
     })
+  }
+
+  function addCustomField(event) {
+    const fieldID = Number(event.currentTarget.value)
+    event.currentTarget.value = ''
+    if (!fieldID) return
+    const field = ordinaryCustomFields.find(candidate => Number(candidate.field_id) === fieldID)
+    if (field) startCustomFieldEdit(field)
   }
 
   function customFieldValueReady(field, editor) {
@@ -1431,7 +1445,7 @@
             <dt>Correspondents</dt>
             <dd>{#each doc.correspondents as c}<span class="pill" style="margin-right:5px">{c.name} · {c.role}</span>{/each}</dd>
           {/if}
-          {#each ordinaryCustomFields as field (field.field_id)}
+          {#each displayedOrdinaryCustomFields as field (field.field_id)}
             {@const editor = customFieldEditors[field.field_id]}
             <dt>{field.name}</dt>
             <dd class="custom-field-value">
@@ -1494,6 +1508,17 @@
               {/if}
             </dd>
           {/each}
+          {#if !trashed && availableOrdinaryCustomFields.length}
+            <dt>Custom fields</dt>
+            <dd class="custom-field-add">
+              <select class="input" aria-label="Add custom field" value="" onchange={addCustomField}>
+                <option value="">Add custom field…</option>
+                {#each availableOrdinaryCustomFields as field (field.field_id)}
+                  <option value={field.field_id}>{field.name}</option>
+                {/each}
+              </select>
+            </dd>
+          {/if}
           <dt>Languages</dt>
           <dd>
             {#if editingLanguages}
@@ -2091,6 +2116,7 @@
   .tag-actions :global(.tag-picker) { flex:1 1 140px }
   .inline-state { display:flex; align-items:center; justify-content:space-between; gap:10px; }
   .custom-field-value { min-width:0; }
+  .custom-field-add .input { width:100%; max-width:none; padding:4px 8px; font-size:.8rem; }
   .custom-field-editor { display:grid; gap:7px; width:100%; }
   .custom-field-editor > .input { width:100%; max-width:none; }
   .custom-field-actions { display:flex; align-items:center; flex-wrap:wrap; gap:6px; }

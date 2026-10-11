@@ -228,7 +228,8 @@ shows Notes read-only. Opening another live document resets selection to the
 first tab. Outgoing custom-field values and the independently paged backlink
 projection remain separate state and operations. [Document detail, versions and
 links](/document-versions-and-links) owns their user-facing vocabulary and
-semantic contract. Ordinary typed custom fields remain in the metadata card.
+semantic contract. Populated ordinary custom fields remain in the metadata card;
+unset definitions stay behind its single add-field selector.
 
 `api.js:uploadDocumentVersion` uses private multipart assembly so `source_mtime`
 and the caller's idempotency key are preserved. The screen keeps the selected

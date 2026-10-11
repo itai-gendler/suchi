@@ -286,9 +286,10 @@ their structured data extracted and written to custom fields:
 | `invoice_seller_vat`  | `SellerTradeParty/SpecifiedTaxRegistration[VA]` (BT-31) | text     |
 | `invoice_buyer`       | `BuyerTradeParty/Name` (BT-44)                          | text     |
 
-The custom field rows are created lazily on the first successful
-extraction — a stock install without any e-invoices doesn't clutter
-the fields table.
+The definitions are created lazily for that filing system on its first
+successful e-invoice extraction. Document Detail shows extracted values on the
+matching invoice; unused definitions remain available through its add-field
+selector instead of appearing as empty rows on every document.
 
 Recognised attachment names (case-insensitive): `factur-x.xml`,
 `zugferd-invoice.xml`, `xrechnung.xml`.

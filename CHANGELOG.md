@@ -36,6 +36,9 @@ Notable user-visible changes to Suchi are recorded here.
   **2 Weeks** ranges, and keeps its controls, grid, and date feed in one wider
   workspace. Day selection scrolls the feed; automatic dates omit a redundant
   status label. Views and Automations now match Calendar's workspace width.
+- Document Detail now shows custom fields only when they have values. Unset
+  definitions remain available through one **Add custom field** selector instead
+  of filling every document with **Not set** rows.
 
 ## [0.2.1] - 2026-10-10
 
