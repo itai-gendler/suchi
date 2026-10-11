@@ -22,6 +22,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/johnnybravo-xyz/suchi/core/pipeline/zugferd"
 )
 
 // CustomFieldRow is the JSON projection of a custom_fields row.
@@ -30,6 +32,7 @@ type CustomFieldRow struct {
 	Name      string `json:"name"`
 	DataType  string `json:"data_type"`
 	ExtraData string `json:"extra_data,omitempty"` // raw JSON string; unparsed
+	ManagedBy string `json:"managed_by,omitempty"`
 	CreatedAt int64  `json:"created_at"`
 	UpdatedAt int64  `json:"updated_at"`
 }
@@ -51,8 +54,10 @@ var customFieldTypes = map[string]bool{
 }
 
 var (
-	errCustomFieldTypeInUse   = errors.New("custom field data type is in use")
-	errCustomFieldChoiceInUse = errors.New("custom field choice is in use")
+	errCustomFieldTypeInUse    = errors.New("custom field data type is in use")
+	errCustomFieldChoiceInUse  = errors.New("custom field choice is in use")
+	errCustomFieldManaged      = errors.New("custom field is managed by a pipeline")
+	errCustomFieldNameReserved = errors.New("custom field name is reserved by a pipeline")
 )
 
 type customFieldInputError struct {
@@ -134,7 +139,7 @@ func (s *Server) ListCustomFieldDefs(w http.ResponseWriter, r *http.Request) {
 		order = "name ASC"
 	}
 	rows, err := s.DB.Read.QueryContext(r.Context(), `
-		SELECT id, name, data_type, extra_data, created_at, updated_at
+		SELECT id, name, data_type, extra_data, managed_by, created_at, updated_at
 		FROM custom_fields WHERE system_id = ?
 		ORDER BY `+order+`
 		LIMIT ? OFFSET ?
@@ -147,7 +152,7 @@ func (s *Server) ListCustomFieldDefs(w http.ResponseWriter, r *http.Request) {
 	var out []CustomFieldRow
 	for rows.Next() {
 		var v CustomFieldRow
-		if err := rows.Scan(&v.ID, &v.Name, &v.DataType, &v.ExtraData,
+		if err := rows.Scan(&v.ID, &v.Name, &v.DataType, &v.ExtraData, &v.ManagedBy,
 			&v.CreatedAt, &v.UpdatedAt); err != nil {
 			s.serverErr(w, "custom_fields.scan", err)
 			return
@@ -183,6 +188,12 @@ func (s *Server) CreateCustomFieldDef(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, http.StatusBadRequest, "missing_name", "name is required")
 		return
 	}
+	name := strings.TrimSpace(*in.Name)
+	if zugferd.IsInvoiceFieldName(name) {
+		s.writeError(w, http.StatusConflict, "managed_field_name",
+			"that name is reserved for e-invoice extraction")
+		return
+	}
 	if in.DataType == nil || !customFieldTypes[*in.DataType] {
 		s.writeError(w, http.StatusBadRequest, "bad_data_type",
 			"data_type must be one of text, number, date, bool, select, multi, url, monetary, documentlink")
@@ -213,7 +224,7 @@ func (s *Server) CreateCustomFieldDef(w http.ResponseWriter, r *http.Request) {
 		res, err := tx.ExecContext(r.Context(), `
 			INSERT INTO custom_fields(system_id, name, data_type, extra_data, created_at, updated_at)
 			VALUES (?, ?, ?, ?, ?, ?)
-		`, systemID, strings.TrimSpace(*in.Name), *in.DataType, extra, now, now)
+		`, systemID, name, *in.DataType, extra, now, now)
 		if err != nil {
 			return err
 		}
@@ -278,14 +289,22 @@ func (s *Server) UpdateCustomFieldDef(w http.ResponseWriter, r *http.Request) {
 		if current.Role != "admin" {
 			return errNotFound
 		}
-		var currentType, currentExtra string
-		if err := tx.QueryRowContext(r.Context(),
-			`SELECT data_type, extra_data FROM custom_fields WHERE id = ? AND system_id = ?`,
-			id, systemID).Scan(&currentType, &currentExtra); err != nil {
+		var currentType, currentExtra, managedBy string
+		if err := tx.QueryRowContext(r.Context(), `
+			SELECT data_type, extra_data, managed_by
+			FROM custom_fields
+			WHERE id = ? AND system_id = ?
+		`, id, systemID).Scan(&currentType, &currentExtra, &managedBy); err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				return errNotFound
 			}
 			return err
+		}
+		if managedBy != "" {
+			return errCustomFieldManaged
+		}
+		if in.Name != nil && zugferd.IsInvoiceFieldName(*in.Name) {
+			return errCustomFieldNameReserved
 		}
 
 		nextType := currentType
@@ -392,6 +411,12 @@ func (s *Server) UpdateCustomFieldDef(w http.ResponseWriter, r *http.Request) {
 	case errors.Is(err, errCustomFieldChoiceInUse):
 		s.writeError(w, http.StatusConflict, "choice_in_use", "choices in use by documents cannot be removed")
 		return
+	case errors.Is(err, errCustomFieldManaged):
+		s.writeError(w, http.StatusConflict, "managed_field", "pipeline-managed custom fields cannot be changed")
+		return
+	case errors.Is(err, errCustomFieldNameReserved):
+		s.writeError(w, http.StatusConflict, "managed_field_name", "that name is reserved for e-invoice extraction")
+		return
 	case isUniqueViolation(err):
 		s.writeError(w, http.StatusConflict, "conflict", "a custom field with that name already exists")
 		return
@@ -426,6 +451,18 @@ func (s *Server) DeleteCustomFieldDef(w http.ResponseWriter, r *http.Request) {
 		if current.Role != "admin" {
 			return errNotFound
 		}
+		var managedBy string
+		if err := tx.QueryRowContext(r.Context(),
+			`SELECT managed_by FROM custom_fields WHERE id = ? AND system_id = ?`,
+			id, systemID).Scan(&managedBy); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return errNotFound
+			}
+			return err
+		}
+		if managedBy != "" {
+			return errCustomFieldManaged
+		}
 		res, err := tx.ExecContext(r.Context(),
 			`DELETE FROM custom_fields WHERE id = ?`, id)
 		if err != nil {
@@ -443,6 +480,10 @@ func (s *Server) DeleteCustomFieldDef(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if errors.Is(err, errNotFound) {
 			s.writeError(w, http.StatusNotFound, "not_found", "no such custom field")
+			return
+		}
+		if errors.Is(err, errCustomFieldManaged) {
+			s.writeError(w, http.StatusConflict, "managed_field", "pipeline-managed custom fields cannot be deleted")
 			return
 		}
 		s.serverErr(w, "custom_fields.delete", err)

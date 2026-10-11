@@ -14,13 +14,16 @@
   import { session } from '../lib/session.svelte.js'
 
   let { notify, view = 'people', initialPeople = '', initialMetadata = '' } = $props()
+  let deleteRequest = $state(null)
+  let deleteBusy = $state(false)
+  let activeDelete = null
   const PEOPLE_TABS = ['users', 'groups']
   const tab = $derived(view === 'metadata'
     ? 'metadata'
     : PEOPLE_TABS.includes(initialPeople) ? initialPeople : 'users')
 
   function navigatePeople(nextTab, nextMetadata = 'tags') {
-    if (tagDeleteBusy || taxMutationBusy || tagDeleteRequest) return
+    if (tagDeleteBusy || taxMutationBusy || tagDeleteRequest || deleteBusy || deleteRequest) return
     const section = nextTab === 'metadata' ? 'metadata' : 'users'
     const params = new URLSearchParams({ tab: 'archive', section })
     if (nextTab !== 'metadata') params.set('people', nextTab)
@@ -117,10 +120,8 @@
     try { await createGroup({ name: ngName.trim() }); ngName = ''; notify?.('Group created'); loadGroups() }
     catch (ex) { notify?.(ex.message || 'Could not create the group') }
   }
-  async function rmGroup(g) {
-    if (!confirm(`Delete group “${g.name}”? Its members will be removed. Shared access must be revoked first.`)) return
-    try { await deleteGroup(g.id); groups = groups.filter(x => x.id !== g.id); notify?.('Group deleted') }
-    catch (ex) { notify?.(ex.code === 'delete_conflict' ? 'This group is still used for shared access. Revoke those grants before deleting it.' : (ex.message || 'Could not delete')) }
+  function rmGroup(group) {
+    requestDelete('group', group)
   }
   async function toggleMembers(g) {
     if (openGroup?.id === g.id) { openGroup = null; return }
@@ -203,17 +204,17 @@
       loadFields()
     } catch (ex) { notify?.(ex.message || 'Could not create the field') }
   }
-  async function renameField(f, name) {
-    if (!name.trim() || name === f.name) return
-    try { await patchCustomField(f.id, { name: name.trim() }); f.name = name.trim(); notify?.('Renamed') }
+  async function renameField(field, name) {
+    if (field.managed_by || !name.trim() || name === field.name) return
+    try { await patchCustomField(field.id, { name: name.trim() }); field.name = name.trim(); notify?.('Renamed') }
     catch (ex) { notify?.(ex.message || 'Could not rename') }
   }
-  async function rmField(f) {
-    if (!confirm(`Delete field “${f.name}”? Values on documents are removed.`)) return
-    try { await deleteCustomField(f.id); fields = fields.filter(x => x.id !== f.id); notify?.('Field deleted') }
-    catch (ex) { notify?.(ex.message || 'Could not delete') }
+  function rmField(field) {
+    if (field.managed_by) return
+    requestDelete('custom_field', field)
   }
   async function saveFieldChoices(field) {
+    if (field.managed_by) return
     const choices = normalizedChoices(fieldChoiceDrafts[field.id] || '')
     if (!choices.length || fieldChoiceBusy != null) return
     fieldChoiceBusy = field.id
@@ -369,15 +370,90 @@
     } catch (ex) { if (scopeCurrent(scope) && kind === taxon) notify?.(ex.message || 'Could not rename') }
     finally { taxMutationBusy = false }
   }
-  async function rmTaxon(row) {
+  function rmTaxon(row) {
     if (taxon === 'tags') { requestTagDelete([row.id], row.name); return }
-    if (!confirm(`Delete “${row.name}”? Documents keep working; the label goes away.`)) return
-    try { await deleteTaxon(taxon, row.id); taxRows = taxRows.filter(x => x.id !== row.id); notify?.('Deleted') }
-    catch (ex) { notify?.(ex.message || 'Could not delete (in use?)') }
+    requestDelete('taxon', row, taxon)
+  }
+
+  function requestDelete(kind, item, metadataKind = '') {
+    if (deleteBusy || deleteRequest) return
+    deleteRequest = { kind, item, metadataKind, scope: captureScope() }
+  }
+
+  function deleteRequestIsCurrent(request) {
+    if (!request || !scopeCurrent(request.scope) || request.scope.code !== systems.code) return false
+    if (request.kind === 'group') return tab === 'groups'
+    if (request.kind === 'custom_field') return tab === 'metadata' && taxon === 'custom_fields'
+    return request.kind === 'taxon' && tab === 'metadata' && taxon === request.metadataKind
+  }
+
+  const deleteDialog = $derived.by(() => {
+    const request = deleteRequest
+    if (!request) return null
+    if (request.kind === 'group') return {
+      title: `Delete group “${request.item.name}”?`,
+      message: 'Its members will be removed. Shared access must be revoked first.',
+      confirmLabel: 'Delete group',
+    }
+    if (request.kind === 'custom_field') return {
+      title: `Delete field “${request.item.name}”?`,
+      message: 'Its values will be removed from every document. This cannot be undone.',
+      confirmLabel: 'Delete field',
+    }
+    return {
+      title: `Delete “${request.item.name}”?`,
+      message: 'Documents keep working, but this label will be removed.',
+      confirmLabel: 'Delete correspondent',
+    }
+  })
+
+  async function confirmDelete() {
+    const request = deleteRequest
+    if (!deleteRequestIsCurrent(request) || deleteBusy) {
+      if (request === deleteRequest) deleteRequest = null
+      return
+    }
+    deleteBusy = true
+    activeDelete = request
+    try {
+      if (request.kind === 'group') {
+        await deleteGroup(request.item.id)
+        if (deleteRequestIsCurrent(request)) {
+          groups = groups.filter(group => group.id !== request.item.id)
+          notify?.('Group deleted')
+        }
+      } else if (request.kind === 'custom_field') {
+        await deleteCustomField(request.item.id)
+        if (deleteRequestIsCurrent(request)) {
+          fields = fields.filter(field => field.id !== request.item.id)
+          notify?.('Field deleted')
+        }
+      } else {
+        await deleteTaxon(request.metadataKind, request.item.id)
+        if (deleteRequestIsCurrent(request)) {
+          taxRows = taxRows.filter(row => row.id !== request.item.id)
+          notify?.('Deleted')
+        }
+      }
+    } catch (ex) {
+      if (deleteRequestIsCurrent(request)) {
+        if (request.kind === 'group' && ex.code === 'delete_conflict') {
+          notify?.('This group is still used for shared access. Revoke those grants before deleting it.')
+        } else {
+          notify?.(ex.message || (request.kind === 'taxon' ? 'Could not delete (in use?)' : 'Could not delete'))
+        }
+      }
+    } finally {
+      if (deleteRequest === request) deleteRequest = null
+      if (activeDelete === request) {
+        activeDelete = null
+        deleteBusy = false
+      }
+    }
   }
 
   $effect(() => {
-    const context = `${tab === 'metadata' ? taxon : ''}:${systems.generation}:${systems.code}`
+    const context = `${tab}:${tab === 'metadata' ? taxon : ''}:${systems.generation}:${systems.code}`
     // A pending request keeps its captured scope; a new panel must not receive its result.
     if (context) {
       selectedTagIDs = new Set()
@@ -385,6 +461,7 @@
       tagDeleteError = ''
       tagDeleteSuccess = ''
       tagDeleteRequest = null
+      deleteRequest = null
       activeTagDelete = null
       tagDeleteBusy = false
     }
@@ -496,8 +573,8 @@
           <div class="group-entry">
             <div class="irow">
               <span class="title grow">{g.name}</span>
-              <button class="btn sm" onclick={() => toggleMembers(g)} aria-expanded={openGroup?.id === g.id} aria-controls={`group-members-${g.id}`}>{openGroup?.id === g.id ? 'Hide members' : 'Members'}</button>
-              <button class="btn sm danger" onclick={() => rmGroup(g)} title="Delete group" aria-label={`Delete ${g.name}`}><Icon name="trash" size={13} /></button>
+              <button class="btn sm" disabled={deleteBusy || !!deleteRequest} onclick={() => toggleMembers(g)} aria-expanded={openGroup?.id === g.id} aria-controls={`group-members-${g.id}`}>{openGroup?.id === g.id ? 'Hide members' : 'Members'}</button>
+              <button class="btn sm danger" disabled={deleteBusy || !!deleteRequest} onclick={() => rmGroup(g)} title="Delete group" aria-label={`Delete ${g.name}`}><Icon name="trash" size={13} /></button>
             </div>
             {#if openGroup?.id === g.id}
               <div class="group-members" id={`group-members-${g.id}`}>
@@ -540,7 +617,7 @@
   <header class="panel-heading metadata-heading">
     <div><h3>Metadata</h3><p>Manage the labels and extra details used on documents in this filing system.</p></div>
     <label class="field">Metadata type
-      <select class="input" value={taxon} disabled={tagDeleteBusy || taxMutationBusy || !!tagDeleteRequest} onchange={(event) => navigatePeople('metadata', event.currentTarget.value)}>
+      <select class="input" value={taxon} disabled={tagDeleteBusy || taxMutationBusy || !!tagDeleteRequest || deleteBusy || !!deleteRequest} onchange={(event) => navigatePeople('metadata', event.currentTarget.value)}>
         {#each TAXA as t}<option value={t.kind}>{t.label}</option>{/each}
       </select>
     </label>
@@ -607,13 +684,28 @@
       {:else if !fieldsLoaded || fieldsLoading}
         <p class="quiet" role="status">Loading custom fields…</p>
       {:else}
+        {#if fields.some(field => field.managed_by)}
+          <p class="managed-field-help">Managed fields are required by document extraction. Their definitions cannot be renamed or deleted.</p>
+        {/if}
         <div class="index">
           {#each fields as f (f.id)}
             <div class="field-entry">
               <div class="irow">
-                <span class="grow"><input class="inline-edit" aria-label={`Rename ${f.name}`} value={f.name} onchange={(e) => renameField(f, e.target.value)} /></span>
+                <span class="grow">
+                  <input class="inline-edit"
+                         aria-label={f.managed_by ? `${f.name} (managed)` : `Rename ${f.name}`}
+                         title={f.managed_by ? 'Required by e-invoice extraction' : ''}
+                         value={f.name}
+                         readonly={!!f.managed_by}
+                         onchange={(e) => renameField(f, e.target.value)} />
+                </span>
                 <span class="pill">{FIELD_TYPES[f.data_type] || f.data_type}</span>
-                <button class="btn sm danger" onclick={() => rmField(f)} title="Delete field" aria-label={`Delete ${f.name}`}><Icon name="trash" size={13} /></button>
+                {#if f.managed_by}
+                  <span class="pill managed-field-pill">Managed</span>
+                {:else}
+                  <button class="btn sm danger" disabled={deleteBusy || !!deleteRequest}
+                          onclick={() => rmField(f)} title="Delete field" aria-label={`Delete ${f.name}`}><Icon name="trash" size={13} /></button>
+                {/if}
               </div>
               {#if f.data_type === 'select' || f.data_type === 'multi'}
                 <div class="choice-editor">
@@ -621,10 +713,10 @@
                     <textarea class="input" rows="3" aria-label={`Choices for ${f.name}`}
                               value={fieldChoiceDrafts[f.id] || ''}
                               oninput={(event) => (fieldChoiceDrafts = { ...fieldChoiceDrafts, [f.id]: event.currentTarget.value })}
-                              disabled={fieldChoiceBusy != null}></textarea>
+                              disabled={!!f.managed_by || fieldChoiceBusy != null}></textarea>
                   </label>
                   <button class="btn sm" type="button"
-                          disabled={fieldChoiceBusy != null || !normalizedChoices(fieldChoiceDrafts[f.id] || '').length}
+                          disabled={!!f.managed_by || fieldChoiceBusy != null || !normalizedChoices(fieldChoiceDrafts[f.id] || '').length}
                           onclick={() => saveFieldChoices(f)}>
                     {fieldChoiceBusy === f.id ? 'Saving…' : 'Save choices'}
                   </button>
@@ -651,11 +743,11 @@
             {/if}
             <span class="dot" style={row.color ? `background:${row.color}` : ''}></span>
             <span class="grow"><input class="inline-edit" aria-label={`Rename ${row.name}`} value={row.name}
-                                    disabled={tagDeleteBusy || taxMutationBusy || !!tagDeleteRequest}
+                                    disabled={tagDeleteBusy || taxMutationBusy || !!tagDeleteRequest || deleteBusy || !!deleteRequest}
                                     onchange={(e) => renameTaxon(row, e.target.value)} /></span>
             {#if row.child_count}<span class="quiet">{row.child_count} children</span>{/if}
             {#if row.document_count != null}<span class="quiet">{row.document_count} docs</span>{/if}
-            <button class="btn sm danger" disabled={tagDeleteBusy || taxMutationBusy || !!tagDeleteRequest}
+            <button class="btn sm danger" disabled={tagDeleteBusy || taxMutationBusy || !!tagDeleteRequest || deleteBusy || !!deleteRequest}
                     onclick={() => rmTaxon(row)} title="Delete entry" aria-label={`Delete ${row.name}`}><Icon name="trash" size={13} /></button>
           </div>
         {:else}
@@ -666,6 +758,17 @@
   </section>
 {/if}
 </div>
+
+{#if deleteRequest && deleteDialog}
+  <ConfirmDialog
+    title={deleteDialog.title}
+    message={deleteDialog.message}
+    confirmLabel={deleteDialog.confirmLabel}
+    busyLabel="Deleting…"
+    busy={deleteBusy}
+    onConfirm={confirmDelete}
+    onCancel={() => (deleteRequest = null)} />
+{/if}
 
 {#if tagDeleteRequest}
   <ConfirmDialog
@@ -696,6 +799,9 @@
   .choice-field { display:grid; gap:6px; margin-top:14px; }
   .choice-field textarea, .choice-editor textarea { width:100%; max-width:none; resize:vertical; line-height:1.4; }
   .choice-field small { color:var(--muted); font-size:.7rem; font-weight:400; }
+  .managed-field-help { margin:0 0 10px; color:var(--muted); font-size:.78rem; }
+  .managed-field-pill { color:var(--accent); background:var(--tint); }
+  .field-entry .inline-edit[readonly] { color:var(--muted); cursor:default; }
   .field-entry { border-bottom:1px solid var(--line); }
   .field-entry:last-child { border-bottom:0; }
   .field-entry > .irow { border-bottom:0; }

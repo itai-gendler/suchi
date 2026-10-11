@@ -39,6 +39,9 @@ Notable user-visible changes to Suchi are recorded here.
 - Document Detail now shows custom fields only when they have values. Unset
   definitions remain available through one **Add custom field** selector instead
   of filling every document with **Not set** rows.
+- Factur-X, ZUGFeRD, and XRechnung invoice fields are now marked as
+  extraction-managed definitions, so they cannot be renamed or deleted. Destructive
+  actions now use Suchi confirmation dialogs instead of browser popups.
 
 ## [0.2.1] - 2026-10-10
 

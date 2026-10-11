@@ -203,6 +203,67 @@ func TestCustomFieldDefinitionProtectsTypedValuesAndActiveChoices(t *testing.T) 
 	}
 }
 
+func TestCustomFieldDefinitionProtectsPipelineManagedFields(t *testing.T) {
+	s, mux := newSystemsBoundaryServer(t)
+	seedSystemsBoundary(t, s)
+	if _, err := s.DB.Write.Exec(`
+		INSERT INTO custom_fields(
+			id, system_id, name, data_type, extra_data, managed_by, created_at, updated_at
+		)
+		VALUES(122, 1, 'invoice_number', 'text', '{}', 'zugferd', 0, 0)
+	`); err != nil {
+		t.Fatal(err)
+	}
+
+	listed := systemsBoundaryRequest(mux, "GET", "/api/custom_fields/?system=S01", "", adminPrincipal(1))
+	if listed.Code != http.StatusOK || !bytes.Contains(listed.Body.Bytes(), []byte(`"managed_by":"zugferd"`)) {
+		t.Fatalf("list managed field: status=%d body=%s", listed.Code, listed.Body.String())
+	}
+
+	assertError := func(method, path, body, code string) {
+		t.Helper()
+		response := systemsBoundaryRequest(mux, method, path, body, adminPrincipal(1))
+		var problem struct {
+			Code string `json:"code"`
+		}
+		if err := json.Unmarshal(response.Body.Bytes(), &problem); err != nil {
+			t.Fatalf("%s %s: decode %q: %v", method, path, response.Body.String(), err)
+		}
+		if response.Code != http.StatusConflict || problem.Code != code {
+			t.Fatalf("%s %s: status=%d code=%q body=%s; want %d %q",
+				method, path, response.Code, problem.Code, response.Body.String(),
+				http.StatusConflict, code)
+		}
+	}
+
+	assertError("PATCH", "/api/custom_fields/122?system=S01",
+		`{"name":"invoice_id"}`, "managed_field")
+	assertError("DELETE", "/api/custom_fields/122?system=S01", "", "managed_field")
+	assertError("POST", "/api/custom_fields/?system=S01",
+		`{"name":"invoice_date","data_type":"date"}`, "managed_field_name")
+	caseVariant := systemsBoundaryRequest(mux, http.MethodPost,
+		"/api/custom_fields/?system=S01",
+		`{"name":"Invoice_Date","data_type":"date"}`, adminPrincipal(1))
+	if caseVariant.Code != http.StatusCreated {
+		t.Fatalf("create case-distinct custom field: status=%d body=%s",
+			caseVariant.Code, caseVariant.Body.String())
+	}
+
+	if _, err := s.DB.Write.Exec(`UPDATE custom_fields SET name='invoice_id' WHERE id=122`); err == nil {
+		t.Fatal("database accepted a managed custom field rename")
+	}
+	if _, err := s.DB.Write.Exec(`DELETE FROM custom_fields WHERE id=122`); err == nil {
+		t.Fatal("database accepted a managed custom field deletion")
+	}
+	var name string
+	if err := s.DB.Read.QueryRow(`SELECT name FROM custom_fields WHERE id=122`).Scan(&name); err != nil {
+		t.Fatal(err)
+	}
+	if name != "invoice_number" {
+		t.Fatalf("managed field name = %q, want invoice_number", name)
+	}
+}
+
 func mustJSON(t *testing.T, v any) []byte {
 	t.Helper()
 	b, err := json.Marshal(v)

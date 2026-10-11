@@ -44,6 +44,8 @@ var coreAfterExtensionObjects = []string{
 	"automation_triggers",
 	"automation_triggers_filter_tag_id_insert",
 	"automation_triggers_filter_tag_id_update",
+	"custom_fields_managed_delete",
+	"custom_fields_managed_immutable",
 	"document_correspondents_revision_delete",
 	"document_correspondents_revision_insert",
 	"document_correspondents_revision_update",

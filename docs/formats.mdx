@@ -88,8 +88,11 @@ Detail per step (matching the boxes above):
   the engine is `ocrmypdf` it also writes a searchable-PDF archive
   into `documents.archive_blob`.
 - **zugferd** — `qpdf --list-attachments` → `--show-attachment` → CII
-  XML parse. Emits `invoice_*` custom fields when a Factur-X /
-  XRechnung attachment is present.
+  XML parse. A Factur-X / ZUGFeRD / XRechnung attachment populates the managed
+  `invoice_number`, `invoice_date`, `invoice_currency`, `invoice_total_gross`,
+  `invoice_total_net`, `invoice_seller`, `invoice_seller_vat`, and
+  `invoice_buyer` custom fields. Their definitions cannot be renamed or deleted;
+  document values remain editable.
 
 Each step degrades independently. Missing `pdftotext` retains accepted device
 text or falls through to server OCR. Without accepted text or an available

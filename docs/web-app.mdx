@@ -333,6 +333,10 @@ list refreshes during/after pairing and on window focus. **Revoke**, or signing
 out in the app, removes the connection; generating, cancelling or expiring a
 code creates no device entry.
 
+Token, mobile-app, saved-password, mailbox, metadata, View, and Automation
+removals use an in-app confirmation dialog; Suchi does not open browser
+confirmation popups.
+
 Pairing/token rows retain their system binding; changing systems requires a new
 pairing. Membership removal revokes system credentials/shares permanently. Manual
 connections stay under **API tokens**.
@@ -362,7 +366,9 @@ administrator role; it does not find or merge a returning account.
 **Metadata** manages tags, correspondents, and custom fields through one type
 selector. Metadata types have navigable URLs, so reload and Back/Forward restore
 the selected catalog. Metadata is scoped to the current filing system; People is
-server-wide.
+server-wide. Custom fields marked **Managed** are required by document extraction:
+their definitions are read-only and cannot be deleted, while their per-document
+values remain editable.
 
 **Filing tree** owns presets, custom tree construction, and taxonomy
 import/export. Preview precedes taxonomy Apply; export explicitly offers starter

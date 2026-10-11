@@ -6,6 +6,37 @@ ALTER TABLE documents ADD COLUMN title_owner TEXT NOT NULL DEFAULT 'auto'
 ALTER TABLE share_links ADD COLUMN visibility TEXT NOT NULL DEFAULT 'network'
     CHECK (visibility IN ('network', 'public'));
 
+ALTER TABLE custom_fields ADD COLUMN managed_by TEXT NOT NULL DEFAULT ''
+    CHECK (managed_by IN ('', 'zugferd'));
+
+-- Fields created by e-invoice extraction are part of that pipeline's storage
+-- contract. Adopt matching rows from existing archives without claiming a
+-- conflicting user-defined field whose type would break extraction.
+UPDATE custom_fields
+SET managed_by = 'zugferd'
+WHERE (name = 'invoice_number'      AND data_type = 'text')
+   OR (name = 'invoice_date'        AND data_type = 'date')
+   OR (name = 'invoice_currency'    AND data_type = 'text')
+   OR (name = 'invoice_total_gross' AND data_type = 'monetary')
+   OR (name = 'invoice_total_net'   AND data_type = 'monetary')
+   OR (name = 'invoice_seller'      AND data_type = 'text')
+   OR (name = 'invoice_seller_vat'  AND data_type = 'text')
+   OR (name = 'invoice_buyer'       AND data_type = 'text');
+
+CREATE TRIGGER custom_fields_managed_immutable
+BEFORE UPDATE OF name, data_type, extra_data, managed_by ON custom_fields
+WHEN OLD.managed_by <> ''
+ AND (NEW.name IS NOT OLD.name
+      OR NEW.data_type IS NOT OLD.data_type
+      OR NEW.extra_data IS NOT OLD.extra_data
+      OR NEW.managed_by IS NOT OLD.managed_by)
+BEGIN SELECT RAISE(ABORT, 'managed custom field is immutable'); END;
+
+CREATE TRIGGER custom_fields_managed_delete
+BEFORE DELETE ON custom_fields
+WHEN OLD.managed_by <> ''
+BEGIN SELECT RAISE(ABORT, 'managed custom field cannot be deleted'); END;
+
 CREATE TRIGGER share_links_visibility_immutable
 BEFORE UPDATE OF visibility ON share_links
 WHEN NEW.visibility IS NOT OLD.visibility

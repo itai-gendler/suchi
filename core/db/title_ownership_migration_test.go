@@ -93,3 +93,61 @@ func TestTitleOwnershipMigrationBackfillsAndTracksOwnerChanges(t *testing.T) {
 		t.Fatal("invalid title owner accepted")
 	}
 }
+
+func TestProductFoundationsMigrationProtectsExistingInvoiceFields(t *testing.T) {
+	migs, err := db.LoadMigrations(migrations.FS, ".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	d, err := db.Open(t.Context(), filepath.Join(t.TempDir(), "managed-custom-fields.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	if err := db.Migrate(t.Context(), d, migs[:3], log); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.ExecWrite(t.Context(), `
+		INSERT INTO custom_fields(id, system_id, name, data_type, created_at, updated_at)
+		VALUES
+			(20, 1, 'invoice_number', 'text', 0, 0),
+			(21, 1, 'invoice_date', 'text', 0, 0),
+			(22, 1, 'warranty_end', 'date', 0, 0)
+	`); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Migrate(t.Context(), d, migs, log); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, tc := range []struct {
+		id   int64
+		want string
+	}{
+		{20, "zugferd"},
+		{21, ""},
+		{22, ""},
+	} {
+		var got string
+		if err := d.Read.QueryRowContext(t.Context(),
+			`SELECT managed_by FROM custom_fields WHERE id=?`, tc.id).Scan(&got); err != nil {
+			t.Fatal(err)
+		}
+		if got != tc.want {
+			t.Errorf("custom field %d managed_by=%q, want %q", tc.id, got, tc.want)
+		}
+	}
+	if _, err := d.ExecWrite(t.Context(),
+		`UPDATE custom_fields SET name='invoice_id' WHERE id=20`); err == nil {
+		t.Fatal("managed custom field rename succeeded")
+	}
+	if _, err := d.ExecWrite(t.Context(),
+		`DELETE FROM custom_fields WHERE id=20`); err == nil {
+		t.Fatal("managed custom field delete succeeded")
+	}
+	if _, err := d.ExecWrite(t.Context(),
+		`UPDATE custom_fields SET name='legacy_invoice_date' WHERE id=21`); err != nil {
+		t.Fatalf("conflicting user field should remain editable: %v", err)
+	}
+}

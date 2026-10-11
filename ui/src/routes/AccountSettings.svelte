@@ -10,6 +10,7 @@
   import Icon from '../lib/Icon.svelte'
   import EmailChangeDialog from '../lib/EmailChangeDialog.svelte'
   import Lazy from '../lib/Lazy.svelte'
+  import ConfirmDialog from '../lib/ConfirmDialog.svelte'
 
   const loadMailboxes = () => import('../lib/EmailAccounts.svelte')
   const loadMobilePairing = () => import('../lib/MobilePairing.svelte')
@@ -27,6 +28,8 @@
   let loadGeneration = 0
   let loadPending = false
   let disposed = false
+  let destructiveRequest = $state(null)
+  let destructiveBusy = $state(false)
   const demoVisitor = $derived(session.user?.kind === 'demo-anon' || session.user?.kind === 'demo-scratch')
   const accountToolsAvailable = $derived(!profileOnly && !demoVisitor)
   const emailChangeMode = $derived(session.user?.email_change_mode || 'disabled')
@@ -111,6 +114,7 @@
     const available = accountToolsAvailable
     tokens = []
     err = ''
+    destructiveRequest = null
     tokensLoading = !!user && available
     if (user && available) untrack(() => void load())
     return () => {
@@ -152,13 +156,9 @@
       notify?.('Label updated')
     } catch (ex) { notify?.(ex.message || 'Could not rename') }
   }
-  async function removeVault(v) {
-    if (!confirm(`Delete the vault entry${v.label ? ' “' + v.label + '”' : ''}? Docs it already unlocked stay unlocked; future uploads with the same password won't auto-decrypt.`)) return
-    try {
-      await deleteDecryptionPassword(v.id)
-      vault = vault.filter(x => x.id !== v.id)
-      notify?.('Vault entry removed')
-    } catch (ex) { notify?.(ex.message || 'Could not remove') }
+  function removeVault(entry) {
+    if (destructiveBusy || destructiveRequest) return
+    destructiveRequest = { kind: 'vault', item: entry, user: session.user }
   }
 
   async function mint(e) {
@@ -180,20 +180,62 @@
     } catch (ex) { notify?.(ex.message || 'Could not create a token') }
   }
 
-  async function revoke(t) {
-    if (!confirm('Revoke “' + t.name + '”? Anything using it stops working immediately.')) return
-    const user = session.user
-    revoking = [...revoking, t.id]
+  function revoke(token) {
+    if (destructiveBusy || destructiveRequest) return
+    destructiveRequest = { kind: 'token', item: token, user: session.user }
+  }
+
+  const destructiveDialog = $derived.by(() => {
+    const request = destructiveRequest
+    if (!request) return null
+    if (request.kind === 'vault') return {
+      title: `Delete${request.item.label ? ` “${request.item.label}”` : ' saved password'}?`,
+      message: 'Documents already unlocked stay unlocked. Future uploads with the same password will not decrypt automatically.',
+      confirmLabel: 'Delete saved password',
+      busyLabel: 'Deleting…',
+    }
+    const connected = isOwnMobileToken(request.item)
+    return {
+      title: `${connected ? 'Disconnect' : 'Revoke'} “${request.item.name}”?`,
+      message: connected
+        ? 'This mobile app will lose access immediately.'
+        : 'Anything using this token will lose access immediately.',
+      confirmLabel: connected ? 'Disconnect app' : 'Revoke token',
+      busyLabel: connected ? 'Disconnecting…' : 'Revoking…',
+    }
+  })
+
+  async function confirmDestructiveAction() {
+    const request = destructiveRequest
+    if (!request || destructiveBusy || request.user !== session.user) {
+      if (request === destructiveRequest) destructiveRequest = null
+      return
+    }
+    destructiveBusy = true
+    if (request.kind === 'token') revoking = [...revoking, request.item.id]
     try {
-      await deleteToken(t.id)
-      if (disposed || session.user !== user) return
-      tokens = tokens.filter(x => x.id !== t.id)
-      notify?.(isOwnMobileToken(t) ? 'Mobile app disconnected' : 'Token revoked')
-      void load()
+      if (request.kind === 'vault') {
+        await deleteDecryptionPassword(request.item.id)
+        if (disposed || session.user !== request.user) return
+        vault = vault.filter(entry => entry.id !== request.item.id)
+        notify?.('Vault entry removed')
+      } else {
+        await deleteToken(request.item.id)
+        if (disposed || session.user !== request.user) return
+        tokens = tokens.filter(token => token.id !== request.item.id)
+        notify?.(isOwnMobileToken(request.item) ? 'Mobile app disconnected' : 'Token revoked')
+        void load()
+      }
     } catch (ex) {
-      if (!disposed && session.user === user) notify?.(ex.message || 'Could not revoke')
+      if (!disposed && session.user === request.user) {
+        notify?.(ex.message || (request.kind === 'vault' ? 'Could not remove' : 'Could not revoke'))
+      }
     } finally {
-      if (!disposed) revoking = revoking.filter(id => id !== t.id)
+      if (!disposed && request.kind === 'token') {
+        revoking = revoking.filter(id => id !== request.item.id)
+      }
+      if (destructiveRequest === request) destructiveRequest = null
+      if (!disposed) destructiveBusy = false
     }
   }
 
@@ -227,7 +269,7 @@
             <span>{connected ? 'Connected' : 'Created'} {t.created_at ? fmtDate(t.created_at) : '—'}</span>
             {#if connected}<span>{t.last_used_at ? 'Last used ' + fmtDate(t.last_used_at) : 'Not used yet'}</span>{/if}
           </span>
-          <button class="act-quiet" disabled={revoking.includes(t.id)} onclick={() => revoke(t)}>Revoke</button>
+          <button class="act-quiet" disabled={revoking.includes(t.id) || destructiveBusy || !!destructiveRequest} onclick={() => revoke(t)}>Revoke</button>
         </div>
       {/each}
     </div>
@@ -397,7 +439,7 @@
                   {/if}
                 {/if}
               </div>
-              <button class="act-quiet" onclick={() => removeVault(v)} title="Delete saved password" aria-label="Delete saved password">Remove</button>
+              <button class="act-quiet" disabled={destructiveBusy || !!destructiveRequest} onclick={() => removeVault(v)} title="Delete saved password" aria-label="Delete saved password">Remove</button>
             </div>
           {/each}
         </div>
@@ -406,6 +448,17 @@
       {/if}
   </section>
   {/if}
+{#if destructiveRequest && destructiveDialog}
+  <ConfirmDialog
+    title={destructiveDialog.title}
+    message={destructiveDialog.message}
+    confirmLabel={destructiveDialog.confirmLabel}
+    busyLabel={destructiveDialog.busyLabel}
+    busy={destructiveBusy}
+    onConfirm={confirmDestructiveAction}
+    onCancel={() => (destructiveRequest = null)} />
+{/if}
+
 <style>
   .settings-section { --pad:22px; flex:none; container-type:inline-size; background:var(--surface); border:1px solid var(--line); border-radius:var(--r); padding:0; margin:0; overflow:hidden }
   .section-heading { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px 24px; margin:0; padding:13px var(--pad); border-bottom:1px solid var(--line) }

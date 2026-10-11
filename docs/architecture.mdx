@@ -240,8 +240,13 @@ replacement creates no note rows for the new revision.
 
 `core/api/custom_fields.go` owns definitions and protects stored values from
 schema drift: choice fields require normalized choices, a populated field cannot
-change type, and an in-use choice cannot disappear. `core/customfield` remains
-the single validation/write/render dispatch for API values, filesystem sidecars,
+change type, and an in-use choice cannot disappear. `custom_fields.managed_by`
+records extraction-owned definitions. Migration 0004 adopts compatible
+`invoice_*` rows, database triggers reject definition mutation/deletion, and
+`core/pipeline/zugferd` creates or adopts the same typed fields transactionally.
+The API reserves those names and reports managed rows to the UI. Per-document
+values remain ordinary editable typed values. `core/customfield` remains the
+single validation/write/render dispatch for API values, filesystem sidecars,
 automations, and imported values. `document_references.go` projects typed raw
 values, formatted display values, and choice metadata while retaining exact-link
 ACL behavior. `core/searchquery` resolves `field:` against the system-local

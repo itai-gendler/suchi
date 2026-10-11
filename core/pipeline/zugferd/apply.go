@@ -10,14 +10,19 @@ package zugferd
 import (
 	"context"
 	"database/sql"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/johnnybravo-xyz/suchi/core/db"
 )
 
-// InvoiceFieldNames are the custom-field keys we own. Kept as a
-// package constant so tests + operator docs share one source of truth.
-var InvoiceFieldNames = []struct {
+// CustomFieldOwner identifies definitions maintained by e-invoice extraction.
+const CustomFieldOwner = "zugferd"
+
+// invoiceFieldDefinitions are the custom-field keys owned by e-invoice
+// extraction.
+var invoiceFieldDefinitions = [...]struct {
 	Name     string
 	DataType string
 }{
@@ -29,6 +34,18 @@ var InvoiceFieldNames = []struct {
 	{"invoice_seller", "text"},
 	{"invoice_seller_vat", "text"},
 	{"invoice_buyer", "text"},
+}
+
+// IsInvoiceFieldName reports whether name belongs to the e-invoice extraction
+// contract. Names use the same case-sensitive identity as custom_fields.
+func IsInvoiceFieldName(name string) bool {
+	name = strings.TrimSpace(name)
+	for _, field := range invoiceFieldDefinitions {
+		if name == field.Name {
+			return true
+		}
+	}
+	return false
 }
 
 // Apply writes the invoice into document_custom_field_values,
@@ -78,20 +95,29 @@ func Apply(ctx context.Context, d *db.DB, docID int64, inv *Invoice) error {
 	})
 }
 
-// ensureFields creates any missing invoice_* rows in custom_fields and
-// returns the name→id lookup for all of them.
+// ensureFields creates missing invoice_* rows, adopts compatible definitions
+// created before ownership was tracked, and returns the name→id lookup.
 func ensureFields(ctx context.Context, tx *sql.Tx, systemID int64) (map[string]int64, error) {
-	out := make(map[string]int64, len(InvoiceFieldNames))
+	out := make(map[string]int64, len(invoiceFieldDefinitions))
 	now := time.Now().Unix()
-	for _, f := range InvoiceFieldNames {
-		var id int64
-		err := tx.QueryRowContext(ctx,
-			`SELECT id FROM custom_fields WHERE system_id = ? AND name = ?`, systemID, f.Name).Scan(&id)
+	for _, field := range invoiceFieldDefinitions {
+		var (
+			id        int64
+			dataType  string
+			managedBy string
+		)
+		err := tx.QueryRowContext(ctx, `
+			SELECT id, data_type, managed_by
+			FROM custom_fields
+			WHERE system_id = ? AND name = ?
+		`, systemID, field.Name).Scan(&id, &dataType, &managedBy)
 		if err == sql.ErrNoRows {
 			res, err := tx.ExecContext(ctx, `
-				INSERT INTO custom_fields(system_id, name, data_type, created_at, updated_at)
-				VALUES (?, ?, ?, ?, ?)
-			`, systemID, f.Name, f.DataType, now, now)
+				INSERT INTO custom_fields(
+					system_id, name, data_type, managed_by, created_at, updated_at
+				)
+				VALUES (?, ?, ?, ?, ?, ?)
+			`, systemID, field.Name, field.DataType, CustomFieldOwner, now, now)
 			if err != nil {
 				return nil, err
 			}
@@ -101,8 +127,27 @@ func ensureFields(ctx context.Context, tx *sql.Tx, systemID int64) (map[string]i
 			}
 		} else if err != nil {
 			return nil, err
+		} else {
+			if dataType != field.DataType {
+				return nil, fmt.Errorf(
+					"reserved custom field %q has type %q; e-invoice extraction requires %q",
+					field.Name, dataType, field.DataType,
+				)
+			}
+			if managedBy != "" && managedBy != CustomFieldOwner {
+				return nil, fmt.Errorf("custom field %q is managed by %q", field.Name, managedBy)
+			}
+			if managedBy == "" {
+				if _, err := tx.ExecContext(ctx, `
+					UPDATE custom_fields
+					SET managed_by = ?, updated_at = ?
+					WHERE id = ? AND managed_by = ''
+				`, CustomFieldOwner, now, id); err != nil {
+					return nil, err
+				}
+			}
 		}
-		out[f.Name] = id
+		out[field.Name] = id
 	}
 	return out, nil
 }

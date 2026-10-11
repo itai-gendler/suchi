@@ -11,6 +11,7 @@
   import Icon from './Icon.svelte'
   import ISODateInput from './ISODateInput.svelte'
   import OAuthDeviceCodeModal from './OAuthDeviceCodeModal.svelte'
+  import ConfirmDialog from './ConfirmDialog.svelte'
 
   let { mode, account, onClose, notify, viewerRole = 'admin', users = [],
         microsoftOAuth = { ready: false, reason: '' } } = $props()
@@ -122,9 +123,10 @@
   let preview = $state(null)
   let previewError = $state('')
   let intakeRules = $state(seedRules)
+  let confirmAction = $state('')
   const scope = captureScope()
   let disposed = false
-  onDestroy(() => { disposed = true; oauthOpen = false; form.sealed_secret_b64 = ''; form.password = '' })
+  onDestroy(() => { disposed = true; oauthOpen = false; confirmAction = ''; form.sealed_secret_b64 = ''; form.password = '' })
 
   function intakePolicy() {
     return { rules: intakeRules.map((rule) => {
@@ -264,33 +266,37 @@
     } finally { busy = false }
   }
 
-  async function del() {
-    if (!isEdit) return
-    if (!confirm('Delete this mailbox?')) return
+  function del() {
+    if (!isEdit || busy || confirmAction) return
+    confirmAction = 'delete'
+  }
+
+  function revoke() {
+    if (!isEdit || busy || confirmAction) return
+    confirmAction = 'revoke'
+  }
+
+  async function confirmDestructiveAction() {
+    const action = confirmAction
+    if (!isEdit || busy || !action) return
     busy = true
     try {
-      await deleteEmailAccount(account.id)
-      notify?.('Mailbox deleted')
+      if (action === 'delete') {
+        await deleteEmailAccount(account.id)
+        notify?.('Mailbox deleted')
+      } else {
+        await revokeEmailOAuth(account.id)
+        notify?.('Sign-in revoked')
+      }
+      confirmAction = ''
       onClose?.(true)
     } catch (ex) {
-      err = ex.data?.message || ex.message || 'Could not delete.'
+      err = ex.data?.message || ex.message || (action === 'delete' ? 'Could not delete.' : 'Could not revoke.')
+      confirmAction = ''
     } finally { busy = false }
   }
 
-  async function revoke() {
-    if (!isEdit) return
-    if (!confirm('Revoke Microsoft sign-in? The mailbox will be disabled until you sign in again.')) return
-    busy = true
-    try {
-      await revokeEmailOAuth(account.id)
-      notify?.('Sign-in revoked')
-      onClose?.(true)
-    } catch (ex) {
-      err = ex.data?.message || ex.message || 'Could not revoke.'
-    } finally { busy = false }
-  }
-
-  function onKey(e) { if (e.key === 'Escape' && !oauthOpen) onClose?.(false) }
+  function onKey(e) { if (e.key === 'Escape' && !oauthOpen && !confirmAction && !busy) onClose?.(false) }
 
   const providerHelp = $derived(presets[form.provider]?.help || '')
   const microsoftOAuthReady = $derived(microsoftOAuth?.ready === true)
@@ -408,7 +414,7 @@
           <div class="toolbar" style="margin:0;gap:8px">
             <span class="pill ok">Signed in · {shortOAuthID}</span>
             <button id="ma-oauth-btn" class="btn sm" onclick={() => (oauthOpen = true)} disabled={busy}>Re-sign in</button>
-            <button class="btn sm" onclick={revoke} disabled={busy}>Revoke sign-in</button>
+            <button class="btn sm" onclick={revoke} disabled={busy || !!confirmAction}>Revoke sign-in</button>
           </div>
         {:else if !microsoftOAuthReady}
           <p class="sub" style="margin:0;color:var(--warn)">
@@ -624,7 +630,7 @@
           <Icon name="mail" size={13} /> Test connection
         </button>
         <span class="spacer" style="flex:1"></span>
-        <button class="btn sm danger" disabled={busy} onclick={del}>
+        <button class="btn sm danger" disabled={busy || !!confirmAction} onclick={del}>
           <Icon name="trash" size={13} /> Delete
         </button>
       {/if}
@@ -639,6 +645,19 @@
     {notify}
     onSuccess={onOAuthSuccess}
     onClose={() => (oauthOpen = false)} />
+{/if}
+
+{#if confirmAction}
+  <ConfirmDialog
+    title={confirmAction === 'delete' ? 'Delete this mailbox?' : 'Revoke Microsoft sign-in?'}
+    message={confirmAction === 'delete'
+      ? 'The mailbox and its saved connection details will be removed.'
+      : 'The mailbox will be disabled until you sign in again.'}
+    confirmLabel={confirmAction === 'delete' ? 'Delete mailbox' : 'Revoke sign-in'}
+    busyLabel={confirmAction === 'delete' ? 'Deleting…' : 'Revoking…'}
+    {busy}
+    onConfirm={confirmDestructiveAction}
+    onCancel={() => (confirmAction = '')} />
 {/if}
 
 <style>

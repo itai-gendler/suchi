@@ -3787,6 +3787,42 @@ test('settings tag management confirms atomic selection across searches', async 
   await expect(page.getByRole('button', { name: 'Delete selected' })).toHaveCount(0)
 })
 
+test('managed custom fields are locked and user fields use an application delete dialog', async ({ page }) => {
+  await mockAPI(page)
+  let fields = [
+    { id: 50, name: 'invoice_number', data_type: 'text', extra_data: '{}', managed_by: 'zugferd' },
+    { id: 51, name: 'Warranty end', data_type: 'date', extra_data: '{}' },
+  ]
+  const deletes = []
+  await page.route('**/api/custom_fields/**', route => {
+    const request = route.request()
+    if (request.method() === 'DELETE') {
+      deletes.push(Number(new URL(request.url()).pathname.split('/').filter(Boolean).at(-1)))
+      fields = fields.filter(field => field.id !== 51)
+      return route.fulfill({ status: 204, body: '' })
+    }
+    return route.fulfill({ json: { count: fields.length, results: fields, next: null } })
+  })
+
+  await page.goto('/#/settings?tab=archive&section=metadata&metadata=custom_fields')
+  const managed = page.getByRole('textbox', { name: 'invoice_number (managed)' })
+  await expect(managed).toHaveAttribute('readonly', '')
+  await expect(page.getByText('Managed', { exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Delete invoice_number' })).toHaveCount(0)
+
+  await page.getByRole('button', { name: 'Delete Warranty end' }).click()
+  let dialog = page.getByRole('alertdialog')
+  await expect(dialog).toContainText(/values will be removed/i)
+  await dialog.getByRole('button', { name: 'Cancel' }).click()
+  expect(deletes).toEqual([])
+  await page.getByRole('button', { name: 'Delete Warranty end' }).click()
+  dialog = page.getByRole('alertdialog')
+  await dialog.getByRole('button', { name: 'Delete field' }).click()
+  await expect(page.getByRole('textbox', { name: 'Rename Warranty end' })).toHaveCount(0)
+  await expect(managed).toBeVisible()
+  expect(deletes).toEqual([51])
+})
+
 test('settings tag row deletion uses the confirmed catalog endpoint', async ({ page }) => {
   await mockAPI(page)
   const deletes = []
@@ -4481,11 +4517,15 @@ test('connected mobile apps show only owned pairing entries and support retry an
   await expect(tokens.getByText('Suchi mobile', { exact: true })).toBeVisible()
   await page.addStyleTag({ content: 'html { font-size: 24px !important; }' })
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
-  page.on('dialog', dialog => dialog.accept())
   await mobile.getByRole('button', { name: 'Revoke', exact: true }).click()
+  let confirmation = page.getByRole('alertdialog')
+  await expect(confirmation).toContainText(`Disconnect “${phoneName}”?`)
+  await confirmation.getByRole('button', { name: 'Disconnect app', exact: true }).click()
   await expect(page.getByText('Revoke failed. Try again.', { exact: true })).toBeVisible()
   await expect(mobile.getByText(phoneName, { exact: true })).toBeVisible()
   await mobile.getByRole('button', { name: 'Revoke', exact: true }).click()
+  confirmation = page.getByRole('alertdialog')
+  await confirmation.getByRole('button', { name: 'Disconnect app', exact: true }).click()
   await expect(mobile.locator('.token-row')).toHaveCount(0)
   await expect(mobile.getByText('No connected mobile apps. Pair the app to add one here.')).toBeVisible()
   await page.reload()

@@ -20,6 +20,7 @@
   import RuleRow from '../lib/RuleRow.svelte'
   import RuleEmpty from '../lib/RuleEmpty.svelte'
   import RuleSection from '../lib/RuleSection.svelte'
+  import ConfirmDialog from '../lib/ConfirmDialog.svelte'
   import { go } from '../lib/router.svelte.js'
 
   let { notify, canShare = false, startCreate = false, createQuery = '', createDocumentIDs = '', jdCategories = [] } = $props()
@@ -45,6 +46,8 @@
   let matchTimer
   let matchVersion = 0
   let nv = $state(emptyView())
+  let deleteRequest = $state(null)
+  let deleteBusy = $state(false)
 
   const filterFields = {
     tag: 'tags__id__in',
@@ -299,11 +302,18 @@
     finally { saving = false }
   }
 
-  async function remove(view) {
-    if (!confirm(`Delete the view “${view.name}”?`)) return
+  function remove(view) {
+    if (deleteBusy || deleteRequest) return
+    deleteRequest = view
+  }
+
+  async function confirmRemove() {
+    const view = deleteRequest
+    if (!view || deleteBusy) return
+    deleteBusy = true
     try {
       await deleteSavedView(view.id)
-      views = views.filter((candidate) => candidate.id !== view.id)
+      views = views.filter(candidate => candidate.id !== view.id)
       if (editing?.id === view.id) {
         editorOpen = false
         editing = null
@@ -311,7 +321,13 @@
         nv = emptyView()
       }
       notify?.('View deleted')
-    } catch (ex) { notify?.(ex.message || 'Could not delete') }
+      deleteRequest = null
+    } catch (ex) {
+      notify?.(ex.message || 'Could not delete')
+      deleteRequest = null
+    } finally {
+      deleteBusy = false
+    }
   }
 
   $effect(() => {
@@ -530,7 +546,7 @@
             {/if}
           </span>
           {#if editing}
-            <button class="delete-view" type="button" onclick={() => remove(editing)}>Delete view</button>
+            <button class="delete-view" type="button" disabled={deleteBusy || !!deleteRequest} onclick={() => remove(editing)}>Delete view</button>
           {/if}
         </div>
         <div class="footer-actions">
@@ -592,6 +608,17 @@
     </RuleWorkspace>
   {/if}
 </div>
+
+{#if deleteRequest}
+  <ConfirmDialog
+    title={`Delete the view “${deleteRequest.name}”?`}
+    message="The saved filter will be removed. Documents are not affected."
+    confirmLabel="Delete view"
+    busyLabel="Deleting…"
+    busy={deleteBusy}
+    onConfirm={confirmRemove}
+    onCancel={() => (deleteRequest = null)} />
+{/if}
 
 <style>
   .views-page {

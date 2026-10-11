@@ -568,9 +568,11 @@ unfinished work. Scratch identity remains restricted for API and direct
 resources. Cookie mutations pass server same-origin/Fetch Metadata checks.
 
 Serve previews through dedicated endpoints with restrictive CSP. Render ordinary
-text through Svelte escaping; sanitize marked-up search snippets before display.
-Destructive confirmations use native dialogs for Escape, focus return and inert
-backgrounds. Browser visibility never substitutes for server authorization.
+text through Svelte escaping; sanitize marked-up search snippets
+before display. Destructive confirmations use `ConfirmDialog.svelte`, backed by
+the native `<dialog>` element for Escape, focus return, and an inert background;
+screens never call `window.confirm`. Browser visibility never substitutes for
+server authorization.
 
 ## Adding or changing a screen
 

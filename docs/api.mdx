@@ -1577,7 +1577,8 @@ notes.
 
 ### `/api/custom_fields/` — field definitions
 
-GET returns the selected system's paged definitions. POST is admin-only and
+GET returns the selected system's paged definitions. Pipeline-owned rows include
+`managed_by` (currently `zugferd`); ordinary rows omit it. POST is admin-only and
 accepts `name`, one declared `data_type`, and optional `extra_data` as a JSON
 string. For example:
 
@@ -1589,11 +1590,13 @@ string. For example:
 }
 ```
 
-PATCH `/api/custom_fields/{id}` can rename a field or update choices. Choice
-fields require a non-empty array of unique, trimmed, non-empty strings. A field
-with any stored value rejects a type change with `409 data_type_in_use`; removing
-an in-use select/multi choice returns `409 choice_in_use`. Adding choices and
-renaming remain allowed. DELETE removes the definition and its values.
+PATCH `/api/custom_fields/{id}` can rename an ordinary field or update choices.
+Choice fields require a non-empty array of unique, trimmed, non-empty strings. A
+field with any stored value rejects a type change with `409 data_type_in_use`;
+removing an in-use select/multi choice returns `409 choice_in_use`. Adding choices
+and renaming remain allowed. DELETE removes an ordinary definition and its values.
+Extraction-managed definitions reject PATCH/DELETE with `409 managed_field`; POST
+and rename reject their reserved names with `409 managed_field_name`.
 
 ### `/api/rendered_layouts/` — folder-layout templates
 

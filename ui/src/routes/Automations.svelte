@@ -9,6 +9,7 @@
   import RuleRow from '../lib/RuleRow.svelte'
   import RuleEmpty from '../lib/RuleEmpty.svelte'
   import RuleSection from '../lib/RuleSection.svelte'
+  import ConfirmDialog from '../lib/ConfirmDialog.svelte'
 
   let { notify, readOnly = false, jdCategories = [] } = $props()
   let items = $state([])
@@ -29,6 +30,8 @@
   let visibleFilters = $state([])
   let nameInput = $state()
   let draggedID = null
+  let deleteRequest = $state(null)
+  let deleteBusy = $state(false)
 
   const userItems = $derived(items.filter(a => !a.preset_slug))
   const builtInItems = $derived(items.filter(a => a.preset_slug))
@@ -370,14 +373,27 @@
     } catch (ex) { notify?.(ex.message || 'Could not update the automation') }
     finally { toggleID = null }
   }
-  async function remove(a) {
-    if (!confirm(`Delete automation “${a.name}”?`)) return
+  function remove(automation) {
+    if (deleteBusy || deleteRequest) return
+    deleteRequest = automation
+  }
+
+  async function confirmRemove() {
+    const automation = deleteRequest
+    if (!automation || deleteBusy) return
+    deleteBusy = true
     try {
-      await deleteAutomation(a.id)
-      items = items.filter(x => x.id !== a.id)
-      if (editing?.id === a.id) editing = null
+      await deleteAutomation(automation.id)
+      items = items.filter(item => item.id !== automation.id)
+      if (editing?.id === automation.id) editing = null
       notify?.('Deleted')
-    } catch (ex) { notify?.(ex.message || 'Could not delete') }
+      deleteRequest = null
+    } catch (ex) {
+      notify?.(ex.message || 'Could not delete')
+      deleteRequest = null
+    } finally {
+      deleteBusy = false
+    }
   }
 
   async function persistOrder(ordered, movedID) {
@@ -891,7 +907,7 @@
       {#snippet footer()}
         <div class="footer-note">
           {#if editing.id && !editing.preset_slug}
-            <button class="delete-action" type="button" onclick={() => remove(editing)}>Delete automation</button>
+            <button class="delete-action" type="button" disabled={deleteBusy || !!deleteRequest} onclick={() => remove(editing)}>Delete automation</button>
           {:else}
             Saved automations are on by default. Reorder them in the list.
           {/if}
@@ -962,6 +978,17 @@
     {/if}
   {/if}
 </div>
+
+{#if deleteRequest}
+  <ConfirmDialog
+    title={`Delete automation “${deleteRequest.name}”?`}
+    message="This automation will stop running. This cannot be undone."
+    confirmLabel="Delete automation"
+    busyLabel="Deleting…"
+    busy={deleteBusy}
+    onConfirm={confirmRemove}
+    onCancel={() => (deleteRequest = null)} />
+{/if}
 
 <style>
   .automations-page {

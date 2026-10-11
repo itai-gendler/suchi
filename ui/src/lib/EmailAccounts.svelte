@@ -6,6 +6,7 @@
   import { listEmailAccounts, deleteEmailAccount, testEmailAccount } from './api.js'
   import MailAccountForm from './MailAccountForm.svelte'
   import Icon from './Icon.svelte'
+  import ConfirmDialog from './ConfirmDialog.svelte'
 
   let { notify, viewerRole = 'admin', users = [] } = $props()
 
@@ -16,6 +17,7 @@
   let openForm = $state(null)      // null | {mode, account?}
   let busy = $state(false)
   let loadVersion = 0
+  let deleteRequest = $state(null)
 
   const PROVIDER_LABELS = {
     microsoft: 'Microsoft',
@@ -78,15 +80,23 @@
     } finally { busy = false }
   }
 
-  async function del(a) {
-    if (!confirm(`Delete “${a.name}”?`)) return
+  function del(account) {
+    if (busy || deleteRequest) return
+    deleteRequest = account
+  }
+
+  async function confirmDelete() {
+    const account = deleteRequest
+    if (!account || busy) return
     busy = true
     try {
-      await deleteEmailAccount(a.id)
+      await deleteEmailAccount(account.id)
       notify?.('Mailbox deleted')
+      deleteRequest = null
       load()
     } catch (ex) {
       notify?.(ex.data?.message || ex.message || 'Could not delete')
+      deleteRequest = null
     } finally { busy = false }
   }
 
@@ -158,6 +168,17 @@
     {users}
     microsoftOAuth={capabilities.microsoft_oauth}
     onClose={onFormClose} />
+{/if}
+
+{#if deleteRequest}
+  <ConfirmDialog
+    title={`Delete “${deleteRequest.name}”?`}
+    message="This mailbox and its saved connection details will be removed."
+    confirmLabel="Delete mailbox"
+    busyLabel="Deleting…"
+    {busy}
+    onConfirm={confirmDelete}
+    onCancel={() => (deleteRequest = null)} />
 {/if}
 
 <style>
