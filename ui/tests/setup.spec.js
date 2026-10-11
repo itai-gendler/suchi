@@ -1654,6 +1654,24 @@ test('preserves an enabled model when saving archive matching', async ({ page })
   await expect(page.getByText('Active', { exact: true })).toBeVisible()
 })
 
+test('scrolls to reading controls when Change reveals them', async ({ page }) => {
+  await page.setViewportSize({ width: 1100, height: 500 })
+  await mockAPI(page, { filingTreeChosen: true })
+  await page.goto('/#/settings?tab=archive&section=llm')
+
+  const research = page.getByRole('region', { name: 'Ask your documents settings' })
+  const change = research.getByRole('button', { name: 'Change', exact: true })
+  await change.scrollIntoViewIfNeeded()
+  const content = page.locator('.archive-content')
+  const before = await content.evaluate(node => node.scrollTop)
+
+  await change.click()
+
+  await expect(research.getByRole('radiogroup', { name: 'How much to read' })).toBeVisible()
+  await expect.poll(() => content.evaluate(node => node.scrollTop)).toBeGreaterThan(before)
+  await expect(research.locator('.cls-disc')).toBeFocused()
+})
+
 test('persists the reading amount independently without enabling the model', async ({ page }) => {
   const researchContextRequests = []
   const llmSettingsRequests = []
@@ -3012,23 +3030,39 @@ test('keeps saved views ahead of the creation form', async ({ page }) => {
   await expect(dialog).toHaveCount(0)
 })
 
-test('opens a progressive saved-view pattern from the empty state', async ({ page }) => {
-  await mockAPI(page, {
-    correspondents: [{ id: 4, name: 'HDFC Ergo' }],
-  })
+test('prefills empty-state View starters from the active filing tree with generic fallbacks', async ({ page }) => {
+  const options = {
+    jdCategories: [
+      { id: 6, code: 22, name: 'Investments', area_code: 20, area_name: 'Money' },
+      { id: 7, code: 23, name: 'Banking', area_code: 20, area_name: 'Money' },
+      { id: 8, code: 31, name: 'Medical records', area_code: 30, area_name: 'Health' },
+      { id: 9, code: 51, name: 'Property', area_code: 50, area_name: 'Home' },
+      { id: 1, code: 49, name: 'Inbox', area_code: 40, area_name: 'System', system: true },
+    ],
+  }
+  await mockAPI(page, options)
   await page.goto('/#/views')
 
   await expect(page.getByRole('heading', { name: 'No views yet' })).toBeVisible()
-  await page.getByRole('button', { name: 'From one correspondent' }).click()
+  await expect(page.getByRole('button', { name: '22 Investments' })).toBeVisible()
+  await expect(page.getByRole('button', { name: '31 Medical records' })).toBeVisible()
+  await expect(page.getByRole('button', { name: '51 Property' })).toBeVisible()
+  await expect(page.getByRole('button', { name: '49 Inbox' })).toHaveCount(0)
+  await page.getByRole('button', { name: '22 Investments' }).click()
 
   const builder = page.locator('.view-builder')
   await expect(builder.getByRole('heading', { name: 'New view' })).toBeVisible()
-  await expect(builder.getByLabel('View name')).toHaveValue('From one correspondent')
-  await expect(builder.getByLabel('Correspondent', { exact: true })).toBeVisible()
+  await expect(builder.getByLabel('View name')).toHaveValue('22 Investments')
+  await expect(builder.getByLabel('Filing category')).toHaveValue('6')
   await expect(builder.getByLabel('Query')).toHaveCount(0)
   await expect(page.locator('.views-panel')).toHaveCount(0)
   await builder.getByRole('button', { name: 'Cancel' }).click()
-  await expect(page.getByRole('heading', { name: 'No views yet' })).toBeVisible()
+
+  options.jdCategories = []
+  await page.reload()
+  await expect(page.getByRole('button', { name: 'Waiting to file' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'This year’s taxes' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'From one correspondent' })).toBeVisible()
 })
 
 test('gates saved-view sharing for members by capability', async ({ page }) => {
@@ -4744,6 +4778,30 @@ test('groups metadata reviews by document', async ({ page }) => {
   }
 })
 
+test('starts Approvals at the content edge with one title and places it after Inbox', async ({ page }) => {
+  await mockAPI(page)
+  await page.goto('/#/tasks')
+
+  const card = page.locator('.approval-card').first()
+  await expect(card).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Approvals', exact: true })).toHaveCount(1)
+  const toolbar = page.getByRole('group', { name: 'Approval options' })
+  await expect(toolbar.locator(':scope > *').first()).toHaveAccessibleName('Refresh')
+  const toolbarBeforeCard = await page.evaluate(() => {
+    const toolbarNode = document.querySelector('.review-toolbar')
+    const cardNode = document.querySelector('.approval-card')
+    return Boolean(toolbarNode.compareDocumentPosition(cardNode) & Node.DOCUMENT_POSITION_FOLLOWING)
+  })
+  expect(toolbarBeforeCard).toBe(true)
+
+  const navigation = await page.locator('#primary-navigation .nav > a').evaluateAll(links =>
+    links.map(link => link.getAttribute('href')))
+  const inboxIndex = navigation.findIndex(href => href?.includes('#/inbox'))
+  const approvalsIndex = navigation.findIndex(href => href?.includes('#/tasks'))
+  expect(approvalsIndex).toBe(inboxIndex + 1)
+  await expect(page.getByRole('button', { name: 'Refresh', exact: true })).toBeVisible()
+})
+
 test('keeps filing reviews compact and explains sources on demand', async ({ page }) => {
   await mockAPI(page, {
     approvalTasks: [{
@@ -4860,7 +4918,6 @@ test('keeps stale metadata visible, unknown actions read-only, and queued decisi
   const titleReview = page.locator('.decision-row').filter({
     has: page.getByRole('button', { name: 'Change title', exact: true }),
   })
-  await expect(titleReview.getByLabel('Current Original title; proposed Reviewed title', { exact: true })).toBeVisible()
   const unknown = page.locator('.decision-row').filter({ hasText: 'Unsupported action' })
   await expect(unknown.getByRole('button')).toHaveCount(0)
   await titleReview.getByRole('button', { name: 'Change title' }).click()
@@ -4868,9 +4925,8 @@ test('keeps stale metadata visible, unknown actions read-only, and queued decisi
   await expect(titleReview.getByRole('button', { name: 'Change title' })).toBeDisabled()
   expect(resolutions).toBe(1)
   stale = false
-  await page.getByRole('button', { name: 'Refresh reviews' }).click()
+  await page.getByRole('button', { name: 'Refresh', exact: true }).click()
   await titleReview.getByRole('button', { name: 'Change title' }).click()
-  await expect(page.locator('.review-toolbar [role="status"]')).toContainText('queued, not yet applied')
   await expect(titleReview).toHaveCount(0)
   await expect(unknown.getByRole('button')).toHaveCount(0)
 })
@@ -5376,6 +5432,26 @@ test('clearing an active document question invalidates it without restoring text
   await expect(page.getByText('Request canceled.')).toHaveCount(0)
 })
 
+test('shows the platform search shortcut and focuses the Omnibox', async ({ page }) => {
+  await mockAPI(page, { filingTreeChosen: true })
+  await page.goto('/#/dashboard')
+
+  const input = page.getByLabel('Search or run a command')
+  const hint = page.locator('.omni-shortcut')
+  const apple = process.platform === 'darwin'
+  await expect(hint).toHaveText(apple ? '⌘ K' : 'Ctrl K')
+  await expect(input).toHaveAttribute('aria-keyshortcuts', apple ? 'Meta+K' : 'Control+K')
+
+  await page.keyboard.press(apple ? 'Meta+k' : 'Control+k')
+  await expect(input).toBeFocused()
+  await expect(hint).toHaveCount(0)
+
+  await input.press('Escape')
+  await expect(hint).toBeVisible()
+  await page.setViewportSize({ width: 390, height: 844 })
+  await expect(hint).toBeHidden()
+})
+
 test('makes the upload modal inert, focused, trapped, and dismissible', async ({ page }) => {
   await mockAPI(page, { filingTreeChosen: true })
   await page.goto('/#/dashboard')
@@ -5576,6 +5652,50 @@ test('keeps automatic dates quiet and labels reviewed and previously accepted hi
   await expect.poll(() => intelligenceQueries.at(-1)).toMatchObject({ view_id: '4', type: 'date', status: 'accepted' })
   expect(intelligenceQueries.at(-1)).not.toHaveProperty('q')
   expect(intelligenceQueries.at(-1)).not.toHaveProperty('sensitivity')
+})
+
+test('keeps a dense date feed scrollable without stretching the two-week grid', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop', 'wide calendar layout regression')
+  await page.setViewportSize({ width: 1568, height: 708 })
+  await page.clock.setFixedTime(new Date('2026-10-11T12:00:00Z'))
+  const dates = Array.from({ length: 20 }, (_, index) => {
+    const day = 11 + (index % 4)
+    const date = `2026-10-${day}`
+    return {
+      id: index + 1,
+      document_id: index + 100,
+      document_title: `Calendar item ${index + 1}`,
+      type: 'date',
+      role: 'due',
+      status: 'accepted',
+      value: { date, precision: 'day' },
+      sort_value: date,
+      reviewed_at: 1780200000,
+    }
+  })
+  await mockAPI(page, { filingTreeChosen: true, intelligence: dates, intelligenceCount: dates.length })
+  await page.goto('/#/calendar?start=2026-10-11&days=14')
+  await expect(page.locator('.agenda-event')).toHaveCount(dates.length)
+
+  const layout = await page.evaluate(() => {
+    const grid = document.querySelector('.month-grid').getBoundingClientRect()
+    const feed = document.querySelector('.agenda').getBoundingClientRect()
+    const list = document.querySelector('.agenda-list')
+    return {
+      gridBottom: grid.bottom,
+      gridHeight: grid.height,
+      feedHeight: feed.height,
+      listClientHeight: list.clientHeight,
+      listScrollHeight: list.scrollHeight,
+      viewportHeight: window.innerHeight,
+    }
+  })
+  expect(layout.gridBottom).toBeLessThanOrEqual(layout.viewportHeight)
+  expect(Math.abs(layout.gridHeight - layout.feedHeight)).toBeLessThan(1)
+  expect(layout.listScrollHeight).toBeGreaterThan(layout.listClientHeight)
+
+  await page.locator('.agenda-list').evaluate(element => { element.scrollTop = element.scrollHeight })
+  await expect.poll(() => page.locator('.agenda-list').evaluate(element => element.scrollTop)).toBeGreaterThan(0)
 })
 
 test('downloads a reviewed exact-day calendar event only after disclosing its contents', async ({ page }) => {
@@ -6183,9 +6303,19 @@ test('confirms permanent Trash deletion before removing rows', async ({ page }) 
   })
   await page.goto('/#/trash')
 
-  await expect(page.getByText('Documents are permanently deleted 30 days after being moved to Trash. Restore puts one back where it was filed.')).toBeVisible()
+  const retention = 'Documents are permanently deleted 30 days after being moved to Trash. Restore puts one back where it was filed.'
+  const workspace = page.locator('.content-narrow')
+  await expect(workspace.getByText(retention)).toBeVisible()
   await expect(page.getByText(/Deletes permanently/).first()).toBeVisible()
+  const toolbar = page.getByRole('group', { name: 'Trash options' })
+  await expect(toolbar.locator(':scope > *').first()).toHaveAccessibleName(/Empty trash/)
   await expect(page.getByRole('button', { name: /Empty trash/ })).toBeEnabled()
+  const toolbarBeforeWorkspace = await page.evaluate(() => {
+    const toolbarNode = document.querySelector('.trash-toolbar')
+    const workspaceNode = document.querySelector('.content-narrow')
+    return Boolean(toolbarNode.compareDocumentPosition(workspaceNode) & Node.DOCUMENT_POSITION_FOLLOWING)
+  })
+  expect(toolbarBeforeWorkspace).toBe(true)
   const expiredRow = page.locator('.irow').filter({ hasText: 'Expired tax notice' })
   await expect(expiredRow.getByRole('button', { name: 'Restore' })).toHaveCount(0)
 

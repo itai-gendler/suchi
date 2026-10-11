@@ -658,6 +658,11 @@ textarea.input { resize: vertical; font-family: ui-monospace, monospace; font-si
 .omni:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 14%, transparent); }
 .omni input { flex: 1; border: 0; background: none; font: inherit; color: var(--ink); outline: none; min-width: 0; }
 .omni input::-webkit-search-cancel-button { display: none; }
+.omni-shortcut {
+  flex: none; padding: 2px 6px; border: 1px solid var(--line); border-radius: 5px;
+  background: transparent; color: var(--faint); font: 500 .62rem/1.3 ui-monospace, monospace;
+  white-space: nowrap;
+}
 .omni-ask { display: inline-flex; align-items: center; gap: 6px; flex: none; padding: 3px 0 3px 10px;
   border: 0; border-left: 1px solid var(--line); background: none; color: var(--accent); font: inherit;
   font-size: .75rem; font-weight: 650; cursor: pointer; }
@@ -673,6 +678,9 @@ textarea.input { resize: vertical; font-family: ui-monospace, monospace; font-si
 .omni-row .grow { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .86rem; }
 .omni-row .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); flex: none; }
 .omni-row.all { border-top: 1px solid var(--line); border-radius: 0 0 8px 8px; margin-top: 4px; color: var(--accent); }
+@media (max-width: 700px) {
+  .omni-shortcut { display: none; }
+}
 
 .side-user { margin-top: auto; padding: 10px 10px 12px; border-top: 1px solid var(--line);
   display: flex; align-items: center; gap: 6px; }

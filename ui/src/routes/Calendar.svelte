@@ -475,7 +475,7 @@
   .agenda-month { font-size: .85rem; font-weight: 650; letter-spacing: -.01em; }
   .agenda h3.agenda-count { margin-left: auto; color: var(--faint); font-family: "Spline Sans Mono", ui-monospace, monospace; font-size: .62rem; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; }
   .agenda-limit { display: block; margin: 0; padding: 6px 15px; border-bottom: 1px solid var(--line); color: var(--muted); font-size: .62rem; line-height: 1.35; }
-  .agenda-list { position: relative; flex: 1; min-height: 0; overflow-y: auto; }
+  .agenda-list { position: relative; flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
   .feed-group + .feed-group { border-top: 1px solid var(--line); }
   .feed-group.focused { background: color-mix(in srgb, var(--accent) 7%, var(--surface)); }
   .feed-group.focused .feed-day b { color: var(--accent); }
@@ -506,6 +506,15 @@
   .agenda-empty span { max-width: 230px; margin-top: 6px; font-size: .7rem; line-height: 1.45; }
   .agenda-skeleton { display: grid; gap: 8px; padding: 14px; border-bottom: 1px solid var(--line); }
   .agenda-skeleton .skel:last-child { width: 65%; }
+
+  @media (min-width: 901px) {
+    .calendar-layout:not(.agenda-only) { position: relative; }
+    .calendar-layout:not(.agenda-only) .agenda {
+      position: absolute;
+      inset: 0 0 0 auto;
+      width: 340px;
+    }
+  }
 
   @media (max-width: 900px) {
     .calendar-filters { width: 100%; }

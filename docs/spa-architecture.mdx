@@ -246,7 +246,9 @@ PUT/DELETE, and post-mutation detail/backlink refresh remain screen-owned; the
 browser never infers visibility, currentness, or reciprocal links.
 
 `Views.svelte` keeps a flat draft plus a separate list of currently visible
-builder filters; starter patterns and **Add a filter** change only those ordinary
+builder filters. Its empty state derives up to three category starters from
+separate filing-tree areas, then fills any gaps with generic patterns; selecting
+one changes only the unsaved draft. **Add a filter** changes the same ordinary
 draft values. Helpers in `lib/documentFilters.js` extract one generated
 `has-field:` token when reopening the editor and serialize it back into the
 canonical rich query. The saved contract remains `filters.q`, so Documents

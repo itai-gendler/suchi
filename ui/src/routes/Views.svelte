@@ -64,11 +64,41 @@
     { kind: 'dates', label: 'dates', keys: ['dateFrom', 'dateTo', 'dateRole'] },
     { kind: 'q', label: 'search text', keys: ['q'] },
   ]
-  const VIEW_PATTERNS = [
+  const DEFAULT_VIEW_PATTERNS = [
     { value: 'waiting', label: 'Waiting to file' },
     { value: 'taxes', label: 'This year’s taxes' },
     { value: 'correspondent', label: 'From one correspondent' },
   ]
+  const viewPatterns = $derived.by(() => {
+    const categories = filingCategories.filter((category) => !category.system)
+    const selected = []
+    const selectedIDs = new Set()
+    const selectedAreas = new Set()
+    const add = (category) => {
+      selected.push({
+        value: `category:${category.id}`,
+        label: `${category.code} ${category.name}`,
+      })
+      selectedIDs.add(category.id)
+    }
+    for (const category of categories) {
+      const area = String(category.area_code ?? '')
+      if (selectedAreas.has(area)) continue
+      selectedAreas.add(area)
+      add(category)
+      if (selected.length === 3) return selected
+    }
+    for (const category of categories) {
+      if (selectedIDs.has(category.id)) continue
+      add(category)
+      if (selected.length === 3) return selected
+    }
+    for (const pattern of DEFAULT_VIEW_PATTERNS) {
+      selected.push(pattern)
+      if (selected.length === 3) return selected
+    }
+    return selected
+  })
 
   function emptyView() {
     return { name: '', q: '', tag: '', corr: '', jd: '', sens: '', dateFrom: '', dateTo: '', dateRole: '', fieldPresence: '', ids: [], shared: false }
@@ -171,7 +201,14 @@
     editing = null
     nv = emptyView()
     let filters = []
-    if (kind === 'waiting') {
+    const category = String(kind).startsWith('category:')
+      ? filingCategories.find((item) => `category:${item.id}` === kind)
+      : null
+    if (category) {
+      nv.name = `${category.code} ${category.name}`
+      nv.jd = category.id
+      filters = ['jd']
+    } else if (kind === 'waiting') {
       nv.name = 'Waiting to file'
       nv.q = 'is:inbox'
       filters = ['q']
@@ -584,7 +621,7 @@
       {:else if views.length === 0}
         <RuleEmpty title="No views yet"
                    description="A view is a filter you keep. Start from a pattern:"
-                   patterns={VIEW_PATTERNS}
+                   patterns={viewPatterns}
                    onselect={openPattern} />
       {:else}
         <div class="views-list" role="list">

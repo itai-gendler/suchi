@@ -35,7 +35,10 @@ Notable user-visible changes to Suchi are recorded here.
   first upload and filing, review, or processing recovery using live archive
   state while keeping the usual counters and lists visible.
 - Dashboard View shortcuts no longer display or request per-view document
-  counts. Saved View lists also defer filter choices until editing begins.
+  counts. Saved View lists also defer filter choices until editing begins and
+  offer three prefilled starters drawn from the active filing tree.
+- The top search now shows its platform-appropriate **⌘ K** or **Ctrl K**
+  shortcut.
 - Calendar now defaults to the current month, offers rolling **30 Days** and
   **2 Weeks** ranges, and keeps its controls, grid, and date feed in one wider
   workspace. Day selection scrolls the feed; automatic dates omit a redundant

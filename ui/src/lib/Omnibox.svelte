@@ -13,6 +13,9 @@
   let error = $state('')
   let queryVersion = 0
   let box, input
+  const appleShortcut = typeof navigator !== 'undefined' && /Mac|iPhone|iPad|iPod/.test(navigator.platform)
+  const shortcutLabel = appleShortcut ? '⌘ K' : 'Ctrl K'
+  const shortcutKeys = appleShortcut ? 'Meta+K' : 'Control+K'
 
   function matches(label) {
     const s = q.trim().toLowerCase()
@@ -93,8 +96,11 @@
   <input bind:this={input} bind:value={q} type="search" placeholder="Search or run a command"
          maxlength="2000"
          autocomplete="off" spellcheck="false" aria-label="Search or run a command"
+         aria-keyshortcuts={shortcutKeys}
          onfocus={() => (open = true)} oninput={() => { open = true; idx = -1; error = ''; queryVersion++ }}
          onkeydown={onKey} />
+
+  {#if !open && !q}<kbd class="omni-shortcut" aria-hidden="true">{shortcutLabel}</kbd>{/if}
 
   {#if canAsk}
     <button type="button" class="omni-ask" aria-label="Ask your documents" title="Ask your documents"

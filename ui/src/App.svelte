@@ -438,11 +438,11 @@
     { hash: '#/dashboard',   ico: 'gauge',    label: 'Dashboard',   key: 'dashboard' },
     { hash: '#/documents',   ico: 'docs',     label: 'Documents',   key: 'documents' },
     { hash: '#/inbox',       ico: 'inbox',    label: 'Inbox',       key: 'inbox' },
+    { hash: '#/tasks',       ico: 'tasks',    label: 'Approvals',   key: 'tasks' },
     { hash: '#/views',       ico: 'eye',      label: 'Views',       key: 'views' },
     ...(canViewCalendar
       ? [{ hash: '#/calendar', ico: 'calendar', label: 'Calendar', key: 'calendar' }]
       : []),
-    { hash: '#/tasks',       ico: 'tasks',    label: 'Approvals',   key: 'tasks' },
     { hash: '#/automations', ico: 'zap',      label: 'Automations', key: 'automations' },
     { hash: '#/trash',       ico: 'trash',    label: 'Trash',       key: 'trash' },
   ])

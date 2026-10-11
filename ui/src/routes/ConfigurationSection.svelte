@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script>
   import { scopedHash as filingHref, systems } from '../lib/systems.svelte.js'
-  import { untrack, onDestroy } from 'svelte'
+  import { tick, untrack, onDestroy } from 'svelte'
   import { adminListUsers,
            getLLMSettings, saveLLMSettings, testLLMSettings, subscriptionLoginAction, getSubscriptionModels, saveSubscriptionModel,
            saveResearchContextMode, saveClassificationAutoApply, saveArchiveMatchingSettings,
@@ -50,6 +50,7 @@
   let modelDialogOpen = $state(false)
   let thresholdsOpen = $state(false)
   let researchOpen = $state(false)
+  let researchOptions = $state()
   let llm = $state({
     enabled: false, endpoint_url: '', model: '', api_key: '', clear_api_key: false,
     egress_ack: false, confidence_threshold: 0.7,
@@ -75,6 +76,20 @@
   let disposed = false
   let loginGeneration = 0
   onDestroy(() => { disposed = true; loginGeneration++; modelsGeneration++; clearTimeout(loginTimer) })
+
+  async function toggleResearchOptions() {
+    if (researchOpen) {
+      researchOpen = false
+      return
+    }
+    researchOpen = true
+    await tick()
+    researchOptions?.scrollIntoView({
+      behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+      block: 'start',
+    })
+    researchOptions?.focus({ preventScroll: true })
+  }
 
   async function loadSubscriptionModels() {
     const generation = ++modelsGeneration
@@ -481,9 +496,8 @@
         <div class="cls-row"><div class="cls-main"><b>Reading per document</b>
             {#if llmStatus?.active}<small style="text-transform:capitalize">{researchContextMode}</small>
             {:else}<small>Needs the document model.</small>{/if}</div>
-          <div class="cls-right">{#if llmStatus?.active}<button class="act-link" onclick={() => (researchOpen = !researchOpen)}>{researchOpen ? 'Hide' : 'Change'}</button>
-            {:else}<button class="act-link" onclick={() => (researchOpen = !researchOpen)}>{researchOpen ? 'Hide' : 'Change'}</button>{/if}</div></div>
-        {#if researchOpen}<div class="cls-disc"><div class="context-presets" role="radiogroup" aria-label="How much to read">
+          <div class="cls-right"><button class="act-link" onclick={toggleResearchOptions}>{researchOpen ? 'Hide' : 'Change'}</button></div></div>
+        {#if researchOpen}<div class="cls-disc" bind:this={researchOptions} tabindex="-1" aria-labelledby="research-context-title"><div class="context-presets" role="radiogroup" aria-label="How much to read">
           {#each RESEARCH_CONTEXT_MODES as mode, index (mode.id)}
             <label class="context-preset" class:on={researchContextMode === mode.id}>
               <input type="radio" name="research-context-mode" bind:group={researchContextMode} value={mode.id} />

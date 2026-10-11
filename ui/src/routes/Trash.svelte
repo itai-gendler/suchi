@@ -72,19 +72,19 @@
   load()
 </script>
 
+<div class="toolbar trash-toolbar" role="group" aria-label="Trash options">
+  <button class="btn sm danger"
+          disabled={loading || total === 0}
+          title={total === 0 ? 'Trash is empty' : `Permanently delete all ${total} documents in Trash`}
+          onclick={() => (deleteRequest = { kind: 'all' })}>
+    <Icon name="trash" size={13} /> Empty trash
+    {#if total > 0}<span class="pill">{total}</span>{/if}
+  </button>
+</div>
 <div class="content-narrow">
-  <div class="toolbar" style="align-items:flex-start;margin:0 0 12px">
-    <p class="sub grow" style="color:var(--muted);margin:0;font-size:.86rem">
-      Documents are permanently deleted 30 days after being moved to Trash. Restore puts one back where it was filed.
-    </p>
-    <button class="btn sm danger"
-            disabled={loading || total === 0}
-            title={total === 0 ? 'Trash is empty' : `Permanently delete all ${total} documents in Trash`}
-            onclick={() => (deleteRequest = { kind: 'all' })}>
-      <Icon name="trash" size={13} /> Empty trash
-      {#if total > 0}<span class="pill">{total}</span>{/if}
-    </button>
-  </div>
+  <p class="sub trash-retention">
+    Documents are permanently deleted 30 days after being moved to Trash. Restore puts one back where it was filed.
+  </p>
   {#if err}<div class="err">{err}</div>{/if}
   {#if loading}
     <div class="index">{#each Array(3) as _}<div class="irow"><div class="skel" style="width:55%"></div></div>{/each}</div>
@@ -133,6 +133,7 @@
 {/if}
 
 <style>
+  .trash-retention { margin:0 0 12px;color:var(--muted);font-size:.86rem }
   .trash-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 16px; cursor: default; }
   .trash-document { display: flex; align-items: center; gap: 12px; min-width: 0; text-decoration: none; }
   .file-icon { display: grid; place-items: center; width: 36px; height: 44px; flex: none; color: var(--muted); background: var(--surface-2); border-radius: var(--r-sm); }

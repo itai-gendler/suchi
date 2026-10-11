@@ -334,9 +334,13 @@
 <svelte:window onkeydown={onKey} />
 
 {#if err}<div class="err">{err}</div>{/if}
-<div class="review-toolbar">
+<div class="toolbar review-toolbar" role="group" aria-label="Approval options">
+  <button class="btn sm"
+          disabled={loading || intelligenceBusy || busyTasks.size > 0} onclick={load}>
+    <Icon name="refresh" size={13} /> Refresh
+  </button>
+  {#if !loading}<span class="pill">{tasks.length + jobs.length + intelligence.length} pending</span>{/if}
   <p role="status">{reviewNotice}</p>
-  <button class="btn sm" disabled={loading || intelligenceBusy || busyTasks.size > 0} onclick={load}>Refresh reviews</button>
 </div>
 
 {#if loading}
@@ -435,7 +439,6 @@
     <div class="empty"><Icon name="tasks" size={56} /><b>Nothing needs you.</b><span>The archive is running itself.</span></div>
   {:else if tasks.length > 0}
     {@const workflowGroups = approvalGroups(tasks)}
-    <h3 style="font-size:.9rem;color:var(--muted);margin:14px 0 8px">Approvals</h3>
     <div class="approval-grid workflow-approval-grid" class:approval-grid-many={workflowGroups.length > 2} data-approval-kind="workflow">
       {#each workflowGroups as group (group.key)}
         <article class="approval-card workflow-approval-card">
@@ -630,8 +633,7 @@
   .rescan-targets ul { margin:5px 0 3px;padding-left:18px }
   .rescan-targets li { margin:3px 0;overflow-wrap:anywhere }
   .rescan-targets a { color:var(--accent) }
-  .review-toolbar { display:flex;align-items:center;justify-content:space-between;gap:12px;margin:10px 0 }
-  .review-toolbar p { min-width:0;font-size:.8rem;color:var(--muted) }
+  .review-toolbar p { flex:1;min-width:0;margin:0;text-align:right;font-size:.8rem;color:var(--muted) }
   .review-toolbar button { flex:none }
   .metadata-transition { display:flex;align-items:baseline;gap:10px;margin:12px 0;font-size:.84rem;overflow-wrap:anywhere }
   .metadata-transition > span:first-child { color:var(--muted);min-width:0 }
@@ -655,7 +657,6 @@
   }
   @media (max-width: 560px) {
     .task-thumb { flex-basis:42px;width:42px }
-    .review-toolbar { align-items:flex-start;flex-direction:column }
     .intelligence-head { align-items: flex-start; flex-direction: column; }
     .intelligence-actions { flex-wrap: wrap; }
     .intelligence-actions > span { width: 100%; }
