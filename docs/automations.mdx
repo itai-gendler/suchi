@@ -247,11 +247,13 @@ For a newly extracted document Suchi runs:
 3. the optional LLM classifier, including questions from matching ask
    automations
 
-Archive matching uses authorized lexical neighbours. With the shared automatic
-application mode on (the default), eligible matches at or above `0.90` apply;
-the default minimum score for review suggestions is `0.50`. Both thresholds are
-configurable. Turn automatic mode off to review inferred changes before
-application. Tokenization, BM25, ACLs and shared retrieval are
+Archive matching uses authorized lexical neighbours. Category and correspondent
+suggestions require at least two supporters covering 30% of the returned sample;
+automatic application requires at least three supporters. With the shared
+automatic application mode on (the default), otherwise-eligible matches at or
+above `0.90` apply; the default minimum score for review suggestions is `0.50`.
+Both thresholds are configurable. Turn automatic mode off to review inferred
+changes before application. Tokenization, BM25, ACLs and shared retrieval are
 documented in [Search architecture: Similar documents](/search#similar-documents).
 
 The optional model shares that mode, with a default metadata/date threshold of

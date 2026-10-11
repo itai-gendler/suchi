@@ -187,7 +187,7 @@ func proposeArchiveInput(ctx context.Context, tx *sql.Tx, log *slog.Logger, docI
 	// The immutable retrieval baseline above rejects human/source races. Only
 	// our own successful writes may advance the baseline used for application.
 	applicationBaseline := current
-	applyOrPropose := func(field string, valueID int64, confidence float64, ids []int64) error {
+	applyOrPropose := func(field string, valueID int64, confidence float64, ids []int64, minAutoSupport int) error {
 		supporters := make([]documentstate.Reference, len(ids))
 		for i, id := range ids {
 			supporters[i] = documentstate.Reference{DocumentID: id, Snapshot: input.snapshots[id]}
@@ -197,12 +197,20 @@ func proposeArchiveInput(ctx context.Context, tx *sql.Tx, log *slog.Logger, docI
 			Threshold: &cfg.AutoThreshold, Source: "archive",
 			Baseline: &applicationBaseline, Supporters: supporters,
 		}
-		didApply, err := approvals.ApplyAutomaticDocumentChangeInTx(ctx, tx, log, docID, change)
-		if err != nil {
-			return fmt.Errorf("archive classifier: apply %s: %w", field, err)
+		didApply := false
+		var err error
+		if len(ids) >= minAutoSupport {
+			didApply, err = approvals.ApplyAutomaticDocumentChangeInTx(ctx, tx, log, docID, change)
+			if err != nil {
+				return fmt.Errorf("archive classifier: apply %s: %w", field, err)
+			}
 		}
 		if didApply {
 			applied++
+			log.Info("archive_classifier.applied",
+				"doc_id", docID, "field", field, "value_id", valueID,
+				"confidence", confidence, "threshold", cfg.AutoThreshold,
+				"supporter_ids", ids)
 			applicationBaseline, err = documentstate.Load(ctx, tx, docID)
 			return err
 		}
@@ -219,11 +227,15 @@ func proposeArchiveInput(ctx context.Context, tx *sql.Tx, log *slog.Logger, docI
 		if winnerID == 0 || (field == "jd_category" && winnerID == input.inboxID) {
 			continue
 		}
+		ids := scalarSupporters[field][winnerID]
+		if len(ids) < 2 || float64(len(ids)) < 0.3*float64(len(input.neighbours)) {
+			continue
+		}
 		confidence := score / totalScore
 		if confidence < cfg.ReviewThreshold {
 			continue
 		}
-		if err := applyOrPropose(field, winnerID, confidence, scalarSupporters[field][winnerID]); err != nil {
+		if err := applyOrPropose(field, winnerID, confidence, ids, 3); err != nil {
 			return err
 		}
 	}
@@ -240,7 +252,7 @@ func proposeArchiveInput(ctx context.Context, tx *sql.Tx, log *slog.Logger, docI
 			return err
 		}
 		if !exists {
-			if err := applyOrPropose("tag", tagID, score/totalScore, ids); err != nil {
+			if err := applyOrPropose("tag", tagID, score/totalScore, ids, 1); err != nil {
 				return err
 			}
 		}

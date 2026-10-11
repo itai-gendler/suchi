@@ -13,6 +13,10 @@ Notable user-visible changes to Suchi are recorded here.
 - Titles renamed or approved by a person are now protected from classifier and
   rule overwrites. A lock explains the protection, and **Let Suchi rename this**
   returns naming to automatic handling without changing the current title.
+- Local archive matching now ignores more low-information question and email
+  words. Category and correspondent suggestions require broad support, automatic
+  application requires three supporting documents, and successful automatic
+  applications log their bounded supporter IDs for diagnosis.
 - Optional Public links now use a separate share-only listener and required
   expiry, while Network links stay on the normal Suchi address. Link creation
   names that distinction, recommends passwords for sensitive documents, and

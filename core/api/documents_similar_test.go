@@ -261,6 +261,8 @@ func TestTopTokens(t *testing.T) {
 		{"the and for is a b c to it me", 5, nil},
 		// Case-fold.
 		{"Bescom BESCOM bescom Insurance", 2, []string{"bescom", "insurance"}},
+		// Common question, connective, modal, and email words drop.
+		{"What's this? Whom shall we thank? Please reply while we wait. Invoice", 5, []string{"invoice", "reply", "wait"}},
 	}
 	for _, tc := range cases {
 		got := similar.TopTokens(tc.in, tc.k)

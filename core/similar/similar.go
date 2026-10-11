@@ -246,13 +246,15 @@ func TopTokens(text string, k int) []string {
 // NLTK-scale stopwords here.
 func isTrivialToken(w string) bool {
 	switch w {
-	case "this", "that", "these", "those", "with", "from", "have", "your",
-		"they", "them", "their", "into", "over", "when", "then", "than",
-		"here", "there", "where", "which", "will", "would", "could", "should",
-		"about", "after", "before", "some", "such", "only", "just", "more",
-		"most", "many", "much", "very", "also", "been", "were", "being",
-		"other", "same", "each", "both", "does", "done", "http",
-		"https", "www":
+	case "this", "that", "these", "those", "what", "whom", "whose", "with", "from",
+		"have", "your", "they", "them", "their", "into", "over", "when", "then", "than",
+		"here", "there", "where", "which", "will", "would", "could", "should", "must",
+		"might", "shall", "about", "after", "before", "because", "while", "until",
+		"during", "through", "between", "against", "without", "within", "upon", "some",
+		"such", "only", "just", "more", "most", "many", "much", "very", "also", "been",
+		"were", "being", "other", "same", "each", "both", "every", "either", "neither",
+		"again", "once", "does", "done", "please", "kindly", "thank", "thanks",
+		"regards", "http", "https", "www":
 		return true
 	}
 	return false

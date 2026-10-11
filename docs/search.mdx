@@ -206,7 +206,8 @@ suggestions at 20 by default and 50 explicitly.
 
 1. Read the source title plus at most the first 4,096 content bytes.
 2. Extract alphanumeric tokens of length four or more.
-3. Remove a small deterministic stopword set.
+3. Remove a deterministic set of low-information function, question and email
+   boilerplate words.
 4. Select at most ten tokens by frequency, then alphabetically for ties.
 5. OR-join each token as a quoted FTS term.
 6. Exclude the source document and trash.
@@ -219,8 +220,10 @@ single calendar-year overlap. Default limit is 10, maximum 50. A source with no
 content falls back to title tokens and sets `matched_on_title_only` so the UI can
 warn that results are noisier.
 
-Archive matching imports this same implementation. It changes thresholds and
-what happens after a match, not tokenization, SQL, ACLs, or ranking.
+Archive matching imports this retrieval implementation. Scalar category and
+correspondent suggestions require at least two supporting neighbours covering
+30% of the returned sample; automatic application requires at least three.
+Configured confidence thresholds, ACLs and freshness checks still apply.
 
 ## Saved Views and Calendar
 

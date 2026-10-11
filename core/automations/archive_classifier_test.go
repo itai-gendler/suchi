@@ -150,6 +150,52 @@ func TestApplyFromArchiveEmptyArchiveIsNoOp(t *testing.T) {
 	}
 }
 
+func TestArchiveIgnoresGenericQuestionWordOverlap(t *testing.T) {
+	ctx := t.Context()
+	d, log := setup(t, ctx)
+	seedUser(t, ctx, d)
+	saveArchiveConfig(t, ctx, d, true)
+	corrID := seedCorrespondent(t, ctx, d, "Raina Alam")
+	for i := 0; i < 2; i++ {
+		seedDocWithCorr(t, ctx, d, "Unrelated job description "+strconv.Itoa(i),
+			"what architecture engineering startup", corrID)
+	}
+	for i := 0; i < 20; i++ {
+		seedDoc(t, ctx, d, "Unrelated calendar page "+strconv.Itoa(i),
+			"calendar planner schedule")
+	}
+	targetID := seedDoc(t, ctx, d, "Scan 2026-09-30 11-07",
+		"Older people sit down and ask, 'What is it?' but the boy asks, 'What can I do with it?'. Steve Jobs ideas inside calendar")
+
+	must(t, automations.ApplyFromArchive(ctx, d, log, targetID))
+
+	assertArchiveCorrespondent(t, d, targetID, 0)
+	assertArchiveProposals(t, d, targetID, "correspondent", corrID, 0)
+}
+
+func TestArchiveScalarInferenceRequiresBroadSupport(t *testing.T) {
+	ctx := t.Context()
+	d, log := setup(t, ctx)
+	seedUser(t, ctx, d)
+	saveArchiveConfig(t, ctx, d, true)
+	corrID := seedCorrespondent(t, ctx, d, "Dominant minority")
+	for i := 0; i < 2; i++ {
+		seedDocWithCorr(t, ctx, d, "Rare source "+strconv.Itoa(i),
+			"hyperdistinct archive example", corrID)
+	}
+	for i := 0; i < 20; i++ {
+		seedDoc(t, ctx, d, "Common source "+strconv.Itoa(i),
+			"calendar planner schedule")
+	}
+	targetID := seedDoc(t, ctx, d, "Incoming scan",
+		"hyperdistinct hyperdistinct calendar")
+
+	must(t, automations.ApplyFromArchive(ctx, d, log, targetID))
+
+	assertArchiveCorrespondent(t, d, targetID, 0)
+	assertArchiveProposals(t, d, targetID, "correspondent", corrID, 0)
+}
+
 func TestApplyFromArchiveHonorsLiveDisable(t *testing.T) {
 	ctx := context.Background()
 	d, log := setup(t, ctx)
@@ -223,6 +269,36 @@ func (h *archiveConsideredHandler) Handle(ctx context.Context, record slog.Recor
 		})
 		h.err = h.change(ctx)
 	}
+	return nil
+}
+
+type archiveAppliedHandler struct {
+	slog.Handler
+	docID        int64
+	field        string
+	valueID      int64
+	supporterIDs []int64
+}
+
+func (h *archiveAppliedHandler) Enabled(context.Context, slog.Level) bool { return true }
+
+func (h *archiveAppliedHandler) Handle(_ context.Context, record slog.Record) error {
+	if record.Message != "archive_classifier.applied" {
+		return nil
+	}
+	record.Attrs(func(attr slog.Attr) bool {
+		switch attr.Key {
+		case "doc_id":
+			h.docID = attr.Value.Int64()
+		case "field":
+			h.field = attr.Value.String()
+		case "value_id":
+			h.valueID = attr.Value.Int64()
+		case "supporter_ids":
+			h.supporterIDs = append(h.supporterIDs, attr.Value.Any().([]int64)...)
+		}
+		return true
+	})
 	return nil
 }
 
@@ -495,6 +571,7 @@ func TestArchiveAutomaticThresholdBoundaries(t *testing.T) {
 		{"above automatic threshold", 10, 9, 0.89, true, false},
 		{"below automatic threshold", 10, 9, 0.91, false, true},
 		{"at review floor", 4, 2, 0.9, false, true},
+		{"two supporters require review", 3, 2, 0.55, false, true},
 		{"below review floor", 10, 4, 0.9, false, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -522,6 +599,36 @@ func TestArchiveAutomaticThresholdBoundaries(t *testing.T) {
 			}
 			assertArchiveProposals(t, d, targetID, "correspondent", corrID, proposed)
 		})
+	}
+}
+
+func TestArchiveAutomaticApplicationLogsSupporters(t *testing.T) {
+	ctx := t.Context()
+	d, log := setup(t, ctx)
+	seedUser(t, ctx, d)
+	saveArchiveConfig(t, ctx, d, true)
+	corrID := seedCorrespondent(t, ctx, d, "Insurance")
+	cluster := seedSimilarCluster(t, ctx, d, corrID, 3)
+	targetID := seedDoc(t, ctx, d, "Policy renewal",
+		"policy renewal premium insurance annual coverage")
+	handler := &archiveAppliedHandler{Handler: log.Handler()}
+
+	must(t, automations.ApplyFromArchive(ctx, d, slog.New(handler), targetID))
+
+	if handler.docID != targetID || handler.field != "correspondent" || handler.valueID != corrID {
+		t.Fatalf("application log = doc %d, field %q, value %d", handler.docID, handler.field, handler.valueID)
+	}
+	if len(handler.supporterIDs) != len(cluster) {
+		t.Fatalf("logged supporters = %v, want %v", handler.supporterIDs, cluster)
+	}
+	logged := make(map[int64]bool, len(handler.supporterIDs))
+	for _, id := range handler.supporterIDs {
+		logged[id] = true
+	}
+	for _, id := range cluster {
+		if !logged[id] {
+			t.Fatalf("logged supporters = %v, missing %d", handler.supporterIDs, id)
+		}
 	}
 }
 
