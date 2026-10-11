@@ -856,6 +856,7 @@ async function mockAPI(page, options = {}) {
     else if (path === '/api/admin/settings/ingest') body = {
       fs_watch_dir: '',
       fs_watch_owner_email: '',
+      fs_watch_recursive: options.fsWatchRecursive ?? true,
     }
     else if (path === '/api/documents/') {
       const query = new URL(request.url()).searchParams.get('q') || ''
@@ -1782,6 +1783,17 @@ test('mounts only the selected settings surface', async ({ page }) => {
   expect(requestedPaths).not.toContain('/api/custom_fields/')
   expect(requestedPaths).not.toContain('/api/tags/')
 })
+
+for (const recursive of [true, false]) {
+  test(`describes watched-folder source safety with recursion ${recursive ? 'enabled' : 'disabled'}`, async ({ page }) => {
+    await mockAPI(page, { filingTreeChosen: true, fsWatchRecursive: recursive })
+    await page.goto('/#/settings?tab=archive&section=sources')
+    await expect(page.getByText(/without moving, renaming or deleting the source/)).toBeVisible()
+    await expect(page.getByText(recursive
+      ? 'Subfolders are included.'
+      : /Only files directly inside the folder are included/)).toBeVisible()
+  })
+}
 
 test('refreshes intake owners after user creation in Archive configuration', async ({ page }) => {
   await mockAPI(page, { filingTreeChosen: true })

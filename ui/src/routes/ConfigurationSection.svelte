@@ -170,6 +170,7 @@
   let llmTestGeneration = 0
   let prefs = $state({ backup_interval_hours: 24, ocr_languages: 'eng' })
   let ingest = $state({ fs_watch_dir: '', fs_watch_owner_email: '', fs_watch_system: '' })
+  let ingestRecursive = $state(true)
 
 
   async function loadUsers() {
@@ -220,6 +221,7 @@
     ingest.fs_watch_dir = current?.fs_watch_dir || ''
     ingest.fs_watch_owner_email = current?.fs_watch_owner_email || ''
     ingest.fs_watch_system = current?.fs_watch_system || ''
+    ingestRecursive = current?.fs_watch_recursive !== false
     seedSourceOwner()
   }
   const loadFunctions = {
@@ -418,9 +420,10 @@
 
     {#if section === 'sources'}
       <h3>Watched folder</h3>
-      <p class="wiz-p">Point suchi at a folder (a scanner target or synced directory) and everything dropped there becomes a document. Browser uploads and connected apps work regardless.</p>
+      <p class="wiz-p">Suchi reads new files from this server folder without moving, renaming or deleting the source. {ingestRecursive ? 'Subfolders are included.' : 'Only files directly inside the folder are included because recursive discovery is disabled by server configuration.'} Browser uploads and connected apps work regardless.</p>
       <div class="field"><label for="i-dir">Watched directory (on the server)</label>
         <input id="i-dir" class="input mono" placeholder="/data/staging" bind:value={ingest.fs_watch_dir} /></div>
+      <p class="sub">The directory must already exist and be readable by the Suchi process. Hidden files, symbolic links and the legacy <span class="mono">errors/</span> directory are ignored.</p>
       <div class="field"><label for="i-owner">Documents from it belong to</label>
         <select id="i-owner" class="input" bind:value={ingest.fs_watch_owner_email}>
           <option value="">Select owner</option>
