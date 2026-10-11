@@ -150,10 +150,17 @@ identify completed parts after parent retirement; retrying retirement does not
 reset an existing Trash deadline. See [Scan
 splitting](/formats#multi-doc-splitting-on-qr-separator-sheets).
 
-Filesystem/IMAP producers use the same document/job transaction pattern. IMAP
-checkpoints ascending batches of at most 50 UIDs after import/bookkeeping; failure
-stops the cycle while preserving earlier progress, and connection tests do not
-clear polling failures. [Mail intake](/guides/mail-intake) owns history/rules/health.
+Filesystem and IMAP producers use the same document/job transaction pattern.
+Filesystem intake is a read-only, polling reconciler: `os.Root` confines opens,
+recursive walking retains no per-directory watches, and checkpoints suppress
+unchanged work. It skips symlinks, special files, hidden/legacy-error paths,
+cross-filesystem directories and excessive depth; source files and sidecars are
+never written, moved or deleted. Observation state commits with successful
+document/job creation, while bounded failures stay in Suchi-owned storage and
+audit. IMAP checkpoints ascending batches of at most 50 UIDs after
+import/bookkeeping; failure stops the cycle while preserving earlier progress,
+and connection tests do not clear polling failures. [Mail intake](/guides/mail-intake)
+owns history/rules/health.
 Portable import differs: `core/importer/bundle/` may restore supplied content,
 archive bytes and metadata without scheduling extraction.
 

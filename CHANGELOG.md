@@ -49,6 +49,11 @@ Notable user-visible changes to Suchi are recorded here.
 - Factur-X, ZUGFeRD, and XRechnung invoice fields are now marked as
   extraction-managed definitions, so they cannot be renamed or deleted. Destructive
   actions now use Suchi confirmation dialogs instead of browser popups.
+- Watched folders are now strictly read-only and include subfolders by default.
+  A bounded polling reconciler avoids per-directory watch descriptors, event
+  overflows, symlink escapes and unreliable network-mount notifications.
+  `INGEST_FS_RECURSIVE=off` restores top-level-only discovery; durable
+  observations skip unchanged files, and failures remain at their source path.
 
 ## [0.2.1] - 2026-10-10
 

@@ -139,8 +139,10 @@ scan_split_dpi = 150
 # dir         = "/data/staging"
 # owner_email = "you@example.com"
 # system      = "S02" # existing code; omit for original system 1
+# recursive   = "on"  # default; set off for top-level files only
 # The owner must be able to enter this system. Sidecars cannot select another.
 # Introduce systems by taxonomy import, not by this boot configuration.
+# Suchi reads this existing directory without moving, deleting or writing files.
 
 # --------------------------------------------------------------------
 # Email ingest (IMAP polling) — shared boot options

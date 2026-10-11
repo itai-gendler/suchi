@@ -26,6 +26,7 @@ cleanup() {
         kill "$SUCHI_PID" 2>/dev/null || true
         wait "$SUCHI_PID" 2>/dev/null || true
     fi
+    chmod -R u+w "$SCRATCH_DIR" 2>/dev/null || true
     rm -rf -- "$SCRATCH_DIR"
 }
 trap cleanup EXIT
@@ -94,24 +95,32 @@ curl -sf -X POST "http://127.0.0.1:$PORT/api/admin/settings/ingest" \
     >/dev/null
 
 echo
-echo "== drop fixtures into ingest =="
-cp "$FIXTURES"/*.eml "$INGEST_DIR/"
-ls -la "$INGEST_DIR"
+echo "== drop fixtures into a read-only nested source =="
+SOURCE_DIR="$INGEST_DIR/mail/new"
+mkdir -p "$SOURCE_DIR"
+cp "$FIXTURES"/*.eml "$SOURCE_DIR/"
+expected=$(find "$SOURCE_DIR" -type f -name '*.eml' | wc -l | tr -d ' ')
+find "$INGEST_DIR" -type f -exec chmod 400 {} +
+find "$INGEST_DIR" -type d -exec chmod 500 {} +
 
 echo
-echo "== wait for fs-watch to drain the ingest dir =="
-# fs-watch deletes files on successful ingest; ingest is complete
-# when the dir is empty (modulo errors/, which is a subdir).
+echo "== wait for read-only recursive reconciliation =="
 for i in $(seq 1 120); do
-    remaining=$(find "$INGEST_DIR" -maxdepth 1 -type f -name '*.eml' | wc -l)
-    if [ "$remaining" -eq 0 ]; then
-        echo "ingest dir drained after ${i}s"
+    observed=$(sqlite3 "$DATA_DIR/suchi.db" \
+        "SELECT COUNT(*) FROM fs_watch_observations WHERE state='ingested'")
+    if [ "$observed" -eq "$expected" ]; then
+        echo "$observed nested source files checkpointed after ${i}s"
         break
     fi
     sleep 1
 done
-if [ "$remaining" -ne 0 ]; then
-    echo "TIMEOUT: $remaining .eml files still in $INGEST_DIR"; ls "$INGEST_DIR"
+if [ "$observed" -ne "$expected" ]; then
+    echo "TIMEOUT: $observed of $expected source files checkpointed"
+    exit 1
+fi
+retained=$(find "$SOURCE_DIR" -type f -name '*.eml' | wc -l | tr -d ' ')
+if [ "$retained" -ne "$expected" ] || [ -e "$INGEST_DIR/errors" ]; then
+    echo "watcher mutated its source: retained=$retained expected=$expected"
     exit 1
 fi
 

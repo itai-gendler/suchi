@@ -2581,12 +2581,14 @@ OCR language list. `POST` to the same path with
 `{backup_interval_hours, ocr_languages}` resets the backup scheduler and
 replaces the language snapshot used by future OCR jobs immediately.
 
-`GET /api/admin/settings/ingest` returns the watched directory, owner and target
-system. `POST` with `{fs_watch_dir,fs_watch_owner_email,fs_watch_system}` validates
-the active owner can enter the target, stops the old watcher, and starts the
-replacement before success. Directory/owner are supplied together; omitted system
-means original system 1. This is global producer configuration, not the browser's
-mutable current system. Boot-pinned fields retain configuration precedence.
+`GET /api/admin/settings/ingest` returns the watched directory, owner, target
+system, and effective `fs_watch_recursive` boot flag. `POST` with
+`{fs_watch_dir,fs_watch_owner_email,fs_watch_system}` validates the existing
+readable directory and that the active owner can enter the target, then replaces
+the running read-only reconciler before success. Directory/owner are supplied
+together; omitted system means original system 1. This is global producer
+configuration, not the browser's mutable current system. Boot-pinned fields,
+including `INGEST_FS_RECURSIVE`, retain configuration precedence.
 
 ## Email accounts (multi-mailbox intake)
 

@@ -209,10 +209,10 @@ reclassifies each child independently.
 **How to feed it in.** Any of the three supported ingest paths works;
 suchi doesn't care what put the `.eml` on the disk:
 
-- **`INGEST_FS_DIR`** — a fs-watch on a Maildir or archive folder.
-  Pair with [mbsync/isync](https://isync.sourceforge.io/) against your
-  IMAP server (or a Bridge like Proton's) to keep the folder fresh.
-  Recommended for setups that already have a mail sync toolchain.
+- **`INGEST_FS_DIR`** — read an existing folder recursively without changing
+  source files. The reconciler polls, so it also works when a NAS mount does not
+  forward local filesystem events. Pair it with
+  [mbsync/isync](https://isync.sourceforge.io/) or another producer when needed.
 - **Mailboxes UI** — direct IMAP polling. Suchi seals the account credential
   and pulls new messages on the configured interval.
 - **Upload API** — POST a `.eml` file to `/api/documents/` for one-off

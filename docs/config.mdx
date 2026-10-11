@@ -352,20 +352,34 @@ ID tokens. Invalid credentials never fall back to a browser session.
 
 ## Filesystem-watch ingest
 
-| Env var                 | Default                               | Purpose                                                                                                                                             |
-| ----------------------- | ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `INGEST_FS_OWNER_EMAIL` | (unset = idle)                        | User that owns docs picked up from the staging dir. Setting this activates the watcher.                                                             |
-| `INGEST_FS_DIR`         | `$DATA_DIR/staging` when owner is set | Watch dir. Files landed here (via move, scp, drag-drop) become docs. Sidecars (`<name>.json`) apply metadata. Failed files land in `<dir>/errors/`. |
-| `INGEST_FS_SYSTEM` | (unset = original system 1) | Existing target code, for example S02. Does not create a system. The owner must be active and able to enter it. |
+| Env var                 | Default                               | Purpose |
+| ----------------------- | ------------------------------------- | ------- |
+| `INGEST_FS_OWNER_EMAIL` | (unset = idle)                        | User that owns documents discovered in the source directory. Setting this activates the watcher. |
+| `INGEST_FS_DIR`         | `$DATA_DIR/staging` when owner is set | Existing readable source directory. Suchi never creates, moves, renames, deletes, or writes its files or sidecars. |
+| `INGEST_FS_SYSTEM`      | (unset = original system 1)           | Existing target code, for example S02. Does not create a system. The owner must be active and able to enter it. |
+| `INGEST_FS_RECURSIVE`   | `on`                                  | Reconcile ordinary files in subfolders. Set to `off` for top-level files only. |
 
-Archive Configuration exposes the same values as database-backed overrides.
-Saving a new directory, owner, or system validates all three and stores the
-resolved owner's numeric user ID in one transaction. It then stops the old
-watcher, drains the new directory, and starts watching immediately. If the
-runtime reload fails, Suchi restores the exact prior settings only when no newer
-save has replaced them. Intake rechecks owner entry; sidecars cannot redirect
-the configured system. Optional sidecar `jd_system` must agree, and `jd_address`
-never allocates or routes a document.
+Archive Configuration exposes the directory, owner, target and effective
+recursion state. Saving a new directory, owner, or system validates all three
+and stores the resolved owner's numeric user ID in one transaction. The directory
+must already exist. The supervisor then stops the old reconciler, scans the new
+source and starts polling it every five seconds. If runtime reload fails, Suchi
+restores the exact prior settings only when no newer save has replaced them.
+
+Reconciliation is deliberately polling-based: it keeps filesystem descriptors
+bounded instead of registering one kernel watch per subdirectory, recovers from
+network filesystems that do not forward local events, and cannot overflow an
+event queue. It processes one file at a time, never follows symbolic links,
+ignores hidden paths and the legacy top-level `errors/` directory, skips special
+files and mounted filesystems beneath the source, and stops descent after 64
+levels. A database checkpoint avoids rehashing unchanged files. Changed files
+and sidecars are reconsidered; unchanged failures retry after five minutes.
+
+Sidecars (`<name>.json`) remain read-only and apply metadata. Failures stay at
+their source path and appear in logs and archive events; Suchi never moves them
+into the old `errors/` directory. Intake rechecks owner entry; sidecars cannot
+redirect the configured system. Optional sidecar `jd_system` must agree, and
+`jd_address` never allocates or routes a document.
 
 The API and UI continue to accept and display the owner's current email, but the
 database setting is `ingest.fs_watch_owner_id`. Because the running watcher owns

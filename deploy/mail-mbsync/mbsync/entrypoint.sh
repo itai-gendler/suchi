@@ -39,11 +39,10 @@ ONE_SHOT="${ONE_SHOT:-0}"
 
 fan() {
     # Copy every Maildir file that landed since the last successful
-    # fan into /ingest/<sha>.eml. sha256 stem is idempotent: a re-run
-    # of the same message hashes the same, and the destination is a
-    # no-op copy. Suchi's fs-watch deletes each file after successful
-    # ingest, and its post-ingest.email dedup handles cases where the
-    # source Maildir file reappears with the same Message-Id.
+    # fan into /ingest/<sha>.eml. The producer-owned hash name makes
+    # repeat syncs idempotent. Suchi reads the handoff without changing
+    # it; its persistent observation and Message-Id dedup prevent repeat
+    # processing.
     next_marker="${MARKER}.next"
     file_list="${MARKER}.files"
     touch "$next_marker"
