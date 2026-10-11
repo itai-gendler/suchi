@@ -1,36 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-// Package fswatch is the filesystem-watching ingest producer.
+// Package fswatch is the read-only filesystem-watching ingest producer.
 //
-// Watches a staging directory. Every file that lands (via move,
-// scp, drag-drop from a NAS mount, whatever) becomes a document if
-// its owner is resolvable. Sidecar JSON with the same basename
-// carries optional metadata — title, correspondent, tags, JD
-// category, notes. Sidecar arrival is best-effort: files without
-// one are ingested with basename-derived title.
-//
-// This is one of the three canonical ingest paths (design
-// principle 9). Upload API is one; email-ingest is the other; both
-// route through the same "insert doc + enqueue post-ingest job in
-// one tx" seam so downstream classification never has to know how
-// the bytes arrived.
-//
-// Contract:
-//
-//   - The watcher processes files one at a time in event order.
-//     Concurrent uploads across producers still work — the outbox
-//     dispatcher parallelizes post-ingest work; fs-watch itself is
-//     a producer, not a compute path.
-//   - Files are recognized by fsnotify Create events (write-then-
-//     move producers are the assumed shape). Debounce via a small
-//     settling delay before opening the file, because some tools
-//     touch a file multiple times before it's "done".
-//   - On success: original file + sidecar are deleted, unless
-//     OnSuccess=keep is set. Failure moves the file into an
-//     `errors/` subdirectory with a companion `.err` note so the
-//     operator can see what went wrong.
-//   - Files whose configured owner is no longer active OR whose sidecar fails
-//     to parse land in `errors/` — never silently dropped.
+// It periodically reconciles one configured directory. Polling rather than one
+// kernel watch per subdirectory keeps descriptor use bounded, works on network
+// mounts that do not forward local watch events, and recovers without an event
+// overflow path. Source files and sidecars are never changed.
 package fswatch
 
 import (
@@ -47,9 +22,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/fsnotify/fsnotify"
-
-	"github.com/johnnybravo-xyz/suchi/core/audit"
 	"github.com/johnnybravo-xyz/suchi/core/blob"
 	"github.com/johnnybravo-xyz/suchi/core/customfield"
 	"github.com/johnnybravo-xyz/suchi/core/db"
@@ -68,7 +40,7 @@ var ErrOwnerNotFound = errors.New("fswatch: owner not found")
 
 // Config carries the knobs Run needs.
 type Config struct {
-	// Dir is the staging directory. Created if missing.
+	// Dir is an existing read-only source directory.
 	Dir string
 
 	// OwnerID is the durable users row that owns ingested files. Zero disables
@@ -79,21 +51,23 @@ type Config struct {
 	// System selects an existing filing system by code; empty means original system 1.
 	System string
 
-	// KeepOnSuccess leaves ingested files in place after processing.
-	// Default (false) deletes them. Errors always go to errors/.
-	KeepOnSuccess bool
+	// Recursive includes ordinary files in subdirectories. It does not follow
+	// symbolic links. Production defaults this on; tests and constrained
+	// deployments may disable it.
+	Recursive bool
 
-	// Settle is the delay before opening a newly-visible file, to let
-	// slow producers finish writing. Default 250ms.
+	// Settle is the minimum age of a file before it can be opened. Default 250ms.
 	Settle time.Duration
 
-	// MaxBytes rejects files above this size at pickup time. Matches
-	// the HTTP BODY_LIMIT cap so producers can't
-	// route around the ingest ceiling. Zero disables the check.
+	// PollInterval controls reconciliation frequency. Default 5s.
+	PollInterval time.Duration
+
+	// MaxBytes rejects files above this size at pickup time. Matches the HTTP
+	// BODY_LIMIT cap. Zero disables the check.
 	MaxBytes int64
 }
 
-// Watcher wires the fsnotify loop to the ingest transaction.
+// Watcher owns periodic discovery and transactional ingest.
 type Watcher struct {
 	cfg      Config
 	db       *db.DB
@@ -119,15 +93,33 @@ func New(ctx context.Context, cfg Config, d *db.DB, cas *blob.CAS, disp *jobs.Di
 	if cfg.Settle == 0 {
 		cfg.Settle = 250 * time.Millisecond
 	}
-	if err := os.MkdirAll(cfg.Dir, 0o750); err != nil {
-		return nil, fmt.Errorf("fswatch: mkdir %s: %w", cfg.Dir, err)
+	if cfg.PollInterval == 0 {
+		cfg.PollInterval = 5 * time.Second
 	}
-	if err := os.MkdirAll(filepath.Join(cfg.Dir, "errors"), 0o750); err != nil {
-		return nil, fmt.Errorf("fswatch: mkdir errors: %w", err)
+	absolute, err := filepath.Abs(cfg.Dir)
+	if err != nil {
+		return nil, fmt.Errorf("fswatch: resolve %s: %w", cfg.Dir, err)
 	}
+	resolved, err := filepath.EvalSymlinks(absolute)
+	if err != nil {
+		return nil, fmt.Errorf("fswatch: resolve %s: %w", cfg.Dir, err)
+	}
+	info, err := os.Stat(resolved)
+	if err != nil {
+		return nil, fmt.Errorf("fswatch: stat %s: %w", resolved, err)
+	}
+	if !info.IsDir() {
+		return nil, fmt.Errorf("fswatch: %s is not a directory", resolved)
+	}
+	root, err := os.OpenRoot(resolved)
+	if err != nil {
+		return nil, fmt.Errorf("fswatch: open root %s: %w", resolved, err)
+	}
+	_ = root.Close()
+	cfg.Dir = resolved
 
 	var active int
-	err := d.Read.QueryRowContext(ctx,
+	err = d.Read.QueryRowContext(ctx,
 		`SELECT 1 FROM users WHERE id = ? AND disabled = 0`,
 		cfg.OwnerID).Scan(&active)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -162,195 +154,54 @@ func New(ctx context.Context, cfg Config, d *db.DB, cas *blob.CAS, disp *jobs.Di
 	}, nil
 }
 
-// Run blocks until ctx is done. Spawns one goroutine internally for
-// the fsnotify event loop; blocks the caller's goroutine on that
-// loop's exit so caller can `go w.Run(ctx)` and be done.
-func (w *Watcher) Run(ctx context.Context) {
-	watcher, err := fsnotify.NewWatcher()
-	if err != nil {
-		w.log.Error("fswatch.new_watcher", "err", err.Error())
-		return
-	}
-	defer watcher.Close()
-	if err := watcher.Add(w.cfg.Dir); err != nil {
-		w.log.Error("fswatch.add_dir", "err", err.Error())
-		return
-	}
-
-	// Startup drain: pick up anything already sitting in the staging
-	// dir when the process starts. A crash mid-processing leaves the
-	// file in place; we don't want operators to have to re-drop it.
-	w.drainDirOnce(ctx)
-
-	w.log.Info("fswatch.start")
-	for {
-		select {
-		case <-ctx.Done():
-			w.log.Info("fswatch.stop", "reason", "context")
-			return
-		case err := <-watcher.Errors:
-			w.log.Warn("fswatch.event_err", "err", err.Error())
-		case ev := <-watcher.Events:
-			w.handleEvent(ctx, ev)
-		}
-	}
-}
-
-// drainDirOnce walks the staging dir at startup and processes every
-// non-hidden, non-sidecar file. Sidecars are found by handleFile.
-func (w *Watcher) drainDirOnce(ctx context.Context) {
-	entries, err := os.ReadDir(w.cfg.Dir)
-	if err != nil {
-		w.log.Warn("fswatch.drain.readdir", "err", err.Error())
-		return
-	}
-	for _, e := range entries {
-		if e.IsDir() || strings.HasPrefix(e.Name(), ".") {
-			continue
-		}
-		if strings.EqualFold(filepath.Ext(e.Name()), ".json") {
-			continue
-		}
-		w.handleFile(ctx, filepath.Join(w.cfg.Dir, e.Name()))
-	}
-}
-
-// handleEvent filters fsnotify events down to the "a new file just
-// landed" case: Create for atomic move-into-place, Write for slow
-// producers that fsync-then-close. Both trigger handleFile after a
-// settle delay.
-func (w *Watcher) handleEvent(ctx context.Context, ev fsnotify.Event) {
-	name := filepath.Base(ev.Name)
-	if strings.HasPrefix(name, ".") {
-		return
-	}
-	// Skip sidecars — they're picked up when their matching document
-	// lands.
-	if strings.EqualFold(filepath.Ext(name), ".json") {
-		return
-	}
-	// Skip removals + rename-away.
-	if ev.Op&(fsnotify.Create|fsnotify.Write) == 0 {
-		return
-	}
-	// Ignore paths under errors/ (the subdirectory isn't watched, but
-	// belt-and-suspenders in case a producer writes there).
-	if strings.Contains(ev.Name, string(os.PathSeparator)+"errors"+string(os.PathSeparator)) {
-		return
-	}
-
-	time.Sleep(w.cfg.Settle)
-	w.handleFile(ctx, ev.Name)
-}
-
-// handleFile does one file end-to-end. Errors during ingest move the
-// file to errors/ with a companion .err note; success deletes it (or
-// leaves it in place if KeepOnSuccess).
-func (w *Watcher) handleFile(ctx context.Context, path string) {
-	if ctx.Err() != nil {
-		return
-	}
-	// Skip if the file has vanished (rapid create + delete).
-	fi, err := os.Stat(path)
-	if err != nil || fi.IsDir() {
-		return
-	}
-
-	// Size cap — matches the HTTP producer's BODY_LIMIT so
-	// dropping a giant file into the staging dir can't do what the
-	// upload endpoint refuses. Skip + WARN; leave the file on disk
-	// so the operator can decide.
-	if w.cfg.MaxBytes > 0 && fi.Size() > w.cfg.MaxBytes {
-		w.log.Warn("fswatch.oversized",
-			"path", filepath.Base(path), "size", fi.Size(), "cap", w.cfg.MaxBytes)
-		// Notification feed: an operator dropping a folder full of
-		// scans expects to see which files the ingester silently
-		// walked past. Audit the skip so /api/events/ can render
-		// "Skipped huge.pdf (size 800MiB > cap 500MiB)".
-		audit.Log(ctx, w.db, w.log, audit.Event{
-			SystemID: w.systemID,
-			Action:   "document.ingest.skipped", ObjectKind: "ingest",
-			After: map[string]any{
-				"reason":   "oversized_file",
-				"filename": filepath.Base(path),
-				"size":     fi.Size(),
-				"cap":      w.cfg.MaxBytes,
-			},
-		})
-		return
-	}
-
-	sidecarPath := sidecarFor(path)
-	var side *sidecar.V1
-	if _, err := os.Stat(sidecarPath); err == nil {
-		b, rerr := os.ReadFile(sidecarPath)
-		if rerr != nil {
-			w.moveToErrors(path, sidecarPath, fmt.Errorf("read sidecar: %w", rerr))
-			return
-		}
-		s, perr := sidecar.Parse(b)
-		if perr != nil {
-			w.moveToErrors(path, sidecarPath, perr)
-			return
-		}
-		side = s
-	}
-
-	docID, deduped, err := w.ingest(ctx, path, side)
-	if err != nil {
-		// A live reload cancels the old watcher before the replacement drains
-		// the directory. Leave an interrupted file in place for that drain.
-		if ctx.Err() != nil {
-			return
-		}
-		w.moveToErrors(path, sidecarPath, err)
-		return
-	}
-	if deduped {
-		w.log.Info("fswatch.deduped", "doc_id", docID, "path", filepath.Base(path))
-		// Use the same dedup event as API uploads so every ingest path
-		// reports that it reused an existing document.
-		audit.Log(ctx, w.db, w.log, audit.Event{
-			SystemID: w.systemID,
-			Action:   "document.ingest.deduplicated", ObjectKind: "document", ObjectID: docID,
-			After: map[string]any{"source": "fswatch", "filename": filepath.Base(path)},
-		})
-	} else {
-		w.log.Info("fswatch.ingested", "doc_id", docID, "path", filepath.Base(path))
-	}
-
-	if !w.cfg.KeepOnSuccess {
-		_ = os.Remove(path)
-		if side != nil {
-			_ = os.Remove(sidecarPath)
-		}
-	}
-
-	// Nudge the dispatcher so the post-ingest job runs immediately
-	// instead of waiting the poll interval.
-	w.disp.Nudge()
-}
-
-// ingest streams the file into CAS, sniffs MIME, applies sidecar
-// metadata inside a single write tx that also inserts the doc row
-// and enqueues the post-ingest job. The dedup rules match the upload
-// handler: alive collision → return existing id; trashed collision
-// → undelete; else insert. Returns deduped=true when either dedup
-// branch fired (caller uses this for audit + log line phrasing).
+// ingest opens a direct test/caller path, while reconciliation uses ingestOpen
+// with an os.Root-confined file descriptor.
 func (w *Watcher) ingest(ctx context.Context, path string, side *sidecar.V1) (int64, bool, error) {
-	// Hash-and-store into CAS.
 	f, err := os.Open(path)
 	if err != nil {
 		return 0, false, fmt.Errorf("open: %w", err)
 	}
 	defer f.Close()
+	info, err := f.Stat()
+	if err != nil {
+		return 0, false, fmt.Errorf("stat: %w", err)
+	}
+	relativePath, err := filepath.Rel(w.cfg.Dir, path)
+	if err != nil || relativePath == "." || relativePath == ".." ||
+		strings.HasPrefix(relativePath, ".."+string(os.PathSeparator)) {
+		relativePath = filepath.Base(path)
+	}
+	relativePath = filepath.ToSlash(relativePath)
+	return w.ingestOpen(ctx, path, relativePath, f, info, side, sourceFingerprint{
+		Size: info.Size(), MTimeNS: info.ModTime().UnixNano(), SidecarSize: -1,
+	}, nil)
+}
+
+// ingestOpen streams one already-confined regular file into CAS, then commits
+// its document, source, job, and observation checkpoint together.
+func (w *Watcher) ingestOpen(ctx context.Context, path, relativePath string, f *os.File,
+	info os.FileInfo, side *sidecar.V1, fingerprint sourceFingerprint, root *os.Root,
+) (int64, bool, error) {
 	ref, err := w.cas.Put(f)
 	if err != nil {
 		return 0, false, fmt.Errorf("cas put: %w", err)
 	}
+	after, err := f.Stat()
+	if err != nil {
+		return 0, false, fmt.Errorf("restat: %w", err)
+	}
+	if !os.SameFile(info, after) || info.Size() != after.Size() ||
+		info.ModTime().UnixNano() != after.ModTime().UnixNano() {
+		return 0, false, errSourceChanged
+	}
+	if root != nil {
+		current, err := root.Lstat(relativePath)
+		if err != nil || !os.SameFile(info, current) ||
+			info.Size() != current.Size() || info.ModTime().UnixNano() != current.ModTime().UnixNano() {
+			return 0, false, errSourceChanged
+		}
+	}
 
-	// Sniff MIME on first 512 bytes of the stored blob (matches the
-	// upload API path — never trust the filename).
 	mime, err := w.sniffMIME(ref.SHA256)
 	if err != nil {
 		w.log.Warn("fswatch.mime_sniff", "err", err.Error())
@@ -374,10 +225,6 @@ func (w *Watcher) ingest(ctx context.Context, path string, side *sidecar.V1) (in
 	if err != nil {
 		return 0, false, fmt.Errorf("resolve inbox: %w", err)
 	}
-
-	// JD category from sidecar, if it resolves. Unresolved codes
-	// (rule matched but code doesn't exist in this instance) fall
-	// through to inbox — same policy as the bulk importer.
 	catID := inbox
 	if side != nil && side.JDCategory != 0 {
 		var id int64
@@ -389,12 +236,7 @@ func (w *Watcher) ingest(ctx context.Context, path string, side *sidecar.V1) (in
 			return 0, false, fmt.Errorf("resolve jd code %d: %w", side.JDCategory, err)
 		}
 	}
-	relPath, relErr := filepath.Rel(w.cfg.Dir, path)
-	if relErr != nil || relPath == "." || relPath == ".." || strings.HasPrefix(relPath, ".."+string(os.PathSeparator)) {
-		relPath = filepath.Base(path)
-	}
 	sourceLabel := filepath.Base(filepath.Clean(w.cfg.Dir))
-	sourceDetail := filepath.ToSlash(relPath)
 
 	var docID int64
 	var deduped bool
@@ -415,7 +257,14 @@ func (w *Watcher) ingest(ctx context.Context, path string, side *sidecar.V1) (in
 				return errors.New("fswatch: sidecar jd_system does not match configured system")
 			}
 		}
-		// Alive dedup is owner-scoped, matching the ingestion deduplication behavior.
+		record := func(id int64) error {
+			if err := ingestmeta.RecordSource(ctx, tx, id, ingestmeta.SourceWatchedFolder,
+				sourceLabel, relativePath, time.Now().Unix()); err != nil {
+				return err
+			}
+			return w.recordObservationInTx(ctx, tx, relativePath, fingerprint, "ingested", id, "")
+		}
+
 		var aliveID int64
 		errAlive := tx.QueryRowContext(ctx,
 			`SELECT id FROM documents
@@ -423,17 +272,14 @@ func (w *Watcher) ingest(ctx context.Context, path string, side *sidecar.V1) (in
 			w.systemID, w.ownerID, ref.SHA256,
 		).Scan(&aliveID)
 		if errAlive == nil {
-			docID = aliveID
-			deduped = true
+			docID, deduped = aliveID, true
 			w.log.Info("fswatch.dedup.alive", "doc_id", docID, "sha", ref.SHA256)
-			return ingestmeta.RecordSource(ctx, tx, docID,
-				ingestmeta.SourceWatchedFolder, sourceLabel, sourceDetail, time.Now().Unix())
+			return record(docID)
 		}
 		if !errors.Is(errAlive, sql.ErrNoRows) {
 			return errAlive
 		}
 
-		// Trashed dedup → undelete.
 		var trashedID int64
 		errTrashed := tx.QueryRowContext(ctx,
 			`SELECT id FROM documents
@@ -448,17 +294,14 @@ func (w *Watcher) ingest(ctx context.Context, path string, side *sidecar.V1) (in
 			); err != nil {
 				return err
 			}
-			docID = trashedID
-			deduped = true
+			docID, deduped = trashedID, true
 			w.log.Info("fswatch.dedup.restored", "doc_id", docID)
-			return ingestmeta.RecordSource(ctx, tx, docID,
-				ingestmeta.SourceWatchedFolder, sourceLabel, sourceDetail, time.Now().Unix())
+			return record(docID)
 		}
 		if !errors.Is(errTrashed, sql.ErrNoRows) {
 			return errTrashed
 		}
 
-		// Fresh insert.
 		now := time.Now().Unix()
 		created := now
 		if side != nil {
@@ -466,50 +309,37 @@ func (w *Watcher) ingest(ctx context.Context, path string, side *sidecar.V1) (in
 				created = c
 			}
 		}
-		// source_mtime — capture the source file's mtime on disk. Cheap
-		// os.Stat; on error we skip rather than fail ingest.
-		var srcMTime sql.NullInt64
-		if fi, statErr := os.Stat(path); statErr == nil {
-			srcMTime.Int64 = fi.ModTime().Unix()
-			srcMTime.Valid = true
-		}
 		res, err := tx.ExecContext(ctx, `
 			INSERT INTO documents(
 				system_id, owner_id, original_blob, original_size, title, title_owner, mime_type,
 				jd_category_id, added_at, created_at, updated_at, source_mtime
 			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-		`, w.systemID, w.ownerID, ref.SHA256, ref.Size, title, titleOwner, mime, catID, now, created, now, srcMTime)
+		`, w.systemID, w.ownerID, ref.SHA256, ref.Size, title, titleOwner, mime, catID,
+			now, created, now, info.ModTime().Unix())
 		if err != nil {
 			return err
 		}
-		id, err := res.LastInsertId()
+		docID, err = res.LastInsertId()
 		if err != nil {
 			return err
 		}
-		docID = id
-		if err := ingestmeta.RecordSource(ctx, tx, docID,
-			ingestmeta.SourceWatchedFolder, sourceLabel, sourceDetail, now); err != nil {
+		if err := ingestmeta.RecordSource(ctx, tx, docID, ingestmeta.SourceWatchedFolder,
+			sourceLabel, relativePath, now); err != nil {
 			return err
 		}
-
-		// Apply sidecar metadata (correspondent, tags, notes).
 		if side != nil {
 			if err := applySidecar(ctx, tx, docID, side, w.ownerID, w.systemID); err != nil {
 				return err
 			}
 		}
-
-		// Post-ingest job, same tx. Includes consumption-trigger
-		// context so filter_path / filter_filename automations can
-		// route fs-watched docs by directory glob or basename.
 		payload, _ := json.Marshal(map[string]any{
-			"sha256":      ref.SHA256,
-			"size":        ref.Size,
-			"mime_type":   mime,
-			"source_path": path,
-			"filename":    filepath.Base(path),
+			"sha256": ref.SHA256, "size": ref.Size, "mime_type": mime,
+			"source_path": path, "filename": filepath.Base(path),
 		})
-		return jobs.Enqueue(ctx, tx, postingest.Kind, id, w.systemID, string(payload))
+		if err := jobs.Enqueue(ctx, tx, postingest.Kind, docID, w.systemID, string(payload)); err != nil {
+			return err
+		}
+		return w.recordObservationInTx(ctx, tx, relativePath, fingerprint, "ingested", docID, "")
 	})
 	return docID, deduped, err
 }
@@ -605,23 +435,6 @@ func applySidecar(ctx context.Context, tx *sql.Tx, docID int64, s *sidecar.V1, o
 	return nil
 }
 
-// moveToErrors is the failure sink. Moves the document + sidecar to
-// errors/ and drops a matching .err file describing what went wrong.
-// Never blocks ingest of other files — best-effort.
-func (w *Watcher) moveToErrors(path, sidecarPath string, ingestErr error) {
-	base := filepath.Base(path)
-	dst := filepath.Join(w.cfg.Dir, "errors", base)
-	if err := os.Rename(path, dst); err != nil {
-		w.log.Warn("fswatch.move_to_errors.failed", "path", path, "err", err.Error())
-	}
-	if _, err := os.Stat(sidecarPath); err == nil {
-		_ = os.Rename(sidecarPath, filepath.Join(w.cfg.Dir, "errors", filepath.Base(sidecarPath)))
-	}
-	errFile := filepath.Join(w.cfg.Dir, "errors", base+".err")
-	_ = os.WriteFile(errFile, []byte(ingestErr.Error()+"\n"), 0o640)
-	w.log.Warn("fswatch.ingest_failed", "path", base, "err", ingestErr.Error())
-}
-
 // emlLooksLikeEmail is the fallback for files without a .eml
 // extension (Maildir names are cryptic hash strings). Reads the
 // first 4 KiB of the CAS blob and asks the eml package whether the
@@ -673,16 +486,4 @@ func deriveTitle(path string, side *sidecar.V1) string {
 		return "Untitled"
 	}
 	return base
-}
-
-// sidecarFor is `<path>.json` OR `<path-without-ext>.json` — accept
-// both because producer conventions differ.
-func sidecarFor(path string) string {
-	// Prefer the "strip extension, add .json" shape (matches the
-	// split-manifest sidecar pattern used by common ingest tools).
-	base := strings.TrimSuffix(path, filepath.Ext(path))
-	if _, err := os.Stat(base + ".json"); err == nil {
-		return base + ".json"
-	}
-	return path + ".json"
 }

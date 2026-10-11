@@ -82,6 +82,7 @@ type FSWatchSettingsStatus struct {
 	Dir        string `json:"fs_watch_dir"`
 	OwnerEmail string `json:"fs_watch_owner_email"`
 	System     string `json:"fs_watch_system"`
+	Recursive  bool   `json:"fs_watch_recursive"`
 }
 
 type ChatCompletionMessage struct {

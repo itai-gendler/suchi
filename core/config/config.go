@@ -78,11 +78,13 @@ type Config struct {
 	// MSAL adds its required OIDC scopes, including offline_access.
 	IngestIMAPOAuthScopesMicrosoft string
 
-	// Filesystem-watch ingest. Idle unless the owner email is
-	// set — matches the design principle "opt-in, never surprise".
+	// Filesystem-watch ingest. Idle unless the owner email is set.
+	// Recursive discovery defaults on; INGEST_FS_RECURSIVE=off retains
+	// top-level-only discovery for unusually large or constrained trees.
 	IngestFSDir        string
 	IngestFSOwnerEmail string
 	IngestFSSystem     string
+	IngestFSRecursive  bool
 
 	// LLM classifier (opt-in). Empty endpoint = disabled.
 	// Non-local endpoint requires LLMEgressAck=true; the classifier
@@ -207,6 +209,15 @@ func Load() (*Config, error) {
 	}
 	if c.IngestFSDir == "" && c.IngestFSOwnerEmail != "" {
 		c.IngestFSDir = filepath.Join(c.DataDir, "staging")
+	}
+
+	switch value := strings.ToLower(env("INGEST_FS_RECURSIVE", "on")); value {
+	case "on":
+		c.IngestFSRecursive = true
+	case "off":
+		c.IngestFSRecursive = false
+	default:
+		return nil, fmt.Errorf("INGEST_FS_RECURSIVE: unknown value %q (want on|off)", value)
 	}
 
 	var err error

@@ -832,7 +832,9 @@ func (s *Server) GetIngestSettings(w http.ResponseWriter, r *http.Request) {
 		s.serverErr(w, "settings.fswatch.system", err)
 		return
 	}
-	s.writeJSON(w, http.StatusOK, FSWatchSettingsStatus{Dir: cfg.Dir, OwnerEmail: ownerEmail, System: sys.Code})
+	s.writeJSON(w, http.StatusOK, FSWatchSettingsStatus{
+		Dir: cfg.Dir, OwnerEmail: ownerEmail, System: sys.Code, Recursive: cfg.Recursive,
+	})
 }
 
 // SaveIngestSettings persists fs-watch dir + owner and replaces the running

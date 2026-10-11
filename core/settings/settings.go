@@ -506,6 +506,7 @@ type FSWatchConfig struct {
 	OwnerEmail string
 	OwnerID    int64
 	System     string
+	Recursive  bool
 }
 
 // ResolveFSWatchConfig fills fields not pinned by boot configuration from the

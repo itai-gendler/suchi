@@ -444,6 +444,7 @@ func Run(ctx context.Context, opts Options) error {
 		Dir:        cfg.IngestFSDir,
 		OwnerEmail: cfg.IngestFSOwnerEmail,
 		System:     cfg.IngestFSSystem,
+		Recursive:  cfg.IngestFSRecursive,
 	}
 	resolveFSWatcher := func(rctx context.Context) (fswatch.Config, string, error) {
 		fresh := settings.ResolveFSWatchConfig(rctx, d, envFSWatch)
@@ -468,7 +469,7 @@ func Run(ctx context.Context, opts Options) error {
 		}
 		return fswatch.Config{
 			Dir: fresh.Dir, OwnerID: ownerID, System: fresh.System,
-			MaxBytes: cfg.BodyLimit,
+			Recursive: fresh.Recursive, MaxBytes: cfg.BodyLimit,
 		}, ownerEmail, nil
 	}
 	fsSupervisor := fswatch.NewSupervisor(ctx, d, cas, disp, log)
@@ -588,7 +589,9 @@ func Run(ctx context.Context, opts Options) error {
 			}
 			fresh.System = system.Code
 		}
-		return api.FSWatchSettingsStatus{Dir: fresh.Dir, OwnerEmail: ownerEmail, System: fresh.System}, nil
+		return api.FSWatchSettingsStatus{
+			Dir: fresh.Dir, OwnerEmail: ownerEmail, System: fresh.System, Recursive: fresh.Recursive,
+		}, nil
 	}
 	apiSrv.FSWatchReloader = reloadFSWatch
 	apiSrv.LLMStatusReader = func(rctx context.Context) (api.LLMSettingsStatus, error) {

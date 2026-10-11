@@ -9,7 +9,6 @@ require (
 	github.com/emersion/go-imap v1.2.1
 	github.com/emersion/go-message v0.18.2
 	github.com/emersion/go-sasl v0.0.0-20241020182733-b788ff22d5a6
-	github.com/fsnotify/fsnotify v1.10.1
 	github.com/huml-lang/go-huml v0.3.1
 	github.com/johnnybravo-xyz/suchi/plugin-api v0.0.0-00010101000000-000000000000
 	github.com/makiuchi-d/gozxing v0.1.1

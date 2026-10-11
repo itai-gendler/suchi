@@ -128,3 +128,21 @@ WHERE EXISTS (
 DROP TRIGGER documents_title_revision;
 CREATE TRIGGER documents_title_revision AFTER UPDATE OF title, title_owner ON documents
 BEGIN UPDATE documents SET title_revision = title_revision + 1 WHERE id = NEW.id; END;
+
+-- Watched folders are read-only sources. This checkpoint belongs to Suchi and
+-- prevents unchanged source files from being rehashed on every reconciliation.
+CREATE TABLE fs_watch_observations (
+    root_path         TEXT NOT NULL,
+    owner_id          INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    system_id         INTEGER NOT NULL REFERENCES jd_systems(id) ON DELETE CASCADE,
+    relative_path     TEXT NOT NULL,
+    file_size         INTEGER NOT NULL CHECK (file_size >= 0),
+    file_mtime_ns     INTEGER NOT NULL,
+    sidecar_size      INTEGER NOT NULL DEFAULT -1 CHECK (sidecar_size >= -1),
+    sidecar_mtime_ns  INTEGER NOT NULL DEFAULT 0,
+    state             TEXT NOT NULL CHECK (state IN ('ingested', 'ignored', 'failed')),
+    document_id       INTEGER REFERENCES documents(id) ON DELETE SET NULL,
+    last_error        TEXT NOT NULL DEFAULT '',
+    updated_at        INTEGER NOT NULL,
+    PRIMARY KEY (root_path, owner_id, system_id, relative_path)
+) STRICT;

@@ -226,6 +226,33 @@ func TestDeviceOCRMinConfidence(t *testing.T) {
 	}
 }
 
+func TestIngestFSRecursiveDefaultsOnAndCanBeDisabled(t *testing.T) {
+	isolateConfigEnv(t)
+	t.Setenv("PUBLIC_URL", "http://localhost")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cfg.IngestFSRecursive {
+		t.Fatal("recursive watched-folder discovery should default on")
+	}
+
+	t.Setenv("INGEST_FS_RECURSIVE", "OFF")
+	cfg, err = Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.IngestFSRecursive {
+		t.Fatal("INGEST_FS_RECURSIVE=off did not disable recursion")
+	}
+
+	t.Setenv("INGEST_FS_RECURSIVE", "sometimes")
+	if _, err := Load(); err == nil || !strings.Contains(err.Error(), "INGEST_FS_RECURSIVE") {
+		t.Fatalf("invalid recursive setting error = %v", err)
+	}
+}
+
 func TestDevAllowLANRequiresExplicitOne(t *testing.T) {
 	isolateConfigEnv(t)
 	t.Setenv("PUBLIC_URL", "http://localhost")
