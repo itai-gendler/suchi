@@ -13,15 +13,28 @@ Optional integrations must preserve useful local operation.
 - `core/` owns application behavior; `plugins/` contains compiled integrations;
   `plugin-api/` is the extension vocabulary; `distro/app/` assembles the server
   and `distro/cmd/suchi/` owns command parsing and process behavior.
-- `ui/src/` owns the web app. Commit its generated `core/ui/spa/dist/` bundle
-  with source changes so Go builds do not need Bun.
+- `ui/src/` owns the web app. `make ui` generates the ignored
+  `core/ui/spa/dist/` tree for embedded builds; never track that directory.
+  `make build`, `make check`, and `make smoke` regenerate it as needed.
 - `hack/` owns fixtures, smoke tests, and benchmarks. Standalone benchmark
   modules need `GOWORK=off` when invoked directly.
+
+## Change and commit discipline
+
 - Check `git status --short` and `git worktree list` first. Sibling `suchi/`
-  directories may be different branches. Preserve local changes; commit only
-  when asked, with concise messages and no contribution trailers.
+  directories may be different branches. Preserve local changes; commit
+  frequently, with concise messages and no contribution trailers.
 - Use Conventional Commits: `<type>(<scope>): brief imperative message` (scope
-  optional), then a blank line and concise `-` bullets covering behavior and verification.
+  optional), then a blank line and concise `-` bullets covering behavior and
+  verification.
+- When commits are requested, split work into coherent, independently reviewable
+  slices. Keep implementation, UI, and documentation commits separate when each
+  can stand on its own.
+- Stage explicit paths in a dirty worktree. Never use broad staging commands that
+  could include unrelated user changes.
+- Repository guidance and executable checks must agree. If `AGENTS.md`,
+  documentation, hooks, Make targets, or CI enforce conflicting policies, report
+  the contradiction and fix the policy rather than silently choosing one.
 
 ## Licensing
 
@@ -49,8 +62,7 @@ Optional integrations must preserve useful local operation.
   copyleft tool only as a separate process, never linked, and record the
   election and the process boundary in `NOTICE` as msgconvert does.
 - The five built-in filing trees in `core/jd/presets/*.toml` are CC0-1.0 and
-  already published. The `suchi-taxonomy` collection is proprietary and private;
-  do not describe it as CC0 and do not link it from public docs.
+  already published.
 - Johnny.Decimal is a trademark of Coruscade Pty Ltd and its documentation is
   CC BY-NC-SA 4.0, which is incompatible with both of our licenses. Refer to the
   system by name and link to their pages; never copy their prose into ours, and
@@ -90,6 +102,9 @@ Optional integrations must preserve useful local operation.
   complete design. Prefer flat, explicit code over clever patterns, deep
   hierarchies, or unnecessary indirection. Add abstractions only for a current
   concrete need.
+- Before adding a layer, simplify the existing path: reuse current contracts,
+  remove obsolete branches and data, and eliminate avoidable work. Add an
+  abstraction only when the simpler path cannot meet a current requirement.
 - Delete unused code before adding abstractions. Keep ACL, recovery, retry,
   and wire-contract tests; prefer observable assertions over source-text checks.
 - Update the relevant public guide and changelog for user-visible changes.
