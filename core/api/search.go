@@ -100,21 +100,12 @@ func (s *Server) Search(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fromSQL := " FROM documents d"
-	where := make([]string, 0, len(queryPlan.Predicates)+2)
-	args := make([]any, 0, len(queryPlan.Predicates)+1)
-	if queryPlan.Match != "" {
-		fromSQL = " FROM documents_fts JOIN documents d ON d.id = documents_fts.rowid"
-		where = append(where, "documents_fts MATCH ?")
-		args = append(args, queryPlan.Match)
-	}
+	where := make([]string, 0, len(queryPlan.Predicates)+len(queryPlan.TextPredicates)+1)
+	args := make([]any, 0, len(queryPlan.Predicates)+len(queryPlan.TextPredicates))
 	if !queryPlan.HasTrashFilter {
 		where = append(where, "d.trashed_at IS NULL")
 	}
-	for _, predicate := range queryPlan.Predicates {
-		where = append(where, predicate.SQL)
-		args = append(args, predicate.Args...)
-	}
+	where, args = appendQueryPredicates(where, args, queryPlan)
 
 	// Existing visual-filter query parameters remain additive while clients
 	// transition to rich-query filters.
@@ -145,7 +136,7 @@ func (s *Server) Search(w http.ResponseWriter, r *http.Request) {
 	countArgs = append(countArgs, extraArgs...)
 	var total int
 	if err := s.DB.Read.QueryRowContext(r.Context(),
-		"SELECT COUNT(*)"+fromSQL+whereSQL, countArgs...).Scan(&total); err != nil {
+		"SELECT COUNT(*) FROM documents d"+whereSQL, countArgs...).Scan(&total); err != nil {
 		s.serverErr(w, "search.count", err)
 		return
 	}
@@ -156,27 +147,30 @@ func (s *Server) Search(w http.ResponseWriter, r *http.Request) {
 	if queryPlan.Match == "" {
 		pageSQL = `
 			SELECT d.id, d.title, '', 0.0, d.created_at,
-			       COALESCE(d.mime_type, ''), COALESCE(d.sensitivity, ''), sys.code, COALESCE(category.code,0)` +
-			fromSQL + searchAddressJoins + whereSQL + `
+			       COALESCE(d.mime_type, ''), COALESCE(d.sensitivity, ''), sys.code, COALESCE(category.code,0)
+			FROM documents d` + searchAddressJoins + whereSQL + `
 			ORDER BY d.created_at DESC, d.id DESC
 			LIMIT ? OFFSET ?`
 		queryArgs = append(queryArgs, args...)
 		queryArgs = append(queryArgs, extraArgs...)
 		queryArgs = append(queryArgs, p.PageSize, p.Offset())
 	} else {
+		boost := recencyBoost
 		if r.URL.Query().Get("recency") == "off" {
-			pageSQL = searchFTSRawPageSQL(whereSQL)
-			queryArgs = append(queryArgs, bm25TitleWeight, bm25ContentWeight)
-			queryArgs = append(queryArgs, args...)
-			queryArgs = append(queryArgs, extraArgs...)
-			queryArgs = append(queryArgs, p.PageSize, p.Offset())
-		} else {
-			rankExpr := "bm25(documents_fts, ?, ?) - ? / (1.0 + (CAST(unixepoch() - d.created_at AS REAL) / ?))"
-			pageSQL = searchFTSPageSQL(whereSQL, rankExpr)
-			queryArgs = append(queryArgs, bm25TitleWeight, bm25ContentWeight, recencyBoost, float64(recencyHalfLifeS))
-			queryArgs = append(queryArgs, args...)
-			queryArgs = append(queryArgs, extraArgs...)
-			queryArgs = append(queryArgs, p.PageSize, p.Offset(), queryPlan.Match)
+			boost = 0
+		}
+		trigram := queryPlan.TrigramMatch != ""
+		pageSQL = searchFTSPageSQL(whereSQL, trigram)
+		queryArgs = append(queryArgs, bm25TitleWeight, bm25ContentWeight, queryPlan.Match)
+		if trigram {
+			queryArgs = append(queryArgs, bm25TitleWeight, bm25ContentWeight, queryPlan.TrigramMatch)
+		}
+		queryArgs = append(queryArgs, boost, float64(recencyHalfLifeS))
+		queryArgs = append(queryArgs, args...)
+		queryArgs = append(queryArgs, extraArgs...)
+		queryArgs = append(queryArgs, p.PageSize, p.Offset(), queryPlan.Match)
+		if trigram {
+			queryArgs = append(queryArgs, queryPlan.TrigramMatch)
 		}
 	}
 	rows, err := s.DB.Read.QueryContext(r.Context(), pageSQL, queryArgs...)
@@ -195,6 +189,7 @@ func (s *Server) Search(w http.ResponseWriter, r *http.Request) {
 			s.serverErr(w, "search.scan", err)
 			return
 		}
+		hit.Snippet = closeMarks(hit.Snippet)
 		hit.JDAddress = systems.Address(hit.SystemCode, categoryCode, hit.ID)
 		out = append(out, hit)
 	}
@@ -205,41 +200,60 @@ func (s *Server) Search(w http.ResponseWriter, r *http.Request) {
 	s.writeJSON(w, http.StatusOK, BuildEnvelope(r, total, p, out))
 }
 
-func searchFTSPageSQL(whereSQL, rankExpr string) string {
-	// Bound the second MATCH and snippet pass to the recency-ranked page.
+// searchFTSPageSQL ranks word-index hits (porter stems, bm25 plus recency)
+// ahead of substring-only trigram hits, then documents matched only by the
+// short-term scan. Excerpts come from the word index when it matched, else
+// from a highlighted trigram window.
+func searchFTSPageSQL(whereSQL string, trigram bool) string {
+	trigramCTE, trigramJoin, trigramScore, trigramPassage := "", "", "NULL", "NULL"
+	if trigram {
+		trigramCTE = `, trigram_hits AS MATERIALIZED (
+			SELECT rowid AS id, bm25(documents_trigram, ?, ?) AS score
+			FROM documents_trigram WHERE documents_trigram MATCH ?
+		)`
+		trigramJoin = `
+			LEFT JOIN trigram_hits ON trigram_hits.id = d.id`
+		trigramScore = "trigram_hits.score"
+		trigramPassage = `(SELECT substr(h, max(1, instr(h, '<mark>') - 60), 240)
+		              FROM (SELECT highlight(documents_trigram, 1, '<mark>', '</mark>') AS h
+		                    FROM documents_trigram WHERE documents_trigram MATCH ? AND rowid = d.id))`
+	}
 	return `
-		WITH ranked AS MATERIALIZED (
-			SELECT d.id, ` + rankExpr + ` AS match_rank
-			FROM documents_fts
-			JOIN documents d ON d.id = documents_fts.rowid` + whereSQL + `
-			ORDER BY match_rank, d.id
+		WITH word_hits AS MATERIALIZED (
+			SELECT rowid AS id, bm25(documents_fts, ?, ?) AS score
+			FROM documents_fts WHERE documents_fts MATCH ?
+		)` + trigramCTE + `, ranked AS MATERIALIZED (
+			SELECT d.id, word_hits.id IS NULL AS tier,
+			       COALESCE(word_hits.score, ` + trigramScore + `, 0)
+			         - ? / (1.0 + (CAST(unixepoch() - d.created_at AS REAL) / ?)) AS match_rank
+			FROM documents d
+			LEFT JOIN word_hits ON word_hits.id = d.id` + trigramJoin + whereSQL + `
+			ORDER BY tier, match_rank, d.id
 			LIMIT ? OFFSET ?
 		)
 		SELECT d.id, d.title,
 		       CASE WHEN COALESCE(d.sensitivity, '') IN ('confidential', 'restricted') THEN ''
-		            ELSE COALESCE(snippet(documents_fts, 1, '<mark>', '</mark>', '…', 20), '') END,
+		            ELSE COALESCE(
+		              (SELECT snippet(documents_fts, 1, '<mark>', '</mark>', '…', 20)
+		               FROM documents_fts WHERE documents_fts MATCH ? AND rowid = d.id),
+		              ` + trigramPassage + `, '') END,
 		       ranked.match_rank, d.created_at,
 		       COALESCE(d.mime_type, ''), COALESCE(d.sensitivity, ''), sys.code, COALESCE(category.code,0)
 		FROM ranked
 		JOIN documents d ON d.id = ranked.id` + searchAddressJoins + `
-		CROSS JOIN documents_fts
-		WHERE documents_fts.rowid = ranked.id
-		  AND documents_fts MATCH ?
-		ORDER BY ranked.match_rank, ranked.id`
+		ORDER BY ranked.tier, ranked.match_rank, ranked.id`
 }
 
-func searchFTSRawPageSQL(whereSQL string) string {
-	// Plain BM25 is faster in one FTS scan than through a second bounded MATCH.
-	return `
-		SELECT d.id, d.title,
-		       CASE WHEN COALESCE(d.sensitivity, '') IN ('confidential', 'restricted') THEN ''
-		            ELSE COALESCE(snippet(documents_fts, 1, '<mark>', '</mark>', '…', 20), '') END,
-		       bm25(documents_fts, ?, ?) AS match_rank, d.created_at,
-		       COALESCE(d.mime_type, ''), COALESCE(d.sensitivity, ''), sys.code, COALESCE(category.code,0)
-		FROM documents_fts
-		JOIN documents d ON d.id = documents_fts.rowid` + searchAddressJoins + whereSQL + `
-		ORDER BY match_rank, d.id
-		LIMIT ? OFFSET ?`
+// closeMarks repairs a passage window that ends inside or after an open
+// <mark> tag, so the browser never renders a half tag as text.
+func closeMarks(passage string) string {
+	if i := strings.LastIndexByte(passage, '<'); i >= 0 && !strings.Contains(passage[i:], ">") {
+		passage = passage[:i]
+	}
+	if strings.Count(passage, "<mark>") > strings.Count(passage, "</mark>") {
+		passage += "</mark>"
+	}
+	return passage
 }
 
 // AutocompleteSuggestion is one entry in the autocomplete response.

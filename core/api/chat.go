@@ -765,22 +765,32 @@ func (s *Server) queryChatFTSSources(ctx context.Context, q sqlQueryer, terms []
 	where := append([]string(nil), baseWhere...)
 	args := append([]any(nil), baseArgs...)
 	queryParts := make([]string, len(terms))
+	trigramParts := make([]string, 0, len(terms))
 	for i, term := range terms {
 		queryParts[i] = term + "*"
+		if utf8.RuneCountInString(term) >= 3 {
+			trigramParts = append(trigramParts, `"`+term+`"`)
+		}
 	}
 	matchQuery := strings.Join(queryParts, " OR ")
+	trigramQuery := strings.Join(trigramParts, " OR ")
 	if len(ids) > 0 {
 		where = append(where, "d.id IN ("+placeholders(len(ids))+")")
 		for _, id := range ids {
 			args = append(args, id)
 		}
 	}
-	where = append([]string{"documents_fts MATCH ?"}, where...)
-	args = append([]any{matchQuery}, args...)
-	args = append(args, limit,
-		markers.start, markers.end, matchQuery,
-		maxSourceRunes, markers.start)
-	rows, err := q.QueryContext(ctx, chatFTSSourceSQL(where), args...)
+	leading := []any{matchQuery}
+	if trigramQuery != "" {
+		leading = append(leading, trigramQuery)
+	}
+	args = append(leading, args...)
+	args = append(args, limit, markers.start, markers.end, matchQuery)
+	if trigramQuery != "" {
+		args = append(args, markers.start, markers.end, trigramQuery)
+	}
+	args = append(args, maxSourceRunes, markers.start)
+	rows, err := q.QueryContext(ctx, chatFTSSourceSQL(where, trigramQuery != ""), args...)
 	if err != nil {
 		return nil, err
 	}
@@ -788,24 +798,37 @@ func (s *Server) queryChatFTSSources(ctx context.Context, q sqlQueryer, terms []
 	return scanChatSourceMaterials(rows, limit, markers)
 }
 
-func chatFTSSourceSQL(where []string) string {
-	// Rank first, then materialize one marked snippet per bounded result row.
-	// The rowid-restricted MATCH keeps FTS5 auxiliary functions valid.
+// chatFTSSourceSQL ranks word-index hits ahead of substring-only trigram hits,
+// then materializes one marked passage per bounded result row.
+func chatFTSSourceSQL(where []string, trigram bool) string {
+	hits := `SELECT rowid AS id, bm25(documents_fts, 3.0, 1.0) AS score, 0 AS tier
+			FROM documents_fts WHERE documents_fts MATCH ?`
+	trigramPassage := "NULL"
+	if trigram {
+		hits += `
+			UNION ALL
+			SELECT rowid, bm25(documents_trigram, 3.0, 1.0), 1
+			FROM documents_trigram WHERE documents_trigram MATCH ?`
+		trigramPassage = `(SELECT highlight(documents_trigram, 1, ?, ?) FROM documents_trigram
+			          WHERE documents_trigram MATCH ? AND rowid = ranked.id)`
+	}
 	return `
-		WITH ranked AS MATERIALIZED (
-			SELECT d.id, bm25(documents_fts, 3.0, 1.0) AS match_rank
-			FROM documents_fts
-			JOIN documents d ON d.id = documents_fts.rowid
+		WITH hits AS MATERIALIZED (` + hits + `
+		), ranked AS MATERIALIZED (
+			SELECT d.id, min(hits.tier) AS tier, min(hits.score) AS match_rank
+			FROM hits
+			JOIN documents d ON d.id = hits.id
 			WHERE ` + strings.Join(where, " AND ") + `
-			ORDER BY match_rank, d.id
+			GROUP BY d.id
+			ORDER BY tier, match_rank, d.id
 			LIMIT ?
 		), marked AS MATERIALIZED (
-			SELECT ranked.id, ranked.match_rank,
-			       COALESCE(snippet(documents_fts, 1, ?, ?, ' … ', ` + strconv.Itoa(chatFTSSnippetTokens) + `), '') AS marked_passage
+			SELECT ranked.id, ranked.tier, ranked.match_rank,
+			       COALESCE(
+			         (SELECT snippet(documents_fts, 1, ?, ?, ' … ', ` + strconv.Itoa(chatFTSSnippetTokens) + `)
+			          FROM documents_fts WHERE documents_fts MATCH ? AND rowid = ranked.id),
+			         ` + trigramPassage + `, '') AS marked_passage
 			FROM ranked
-			CROSS JOIN documents_fts
-			WHERE documents_fts.rowid = ranked.id
-			  AND documents_fts MATCH ?
 		)
 		SELECT d.id, substr(COALESCE(d.title, ''), 1, ` + strconv.Itoa(chatMaxTitleRunes) + `),
 		       CASE WHEN length(COALESCE(d.content, '')) <= ? THEN COALESCE(d.content, '') ELSE '' END,
@@ -818,7 +841,7 @@ func chatFTSSourceSQL(where []string) string {
 		       COALESCE(d.sensitivity, '')
 		FROM marked
 		JOIN documents d ON d.id = marked.id
-		ORDER BY marked.match_rank, marked.id`
+		ORDER BY marked.tier, marked.match_rank, marked.id`
 }
 
 func (s *Server) queryChatContextSources(ctx context.Context, q sqlQueryer, ids []int64,
@@ -868,15 +891,17 @@ func (s *Server) queryChatAdditionalPassages(ctx context.Context, q sqlQueryer, 
 	if term == "" || len(ids) == 0 {
 		return map[int64]string{}, nil
 	}
-	args := make([]any, 0, len(ids)+4)
-	args = append(args,
-		markers.start, markers.end,
-		"content : "+term+"*")
+	trigram := utf8.RuneCountInString(term) >= 3
+	args := make([]any, 0, len(ids)+7)
+	args = append(args, markers.start, markers.end, "content : "+term+"*")
+	if trigram {
+		args = append(args, markers.start, markers.end, `content : "`+term+`"`)
+	}
 	for _, id := range ids {
 		args = append(args, id)
 	}
 	args = append(args, markers.start)
-	rows, err := q.QueryContext(ctx, chatAdditionalPassagesSQL(len(ids)), args...)
+	rows, err := q.QueryContext(ctx, chatAdditionalPassagesSQL(len(ids), trigram), args...)
 	if err != nil {
 		return nil, err
 	}
@@ -893,20 +918,28 @@ func (s *Server) queryChatAdditionalPassages(ctx context.Context, q sqlQueryer, 
 	return passages, rows.Err()
 }
 
-func chatAdditionalPassagesSQL(idCount int) string {
+func chatAdditionalPassagesSQL(idCount int, trigram bool) string {
+	trigramPassage := "NULL"
+	if trigram {
+		trigramPassage = `(SELECT highlight(documents_trigram, 1, ?, ?) FROM documents_trigram
+			          WHERE documents_trigram MATCH ? AND rowid = d.id)`
+	}
 	return `
 		WITH marked AS MATERIALIZED (
-			SELECT rowid,
-			       COALESCE(snippet(documents_fts, 1, ?, ?, ' … ', ` + strconv.Itoa(chatFTSSnippetTokens) + `), '') AS marked_passage
-			FROM documents_fts
-			WHERE documents_fts MATCH ?
-			  AND rowid IN (` + placeholders(idCount) + `)
+			SELECT d.id AS rowid,
+			       COALESCE(
+			         (SELECT snippet(documents_fts, 1, ?, ?, ' … ', ` + strconv.Itoa(chatFTSSnippetTokens) + `)
+			          FROM documents_fts WHERE documents_fts MATCH ? AND rowid = d.id),
+			         ` + trigramPassage + `) AS marked_passage
+			FROM documents d
+			WHERE d.id IN (` + placeholders(idCount) + `)
 		)
 		SELECT rowid,
 		       substr(marked_passage,
 		              max(1, instr(marked_passage, ?) - ` + strconv.Itoa(chatMaxPassageRunes/2) + `),
 			              ` + strconv.Itoa(chatMaxPassageRunes+chatFTSMarkerRunes*2) + `)
 		FROM marked
+		WHERE marked_passage IS NOT NULL
 		ORDER BY rowid`
 }
 

@@ -81,6 +81,9 @@ func TestFTS5(t *testing.T) {
 	if got := ftsHits(t, d, "rupees"); got != 1 {
 		t.Errorf("porter stem miss: MATCH 'rupees' hits = %d, want 1", got)
 	}
+	if got := trigramHits(t, d, `"ctricity"`); got != 1 {
+		t.Errorf("after insert: trigram 'ctricity' hits = %d, want 1", got)
+	}
 	// Porter stemmer collides invoice/invoices — prove it.
 	err = d.WriteTx(ctx, func(tx *sql.Tx) error {
 		_, err := tx.ExecContext(ctx,
@@ -96,6 +99,12 @@ func TestFTS5(t *testing.T) {
 	if got := ftsHits(t, d, "rupees"); got != 0 {
 		t.Errorf("after UPDATE: stale 'rupees' hits = %d, want 0", got)
 	}
+	if got := trigramHits(t, d, `"rupees"`); got != 0 {
+		t.Errorf("after UPDATE: stale trigram 'rupees' hits = %d, want 0", got)
+	}
+	if got := trigramHits(t, d, `"nvoices for"`); got != 1 {
+		t.Errorf("after UPDATE: trigram 'nvoices for' hits = %d, want 1", got)
+	}
 
 	// Delete flushes the FTS row.
 	err = d.WriteTx(ctx, func(tx *sql.Tx) error {
@@ -108,6 +117,9 @@ func TestFTS5(t *testing.T) {
 	if got := ftsHits(t, d, "invoice"); got != 0 {
 		t.Errorf("after DELETE: hits = %d, want 0", got)
 	}
+	if got := trigramHits(t, d, `"invoice"`); got != 0 {
+		t.Errorf("after DELETE: trigram hits = %d, want 0", got)
+	}
 }
 
 func ftsHits(t *testing.T, d *db.DB, term string) int {
@@ -117,6 +129,17 @@ func ftsHits(t *testing.T, d *db.DB, term string) int {
 		`SELECT COUNT(*) FROM documents_fts WHERE documents_fts MATCH ?`, term).Scan(&n)
 	if err != nil {
 		t.Fatalf("fts query: %v", err)
+	}
+	return n
+}
+
+func trigramHits(t *testing.T, d *db.DB, term string) int {
+	t.Helper()
+	var n int
+	err := d.Read.QueryRow(
+		`SELECT COUNT(*) FROM documents_trigram WHERE documents_trigram MATCH ?`, term).Scan(&n)
+	if err != nil {
+		t.Fatalf("trigram query: %v", err)
 	}
 	return n
 }

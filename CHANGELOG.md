@@ -6,6 +6,11 @@ Notable user-visible changes to Suchi are recorded here.
 
 ### Changed
 
+- Search, Documents, Calendar and Ask your documents also match text inside
+  words: German compounds (`Versicherung` finds `Krankenversicherung`) and
+  Chinese, Japanese, Korean and Thai text written without spaces. English
+  stemming is unchanged. The upgrade builds a second search index, which adds
+  storage and some write time; see the search guide.
 - Add account-level language preference, locale negotiation, validated deferred
   browser catalogs, localized server-rendered pages, locale-aware formatting and
   plural rules, with English fallback and automatic text direction.

@@ -647,7 +647,9 @@ Logs/metrics use matched route patterns, propagated outward through request copi
 ## Retrieval, filing, and human review
 
 `core/searchquery` parses bounded flat clauses, resolves names at the API boundary
-and compiles parameterized SQL/FTS. `core/api/search_query.go` keeps ranked Search,
+and compiles parameterized SQL/FTS. Each text clause matches the porter word index
+(`documents_fts`) or the substring trigram index (`documents_trigram`), so search
+does not depend on the documents' language. `core/api/search_query.go` keeps ranked Search,
 sortable Documents and saved views on the same document-set contract while
 preserving response shapes. See [Search](/search).
 
