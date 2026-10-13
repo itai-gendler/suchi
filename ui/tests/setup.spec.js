@@ -151,44 +151,38 @@ for (const switchAccount of [false, true]) {
       expect(uploadCredentials).toEqual(['cookie'])
       await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible()
     } else {
-      await expect(page.getByText('duplicate', { exact: true })).toBeVisible()
+      await expect(page.getByText(/^Already in the archive/)).toBeVisible()
       expect(uploadCredentials).toEqual(['cookie', 'cookie'])
       expect(await page.evaluate(() => localStorage.getItem('suchi.token'))).toBeNull()
     }
   })
 }
 
-for (const target of ['page', 'modal']) {
-  test(`uploads each ${target} drop once and refreshes the document list`, async ({ page }) => {
-    const options = { filingTreeChosen: true, documents: [] }
-    await mockAPI(page, options)
-    let uploads = 0
-    await page.route('**/api/documents/', async route => {
-      if (route.request().method() !== 'POST') return route.fallback()
-      uploads++
-      options.documents = [{ id: 41, title: 'Dropped receipt.pdf', created_at: 1780000000 }]
-      return route.fulfill({ json: { id: 41, deduplicated: true } })
-    })
-    await page.goto('/#/documents')
-    await expect(page.getByText('No documents match.', { exact: true })).toBeVisible()
-    if (target === 'modal') {
-      await page.getByRole('button', { name: 'Upload documents', exact: true }).click()
-      await expect(page.getByRole('dialog', { name: 'Upload documents' }).locator('.drop')).toBeVisible()
-    }
-    await page.evaluate(target => {
-      const transfer = new DataTransfer()
-      transfer.items.add(new File(['%PDF-test-one'], 'receipt.pdf', { type: 'application/pdf' }))
-      const dropTarget = target === 'modal' ? document.querySelector('.modal .drop') : window
-      dropTarget.dispatchEvent(new DragEvent('dragenter', { dataTransfer: transfer, bubbles: true, cancelable: true }))
-      dropTarget.dispatchEvent(new DragEvent('drop', { dataTransfer: transfer, bubbles: true, cancelable: true }))
-    }, target)
-    await expect(page.getByText('duplicate', { exact: true })).toBeVisible()
-    await expect(page.locator('.dropveil')).toHaveCount(0)
-    await page.getByRole('button', { name: 'Close upload' }).click()
-    await expect(page.getByRole('link', { name: /Dropped receipt.pdf/ })).toBeVisible()
-    expect(uploads).toBe(1)
+test('uploads a dropped file once on the upload page and refreshes the document list', async ({ page }) => {
+  const options = { filingTreeChosen: true, documents: [] }
+  await mockAPI(page, options)
+  let uploads = 0
+  await page.route('**/api/documents/', async route => {
+    if (route.request().method() !== 'POST') return route.fallback()
+    uploads++
+    options.documents = [{ id: 41, title: 'Dropped receipt.pdf', created_at: 1780000000 }]
+    return route.fulfill({ json: { id: 41, deduplicated: true } })
   })
-}
+  await page.goto('/#/documents')
+  await expect(page.getByText('No documents match.', { exact: true })).toBeVisible()
+  await page.evaluate(() => {
+    const transfer = new DataTransfer()
+    transfer.items.add(new File(['%PDF-test-one'], 'receipt.pdf', { type: 'application/pdf' }))
+    window.dispatchEvent(new DragEvent('dragenter', { dataTransfer: transfer, bubbles: true, cancelable: true }))
+    window.dispatchEvent(new DragEvent('drop', { dataTransfer: transfer, bubbles: true, cancelable: true }))
+  })
+  await expect(page).toHaveURL(/#\/upload$/)
+  await expect(page.getByText(/^Already in the archive/)).toBeVisible()
+  await expect(page.locator('.dropveil')).toHaveCount(0)
+  await page.goto('/#/documents')
+  await expect(page.getByRole('link', { name: /Dropped receipt.pdf/ })).toBeVisible()
+  expect(uploads).toBe(1)
+})
 
 for (const input of ['drop', 'picker']) {
   test('stops queued ' + input + ' uploads when the account changes', async ({ page }) => {
@@ -235,7 +229,6 @@ for (const input of ['drop', 'picker']) {
       })
     }
     await expect.poll(() => !!firstUpload).toBe(true)
-    if (input === 'drop') await page.getByRole('button', { name: 'Close upload' }).click()
     const navigation = page.getByRole('button', { name: 'Open navigation', exact: true })
     if (await navigation.isVisible()) await navigation.click()
     await page.getByRole('button', { name: 'Sign out', exact: true }).click()
@@ -623,20 +616,21 @@ async function mockAPI(page, options = {}) {
       return
     }
     if (path === '/api/jd/categories/' && options.taxonomyFailure) {
-      await route.fulfill({ status: 500, json: { error: 'taxonomy unavailable' } })
+      await route.fulfill({ status: 503, json: { error: 'taxonomy unavailable' } })
       return
     }
     if (path === '/api/admin/settings/llm' && request.method() === 'PATCH' &&
         (request.postDataJSON().auto_apply !== undefined ? options.applicationModeSaveFailure : options.researchContextSaveFailure)) {
       await route.fulfill({
-        status: 500,
+        status: 503,
         json: { code: 'save_failed', error: options.failureMessage || 'reading amount unavailable' },
       })
       return
     }
     if (options.failPaths?.includes(path)) {
       await route.fulfill({
-        status: options.failureStatus || 500,
+        // 500 and 502 bodies are generic; a 503 carries the server's reason.
+        status: options.failureStatus || 503,
         json: {
           code: options.failureCode,
           error: options.failureMessage || 'forced request failure',
@@ -2116,7 +2110,7 @@ test('requires review and a successful apply before Blank satisfies archive setu
   await (await openBlankReview()).click()
   await expect(page.getByText(options.failureMessage, { exact: true })).toBeVisible()
   await page.goto('/#/dashboard')
-  await expect(page.locator('.setup-reminder').filter({ visible: true })).toHaveCount(1)
+  await expect(page.getByText('Choose your filing tree', { exact: true })).toBeVisible()
 
   options.failPaths.length = 0
   await (await openBlankReview()).click()
@@ -2182,7 +2176,7 @@ test('keeps the filing index neutral until a preset is applied', async ({ page }
 test('uses the demo category database id in document links', async ({ page }) => {
   await mockAPI(page, {
     jdCategories: [{
-      id: 6, code: 22, name: 'Money and tax', area_code: 20, area_name: 'Money',
+      id: 6, code: 21, name: 'Bank & card statements', area_code: 20, area_name: 'Money',
     }],
   })
   await page.goto('/#/demo')
@@ -2896,7 +2890,7 @@ test('loads recent dashboard documents once per navigation', async ({ page }) =>
   })
   await mockAPI(page)
   await page.goto('/#/dashboard')
-  await expect(page.getByText('No recent documents.')).toBeVisible()
+  await expect(page.getByText('Nothing here yet.')).toBeVisible()
   await expect.poll(() => recentRequests).toBe(1)
   await page.waitForTimeout(150)
   expect(recentRequests).toBe(1)
@@ -4183,7 +4177,7 @@ test('saves the display name through supported profile fields and keeps email re
   await expect(profile.getByLabel('Display name', { exact: true })).toHaveValue('Updated name')
   await expect(profile.getByLabel('Email', { exact: true })).toHaveValue('admin@example.test')
   await expect(profile.getByLabel('Email', { exact: true })).toHaveAttribute('readonly', '')
-  expect(changes).toEqual([{ display_name: 'Updated name' }])
+  expect(changes).toEqual([{ display_name: 'Updated name', locale: '' }])
   expect(pageErrors).toEqual([])
 })
 
@@ -4327,8 +4321,9 @@ test('uses provider reauthentication for OIDC-managed email and consumes fixed n
   }
 
   await page.goto('/?account_notice=untrusted-detail#/settings')
+  // Wait for the app to consume the notice before checking no toast appeared.
+  await expect.poll(() => new URL(page.url()).searchParams.has('account_notice')).toBe(false)
   await expect(page.locator('.toast[role="status"]')).toHaveCount(0)
-  expect(new URL(page.url()).searchParams.has('account_notice')).toBe(false)
   expect(new URL(page.url()).hash).toBe('#/settings')
 })
 
@@ -4964,7 +4959,7 @@ test('shows affected document titles in rescan details', async ({ page }) => {
   await page.goto('/#/tasks')
 
   await page.getByText('Affected documents', { exact: true }).click()
-  await expect(page.getByText('Text extraction has improved. 5 documents can be updated.', { exact: true })).toBeVisible()
+  await expect(page.getByText('Document text has improved. 5 documents can be updated.', { exact: true })).toBeVisible()
   await expect(page.getByText(/can be updated to v\d/)).toHaveCount(0)
   await expect(page.getByText('Affected documents')).toBeVisible()
   await expect(page.getByRole('link', { name: 'SBI account statement August 2026.pdf' })).toHaveAttribute('href', '#/doc/18')
@@ -5417,7 +5412,8 @@ test('clearing an active document question invalidates it without restoring text
   await expect(page.getByText('Request canceled.')).toHaveCount(0)
 })
 
-test('shows the platform search shortcut and focuses the Omnibox', async ({ page }) => {
+test('shows the platform search shortcut and focuses the Omnibox', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name === 'mobile', 'desktop hint; the test resizes to check mobile hiding')
   await mockAPI(page, { filingTreeChosen: true })
   await page.goto('/#/dashboard')
 
@@ -5437,30 +5433,12 @@ test('shows the platform search shortcut and focuses the Omnibox', async ({ page
   await expect(hint).toBeHidden()
 })
 
-test('makes the upload modal inert, focused, trapped, and dismissible', async ({ page }) => {
+test('opens the upload page from the top bar', async ({ page }) => {
   await mockAPI(page, { filingTreeChosen: true })
   await page.goto('/#/dashboard')
-  const opener = page.getByRole('button', { name: 'Upload documents' })
-  await opener.focus()
-  await opener.click()
-  const dialog = page.getByRole('dialog', { name: 'Upload documents' })
-  await expect(dialog).toBeVisible()
-  await expect(dialog).toBeFocused()
-  await expect(page.locator('.shell')).toHaveAttribute('inert', '')
-  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+k' : 'Control+k')
-  await expect(page.getByLabel('Search or run a command')).not.toBeFocused()
-  const close = page.getByRole('button', { name: 'Close upload' })
-  const drop = dialog.getByRole('button', { name: 'Upload documents' })
-  await expect(drop).toBeVisible()
-  await close.focus()
-  await page.keyboard.press('Shift+Tab')
-  await expect(drop).toBeFocused()
-  await page.keyboard.press('Tab')
-  await expect(close).toBeFocused()
-  await page.keyboard.press('Escape')
-  await expect(dialog).toHaveCount(0)
-  await expect(opener).toBeFocused()
-  await expect(page.locator('.shell')).not.toHaveAttribute('inert', '')
+  await page.getByRole('button', { name: 'Upload documents', exact: true }).click()
+  await expect(page).toHaveURL(/#\/upload$/)
+  await expect(page.getByRole('button', { name: 'Add files', exact: true })).toBeVisible()
 })
 
 test('reviews dates in a responsive grid with visible actions', async ({ page }, testInfo) => {
@@ -6948,7 +6926,7 @@ test('Account subscription connects with device code and requires egress and mod
   await expect(testConnection).toBeEnabled()
   await expect(saveModel).toBeDisabled()
   await testConnection.click()
-  await expect(page.getByRole('status').filter({ hasText: 'Responded in 12 ms' })).toContainText('self-reported confidence 91%')
+  await expect(page.getByRole('status').filter({ hasText: 'Responded in 12 ms' })).toContainText('Model confidence 91% (self-reported)')
   await expect(saveModel).toBeEnabled()
   expect(llmTestRequests[0]).toMatchObject({ subscription_provider: 'openai_chatgpt', endpoint_url: '', model: 'subscription-model', api_key: '', clear_api_key: false, egress_ack: true })
   await page.getByRole('combobox', { name: 'Model', exact: true }).selectOption('other-model')
