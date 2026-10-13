@@ -16,7 +16,6 @@
   let collisions = $state([])
   let err = $state('')
   let reading = $state(false)
-  let skipSeeds = $state(false)
   let remaps = $state({})
   let confirmBlank = $state(false)
   let firstDestination = $state(false)
@@ -81,7 +80,7 @@
   async function run(apply) {
     if (busy || reading || !content.trim() || (apply && !canApply)) return
     const version = ++generation
-    const body = { content, format, apply, skip_seeds: skipSeeds, remaps: { ...remaps } }
+    const body = { content, format, apply, remaps: { ...remaps } }
     if (separate && firstDestination) body.existing_system_code = existingCode
     if (apply) body.expected_state_hash = diff.state_hash
     busy = true
@@ -147,8 +146,6 @@
   <textarea id="taxonomy-content" class="input mono" rows="7" bind:value={content} disabled={busy}
             oninput={() => { fileName = ''; invalidate(true) }} placeholder={translate("taxonomyImport.pasteASuchiTaxonomyV1File")}></textarea>
   {#if reading}<p class="sub" role="status">{translate("taxonomyImport.readingFile")}</p>{/if}
-  <label class="wiz-check"><input type="checkbox" checked={!skipSeeds} disabled={busy}
-    onchange={(event) => { skipSeeds = !event.currentTarget.checked; invalidate() }} /> {translate("taxonomyImport.includeStarterRulesFromThisFile")}</label>
   <p class="sub">{translate("taxonomyImport.validationChecksSupportedStructureNotDomainCorrectness")}</p>
   {#if firstDestination && !diff?.applied}
     <fieldset disabled={busy} style="margin:12px 0;padding:12px;border:1px solid var(--line)">
@@ -200,12 +197,8 @@
         </div>
       </div>
       <h4>{diff.applied ? translate("taxonomyImport.applied") : translate("taxonomyImport.plannedChanges")}</h4>
-      <p>{translate(diff.applied ? "taxonomyImport.addedCounts" : "taxonomyImport.addsCounts", { categories: plural("taxonomyImport.categoryCount", diff.categories_to_add?.length || 0), rules: plural("taxonomyImport.ruleCount", diff.rules_to_add?.length || 0) })}</p>
+      <p>{translate(diff.applied ? "taxonomyImport.addedCounts" : "taxonomyImport.addsCounts", { categories: plural("taxonomyImport.categoryCount", diff.categories_to_add?.length || 0) })}</p>
       {#if diff.categories_to_add?.length}<p class="sub">{translate("taxonomyImport.categoryCodesValue", { "join": diff.categories_to_add.join(', ') })}</p>{/if}
-      {#if diff.rules_to_add?.length}<h4>{translate("taxonomyImport.rulesToAdd")}</h4><ul>{#each diff.rules_to_add as name}<li>{name}</li>{/each}</ul>{/if}
-      {#if diff.rules_preserved?.length}<h4>{translate("taxonomyImport.existingRulesPreserved")}</h4><ul>{#each diff.rules_preserved as rule}<li>{rule.name} — {rule.enabled ? translate("taxonomyImport.enabled") : translate("taxonomyImport.disabledStaysDisabled")}</li>{/each}</ul>{/if}
-      {#if diff.rules_skipped?.length}<h4>{translate("taxonomyImport.rulesSkipped")}</h4><ul>{#each diff.rules_skipped as rule}<li>{rule.name} — {rule.reason}</li>{/each}</ul>{/if}
-      <p class="sub">{skipSeeds ? translate("taxonomyImport.starterRulesExcluded") : translate("taxonomyImport.starterAdditionsValueKeywordPhrasesValueExplicitAutomations", { "keywords_to_seed": diff.keywords_to_seed, "automations_to_seed": diff.automations_to_seed })}</p>
       <p class="sub hash">{translate("taxonomyImport.fileFingerprintSha256")} <code>{diff.content_sha256}</code></p>
       {#if diff.applied && diff.index_refresh_pending}<p role="status">{translate("taxonomyImport.theFilingMapWillUpdateInThe")}</p>{/if}
     </div>

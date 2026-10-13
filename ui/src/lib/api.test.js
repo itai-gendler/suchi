@@ -212,12 +212,12 @@ test('taxonomy exports capture the filing system and preserve the requested text
   resetSystems({ user_id: 1 })
   systems.code = 'S02'
   globalThis.fetch = async (path, options) => {
-    assert.equal(path, '/api/admin/taxonomy/export?format=toml&skip_seeds=true&system=S02')
+    assert.equal(path, '/api/admin/taxonomy/export?format=toml&system=S02')
     assert.equal(options.credentials, 'same-origin')
     return new Response('system = "S02"\n', { headers: { 'content-type': 'text/plain' } })
   }
   try {
-    assert.equal(await exportTaxonomy('toml', true), 'system = "S02"\n')
+    assert.equal(await exportTaxonomy('toml'), 'system = "S02"\n')
   } finally {
     globalThis.fetch = originalFetch
     resetSystems()

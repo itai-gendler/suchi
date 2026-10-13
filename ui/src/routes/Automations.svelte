@@ -25,7 +25,6 @@
   let facetsPromise
   let facetsError = $state('')
   let peekID = $state(null)
-  let builtInsOpen = $state(false)
   let toggleID = $state(null)
   let reorderID = $state(null)
   let saving = $state(false)
@@ -34,9 +33,6 @@
   let draggedID = null
   let deleteRequest = $state(null)
   let deleteBusy = $state(false)
-
-  const userItems = $derived(items.filter(a => !a.preset_slug))
-  const builtInItems = $derived(items.filter(a => a.preset_slug))
 
   const TRIGGER_LABEL_KEYS = {
     consumption: 'automations.triggerConsumption',
@@ -439,9 +435,8 @@
   async function persistOrder(ordered, movedID) {
     if (reorderID !== null) return
     const previous = items
-    const builtIns = items.filter(item => item.preset_slug)
     const normalized = ordered.map((item, index) => ({ ...item, order: index }))
-    items = [...normalized, ...builtIns]
+    items = normalized
     reorderID = movedID
     try {
       for (let index = 0; index < normalized.length; index++) {
@@ -457,7 +452,7 @@
   }
 
   function moveAutomation(id, direction) {
-    const ordered = [...userItems]
+    const ordered = [...items]
     const from = ordered.findIndex(item => item.id === id)
     const to = Math.max(0, Math.min(ordered.length - 1, from + direction))
     if (from < 0 || from === to) return
@@ -477,7 +472,7 @@
     const id = draggedID || Number(event.dataTransfer.getData('text/plain'))
     draggedID = null
     if (!id || id === targetID || reorderID !== null) return
-    const ordered = [...userItems]
+    const ordered = [...items]
     const from = ordered.findIndex(item => item.id === id)
     let to = ordered.findIndex(item => item.id === targetID)
     if (from < 0 || to < 0) return
@@ -559,7 +554,7 @@
   load()
 </script>
 
-{#snippet automationRow(a, sortable)}
+{#snippet automationRow(a)}
   <RuleRow class="automation-row"
            id={`automation-${a.id}`}
            title={a.name || translate("automations.automationValue", { "id": a.id })}
@@ -569,10 +564,10 @@
            actionLabel={readOnly ? (peekID === a.id ? translate("automations.hideJson") : translate("automations.viewJson")) : translate("automations.editValue", { id: automationLabel(a) })}
            detailText={readOnly && peekID === a.id ? JSON.stringify(a, null, 2) : ''}
            onaction={() => readOnly ? (peekID = peekID === a.id ? null : a.id) : openEditor(a)}
-           ondragover={(event) => { if (sortable && !readOnly) event.preventDefault() }}
-           ondrop={(event) => { if (sortable && !readOnly) dropAutomation(event, a.id) }}>
+           ondragover={(event) => { if (!readOnly) event.preventDefault() }}
+           ondrop={(event) => { if (!readOnly) dropAutomation(event, a.id) }}>
     {#snippet leading()}
-      {#if sortable && !readOnly}
+      {#if !readOnly}
         <button class="drag-handle" type="button" draggable="true"
                 disabled={reorderID !== null}
                 aria-label={translate("automations.moveValue", { id: automationLabel(a) })}
@@ -593,9 +588,6 @@
       {:else}
         <span class="row-indent" aria-hidden="true"></span>
       {/if}
-    {/snippet}
-    {#snippet titleMeta()}
-      {#if a.preset_slug}<span class="owner-pill">{translate("automations.valueFilingTree", { "preset_slug": a.preset_slug })}</span>{/if}
     {/snippet}
     {#snippet trailing()}
       {#if readOnly}
@@ -949,7 +941,7 @@
 
       {#snippet footer()}
         <div class="footer-note">
-          {#if editing.id && !editing.preset_slug}
+          {#if editing.id}
             <button class="delete-action" type="button" disabled={deleteBusy || !!deleteRequest} onclick={() => remove(editing)}>{translate("automations.deleteAutomation")}</button>
           {:else}
             {translate("automations.savedAutomationsAreOnByDefaultReorder")}
@@ -969,7 +961,7 @@
                    description={translate("automations.rulesThatTagTitleAndRouteDocuments")}
                    headingId="automations-heading">
       {#snippet actions()}
-        {#if !loading && userItems.length > 1}<span class="list-order">{translate("automations.runTopToBottom")}</span>{/if}
+        {#if !loading && items.length > 1}<span class="list-order">{translate("automations.runTopToBottom")}</span>{/if}
         {#if !readOnly}
           <button class="btn primary new-automation" onclick={() => openEditor(null)}>
             <Icon name="plus" size={15} /> {translate("automations.newAutomation")}
@@ -983,10 +975,10 @@
             <div class="loading-row"><span></span><div class="skel"></div></div>
           {/each}
         </div>
-      {:else if userItems.length}
+      {:else if items.length}
         <div class="automation-list" role="list">
-          {#each userItems as automation (automation.id)}
-            {@render automationRow(automation, true)}
+          {#each items as automation (automation.id)}
+            {@render automationRow(automation)}
           {/each}
         </div>
       {:else}
@@ -998,27 +990,6 @@
       {/if}
     </RuleWorkspace>
 
-    {#if !loading && builtInItems.length}
-      <section class="builtins">
-        <button class="builtins-toggle" class:open={builtInsOpen}
-                onclick={() => (builtInsOpen = !builtInsOpen)}
-                aria-expanded={builtInsOpen}>
-          <span class="chev" class:open={builtInsOpen}><Icon name="chev" size={13} /></span>
-          <span class="grow">
-            <b>{translate("automations.builtInAutomations")}</b>
-            <span>{translate("automations.installedByYourFilingTree")}</span>
-          </span>
-          <span class="count-pill">{builtInItems.length}</span>
-        </button>
-        {#if builtInsOpen}
-          <div class="automation-list builtins-list" role="list">
-            {#each builtInItems as automation (automation.id)}
-              {@render automationRow(automation, false)}
-            {/each}
-          </div>
-        {/if}
-      </section>
-    {/if}
   {/if}
 </div>
 
@@ -1039,12 +1010,6 @@
     margin: 0 auto;
   }
   .page-error { margin-bottom: 12px; }
-  .builtins {
-    overflow: hidden;
-    border: 1px solid var(--line);
-    border-radius: 12px;
-    background: var(--surface);
-  }
   .footer-actions {
     display: flex;
     align-items: center;
@@ -1073,16 +1038,6 @@
   .drag-handle:focus-visible { color: var(--accent); }
   .drag-handle:disabled { cursor: wait; opacity: .45; }
   .row-indent { width: 24px; }
-  .owner-pill,
-  .count-pill {
-    padding: 2px 7px;
-    border-radius: 999px;
-    background: var(--tint);
-    color: var(--accent);
-    font-size: .65rem;
-    font-weight: 650;
-    white-space: nowrap;
-  }
   .text-action {
     padding: 5px 2px;
     border: 0;
@@ -1319,26 +1274,6 @@
     cursor: pointer;
   }
   .save-automation { min-width: 126px; }
-  .builtins { margin-top: 14px; box-shadow: none; }
-  .builtins-toggle {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    width: 100%;
-    min-height: 58px;
-    padding: 10px 18px;
-    border: 0;
-    background: var(--surface-2);
-    color: var(--ink);
-    text-align: left;
-    cursor: pointer;
-  }
-  .builtins-toggle.open { border-bottom: 1px solid var(--line); }
-  .builtins-toggle:hover { background: var(--tint); }
-  .builtins-toggle .grow { display: flex; flex-direction: column; gap: 1px; }
-  .builtins-toggle .grow span { color: var(--muted); font-size: .72rem; }
-  .builtins-toggle .chev { display: flex; transition: transform .15s; }
-  .builtins-toggle .chev.open { transform: rotate(90deg); }
   @media (max-width: 760px) {
     .question-grid { grid-template-columns: 1fr; }
     .sentence-row { align-items: flex-start; }
@@ -1350,7 +1285,6 @@
     .tag-picker { max-width: none; }
   }
   @media (max-width: 520px) {
-    .builtins { border-radius: 9px; }
     .builder-name { padding-left: 14px; padding-right: 14px; }
     .footer-actions { justify-content: flex-end; }
     .question-grid,

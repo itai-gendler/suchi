@@ -22,7 +22,6 @@
   let currentAreas = $state([])
   let selectedPresetID = $state('solo')
   let selectedSetIDs = $state([])
-  let includeSeeds = $state(true)
   let refile = $state(false)
   let confirmBlank = $state(false)
   let preview = $state(null)
@@ -109,7 +108,6 @@
 
   function baseBody() {
     const body = {
-      include_seeds: includeSeeds,
       confirm_blank: confirmBlank,
       refile,
       replacements: {},
@@ -208,15 +206,15 @@
     await Promise.all([load(), onTaxonomyChanged?.()])
   }
 
-  async function doExport(skipSeeds) {
+  async function doExport() {
     if (exportBusy || importBusy) return
     exportBusy = true
     try {
-      const text = await exportTaxonomy(exportFormat, skipSeeds)
+      const text = await exportTaxonomy(exportFormat)
       const a = document.createElement('a')
       a.href = URL.createObjectURL(new Blob([text], { type: 'text/plain' }))
       const code = captureScope().code
-      a.download = `${code ? `${code}.taxonomy` : `archive${skipSeeds ? '-tree' : ''}`}.${exportFormat}`
+      a.download = `${code ? `${code}.taxonomy` : 'archive'}.${exportFormat}`
       a.click()
       setTimeout(() => URL.revokeObjectURL(a.href), 10_000)
       notify?.(translate("filingTreeSettings.exportedValue", { "download": a.download }))
@@ -260,13 +258,12 @@
         </section>
         <section class="card file-card" aria-labelledby="export-heading">
           <h3 id="export-heading">{translate("filingTreeSettings.exportThisFilingTree")}</h3>
-          <p>{translate("filingTreeSettings.saveTheTreeWithSupportedStarterRules")}</p>
+          <p>{translate("filingTreeSettings.saveTheTreeStructure")}</p>
           <label class="field">{translate("filingTreeSettings.fileFormat")}
             <select class="input" bind:value={exportFormat} disabled={exportBusy || importBusy}><option value="huml">{translate("filingTreeSettings.huml")}</option><option value="toml">TOML</option></select>
           </label>
           <div class="toolbar">
-            <button class="btn" disabled={exportBusy || importBusy} onclick={() => doExport(false)}><Icon name="download" size={14} />{translate("filingTreeSettings.exportWithStarterRules")}</button>
-            <button class="btn" disabled={exportBusy || importBusy} onclick={() => doExport(true)}>{translate("filingTreeSettings.exportTreeOnly")}</button>
+            <button class="btn" disabled={exportBusy || importBusy} onclick={doExport}><Icon name="download" size={14} />{translate("filingTreeSettings.exportTree")}</button>
           </div>
           <p class="note">{translate("filingTreeSettings.aFilingTreeExportIsNotAn")}</p>
         </section>
@@ -310,7 +307,6 @@
             {#if blankTarget}
               <label class="warning-check"><input type="checkbox" bind:checked={confirmBlank} /> {translate("filingTreeSettings.iUnderstandThatDocumentsWillRemainIn")}</label>
             {/if}
-            <label><input type="checkbox" bind:checked={includeSeeds} onchange={resetReview} /> {translate("filingTreeSettings.includeStarterFilingRules")}</label>
             <label><input type="checkbox" bind:checked={refile} /> {translate("filingTreeSettings.refileExistingDocumentsAfterTheChange")}</label>
             <p>{translate("filingTreeSettings.refileRunsTheSelectedTreeSActive")}</p>
           </div>
@@ -358,8 +354,6 @@
 
           <div class="review-summary">
             <span>{plural("filingTreeSettings.categoryAddedCount", preview.categories_to_add?.length || 0)}</span>
-            <span>{plural("filingTreeSettings.starterRuleAddedCount", preview.rules_to_add?.length || 0)}</span>
-            <span>{plural("filingTreeSettings.rulePreservedCount", preview.rules_preserved?.length || 0)}</span>
           </div>
           {#if applied}
             <div class="success" role="status">{translate("filingTreeSettings.filingTreeUpdated")}{#if applied.refile} {translate("filingTreeSettings.refileSummary", { documents: plural("filingTreeSettings.documentCount", applied.refile.documents_scanned), renders: plural("filingTreeSettings.renderCount", applied.refile.renders_queued) })}{/if}</div>

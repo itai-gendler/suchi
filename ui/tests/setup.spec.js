@@ -293,11 +293,10 @@ function taxonomyPreview(overrides = {}) {
     name: 'Personal records', story: 'Keep identity paperwork together.',
     content_sha256: 'a'.repeat(64), state_hash: 'preview-state',
     mode: 'merge', areas_incoming: 1, categories_incoming: 1,
-    categories_to_add: [11], collisions: [], keywords_to_seed: 0, automations_to_seed: 1,
+    categories_to_add: [11], collisions: [],
     user_areas: [{ code: 10, name: 'Life admin', categories: [{ code: 11, name: 'Identity', description: 'Passports and identity cards.' }] }],
     generated_areas: [{ code: 40, name: 'System', categories: [{ code: 49, name: 'Inbox' }] }],
-    rules_to_add: ['File identity'], rules_preserved: [{ name: 'Local starter', enabled: false }],
-    rules_skipped: [], applied: false, index_refresh_pending: false,
+    applied: false, index_refresh_pending: false,
     ...overrides,
   }
 }
@@ -355,12 +354,11 @@ test('taxonomy import previews a named tree and refreshes setup and sidebar afte
   await expect(importer.getByText('Passports and identity cards.')).toBeVisible()
   await expect(importer.getByText('00–09 System index', { exact: true })).toBeVisible()
   await expect(importer.getByText('49 Inbox', { exact: true })).toBeVisible()
-  await expect(importer.getByText('Local starter — disabled (stays disabled)', { exact: true })).toBeVisible()
   await expect(page.locator('.setup-reminder-settings')).toBeVisible()
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
   await importer.getByRole('button', { name: 'Apply import', exact: true }).click()
   await expect(page.locator('.setup-reminder-settings')).toHaveCount(0)
-  expect(requests[0]).toMatchObject({ content: taxonomyContent, format: 'toml', apply: false, skip_seeds: false, remaps: {} })
+  expect(requests[0]).toMatchObject({ content: taxonomyContent, format: 'toml', apply: false, remaps: {} })
   expect(requests[1]).toMatchObject({ expected_state_hash: 'preview-state', apply: true, format: 'toml' })
   await page.goto('/#/dashboard')
   if ((page.viewportSize()?.width || 0) <= 860) await page.getByRole('button', { name: 'Open navigation' }).click()
@@ -396,8 +394,6 @@ test('taxonomy import requires explicit previewed collision choices and retains 
       return taxonomyPreview({
         collisions: [{ code: 11, existing: 'Old identity', incoming: 'Identity', proposed_code: 12, resolved }],
         categories_to_add: payload.remaps['11'] === 12 ? [12] : [],
-        rules_to_add: [],
-        rules_skipped: payload.remaps['11'] === 0 ? [{ name: 'File identity', reason: 'Depends on skipped category 11' }] : [],
         state_hash: `collision-${requests.length}`,
       })
     },
@@ -416,13 +412,10 @@ test('taxonomy import requires explicit previewed collision choices and retains 
   await expect(importer.getByRole('button', { name: 'Apply import', exact: true })).toBeEnabled()
   expect(requests[1].remaps).toEqual({ 11: 12 })
   await importer.getByLabel('Choice for 11').selectOption('0')
-  await importer.getByRole('button', { name: 'Preview', exact: true }).click()
-  await expect(importer.getByText('File identity — Depends on skipped category 11')).toBeVisible()
-  await importer.getByLabel('Include starter rules').uncheck()
   await expect(importer.getByLabel('Choice for 11')).toHaveValue('0')
   await expect(importer.getByRole('button', { name: 'Apply import', exact: true })).toBeDisabled()
   await importer.getByRole('button', { name: 'Preview', exact: true }).click()
-  expect(requests[3]).toMatchObject({ remaps: { 11: 0 }, skip_seeds: true })
+  expect(requests[2]).toMatchObject({ remaps: { 11: 0 } })
   await importer.getByRole('combobox', { name: 'File format', exact: true }).selectOption('huml')
   await expect(importer.getByRole('button', { name: 'Apply import', exact: true })).toBeDisabled()
   await importer.getByLabel('Paste content').fill(taxonomyContent + '\n')
@@ -463,7 +456,7 @@ test('taxonomy import confirms blank trees in a native modal before applying', a
   await mockAPI(page, {
     taxonomyImport: async payload => {
       requests.push(payload)
-      return taxonomyPreview({ categories_incoming: 0, categories_to_add: [], user_areas: [], rules_to_add: [] })
+      return taxonomyPreview({ categories_incoming: 0, categories_to_add: [], user_areas: [] })
     },
   })
   const importer = await openTaxonomyImport(page)
@@ -521,7 +514,6 @@ test('taxonomy import disables conflicting requests and discards a preview after
   await expect.poll(() => !!pending).toBe(true)
   await expect(importer.getByLabel('Paste content')).toBeDisabled()
   await expect(importer.getByRole('combobox', { name: 'File format', exact: true })).toBeDisabled()
-  await expect(importer.getByLabel('Include starter rules')).toBeDisabled()
   await expect(page.getByRole('button', { name: 'Close', exact: true })).toBeDisabled()
   await page.goto('/#/dashboard')
   await pending.fulfill({ json: taxonomyPreview() }).catch(() => {})
@@ -530,28 +522,20 @@ test('taxonomy import disables conflicting requests and discards a preview after
   await expect(nextImporter.getByRole('button', { name: 'Apply import', exact: true })).toBeDisabled()
 })
 
-test('taxonomy settings offers explicit starter and tree-only exports without silent fallback', async ({ page }) => {
+test('taxonomy settings exports the filing tree', async ({ page }) => {
   const exports = []
   await mockAPI(page, { filingTreeChosen: true })
   await page.route('**/api/admin/taxonomy/export?**', async route => {
-    const url = new URL(route.request().url())
-    exports.push(Object.fromEntries(url.searchParams))
-    if (url.searchParams.get('skip_seeds') === 'false') {
-      await route.fulfill({ status: 400, json: { error: 'Disabled starter cannot be exported. Use tree-only export.' } })
-    } else {
-      await route.fulfill({ contentType: 'text/plain', body: taxonomyContent })
-    }
+    exports.push(Object.fromEntries(new URL(route.request().url()).searchParams))
+    await route.fulfill({ contentType: 'text/plain', body: taxonomyContent })
   })
   await page.goto('/#/settings?tab=archive&section=filing-tree')
   await page.getByRole('button', { name: 'Import or export' }).click()
   await page.getByRole('combobox', { name: 'File format', exact: true }).selectOption('toml')
-  await page.getByRole('button', { name: 'Export with starter rules' }).click()
-  await expect(page.getByText('Disabled starter cannot be exported. Use tree-only export.', { exact: true })).toBeVisible()
-  expect(exports).toEqual([{ format: 'toml', skip_seeds: 'false' }])
   const download = page.waitForEvent('download')
-  await page.getByRole('button', { name: 'Export tree only' }).click()
-  expect((await download).suggestedFilename()).toBe('archive-tree.toml')
-  expect(exports[1]).toEqual({ format: 'toml', skip_seeds: 'true' })
+  await page.getByRole('button', { name: 'Export tree' }).click()
+  expect((await download).suggestedFilename()).toBe('archive.toml')
+  expect(exports).toEqual([{ format: 'toml' }])
   await page.getByRole('button', { name: 'Import file' }).click()
   await expect(page.getByRole('region', { name: 'Import taxonomy', exact: true })).toBeVisible()
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
@@ -1929,7 +1913,7 @@ test('creates, previews, and deletes Advanced folder layouts', async ({ page }) 
   await expect(saved.getByText('Imported folders', { exact: true })).toHaveCount(0)
 })
 
-test('centers custom automations ahead of collapsed filing-tree rules', async ({ page }) => {
+test('lists every automation in run order', async ({ page }) => {
   await mockAPI(page, {
     automations: [
       {
@@ -1938,7 +1922,7 @@ test('centers custom automations ahead of collapsed filing-tree rules', async ({
         actions: [{ id: 1, type: 'assign_tags', params: { tag_ids: [] } }],
       },
       {
-        id: 19, name: 'Built-in utility filing', enabled: true, order: 1, preset_slug: 'household',
+        id: 19, name: 'File utility bills', enabled: true, order: 1,
         triggers: [{ type: 2 }],
         actions: [{ id: 2, type: 'assign_tags', params: { tag_ids: [] } }],
       },
@@ -1948,18 +1932,7 @@ test('centers custom automations ahead of collapsed filing-tree rules', async ({
 
   await expect(page.getByRole('button', { name: 'New automation' })).toBeVisible()
   await expect(page.locator('.automations-card').getByRole('heading', { name: 'Automations', exact: true })).toBeVisible()
-  await expect(page.getByText('Route tax records', { exact: true })).toBeVisible()
-  await expect(page.locator('#automation-19')).toHaveCount(0)
-
-  const customPanel = page.locator('.automations-card')
-  const builtIns = page.locator('.builtins')
-  await expect.poll(async () => {
-    const [customBox, builtInBox] = await Promise.all([customPanel.boundingBox(), builtIns.boundingBox()])
-    return customBox && builtInBox ? builtInBox.y > customBox.y + customBox.height : false
-  }).toBe(true)
-
-  await page.getByRole('button', { name: /Built-in automations/ }).click()
-  await expect(page.locator('#automation-19 .rule-title').filter({ hasText: 'Built-in utility filing' })).toBeVisible()
+  await expect(page.locator('.automation-list .rule-title')).toHaveText(['Route tax records', 'File utility bills'])
 })
 
 test('opens the sentence builder from a starter pattern', async ({ page }) => {
