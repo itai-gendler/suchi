@@ -1,5 +1,7 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script>
+  import { t as translate } from "../lib/i18n.svelte.js";
+  import { plural } from '../lib/format.js'
   import { captureScope, scopeCurrent, systems } from '../lib/systems.svelte.js'
   import { go } from '../lib/router.svelte.js'
   import { adminListUsers, adminPatchUser,
@@ -49,7 +51,7 @@
       if (version !== usersLoadVersion || !scopeCurrent(scope) || (tab !== 'users' && tab !== 'groups')) return
       users = r?.results || []
     } catch (ex) {
-      if (version === usersLoadVersion && scopeCurrent(scope) && (tab === 'users' || tab === 'groups')) usersError = ex.message || 'Could not load users.'
+      if (version === usersLoadVersion && scopeCurrent(scope) && (tab === 'users' || tab === 'groups')) usersError = ex.message || translate("peopleSettings.couldNotLoadUsers")
     } finally {
       if (version === usersLoadVersion && scopeCurrent(scope) && (tab === 'users' || tab === 'groups')) {
         usersLoaded = true
@@ -67,8 +69,8 @@
     try {
       await adminPatchUser(u.id, { capabilities: newCaps })
       u.capabilities = newCaps
-      notify?.(has ? `Revoked ${cap.label} from ${u.email}` : `Granted ${cap.label} to ${u.email}`)
-    } catch (ex) { notify?.(ex.message || 'Could not update capabilities') }
+      notify?.(has ? translate("peopleSettings.revokedValueFromValue", { "label": cap.label, "email": u.email }) : translate("peopleSettings.grantedValueToValue", { "label": cap.label, "email": u.email }))
+    } catch (ex) { notify?.(ex.message || translate("peopleSettings.couldNotUpdateCapabilities")) }
     finally { userBusy = false }
   }
 
@@ -79,8 +81,8 @@
     try {
       await adminPatchUser(u.id, { disabled })
       u.disabled = disabled
-      notify?.(disabled ? `Disabled ${u.email}` : `Enabled ${u.email}`)
-    } catch (ex) { notify?.(ex.message || 'Could not update user') }
+      notify?.(disabled ? translate("peopleSettings.disabledValue", { "email": u.email }) : translate("peopleSettings.enabledValue", { "email": u.email }))
+    } catch (ex) { notify?.(ex.message || translate("peopleSettings.couldNotUpdateUser")) }
     finally { userBusy = false }
   }
 
@@ -109,7 +111,7 @@
       groups = r?.results || r || []
       groupsLoaded = true
     } catch (ex) {
-      if (version === groupsLoadVersion && scopeCurrent(scope) && tab === 'groups') groupsError = ex.message || 'Could not load groups.'
+      if (version === groupsLoadVersion && scopeCurrent(scope) && tab === 'groups') groupsError = ex.message || translate("peopleSettings.couldNotLoadGroups")
     } finally {
       if (version === groupsLoadVersion && scopeCurrent(scope) && tab === 'groups') groupsLoading = false
     }
@@ -117,8 +119,8 @@
   async function addGroup(e) {
     e.preventDefault()
     if (!ngName.trim()) return
-    try { await createGroup({ name: ngName.trim() }); ngName = ''; notify?.('Group created'); loadGroups() }
-    catch (ex) { notify?.(ex.message || 'Could not create the group') }
+    try { await createGroup({ name: ngName.trim() }); ngName = ''; notify?.(translate("peopleSettings.groupCreated")); loadGroups() }
+    catch (ex) { notify?.(ex.message || translate("peopleSettings.couldNotCreateTheGroup")) }
   }
   function rmGroup(group) {
     requestDelete('group', group)
@@ -127,7 +129,7 @@
     if (openGroup?.id === g.id) { openGroup = null; return }
     addUID = ''
     try { await reloadMembers(g) }
-    catch (ex) { notify?.(ex.message || 'Could not load members') }
+    catch (ex) { notify?.(ex.message || translate("peopleSettings.couldNotLoadMembers")) }
   }
 
   async function reloadMembers(g) {
@@ -138,12 +140,12 @@
   async function addMember(g) {
     const uid = Number(addUID)
     if (!uid) return
-    try { await addGroupMember(g.id, uid); addUID = ''; await reloadMembers(g); notify?.('Member added') }
-    catch (ex) { notify?.(ex.message || 'Could not add the member') }
+    try { await addGroupMember(g.id, uid); addUID = ''; await reloadMembers(g); notify?.(translate("peopleSettings.memberAdded")) }
+    catch (ex) { notify?.(ex.message || translate("peopleSettings.couldNotAddTheMember")) }
   }
   async function rmMember(g, uid) {
     try { await removeGroupMember(g.id, uid); openGroup = { ...openGroup, members: openGroup.members.filter(m => (m.user_id ?? m.id) !== uid) } }
-    catch (ex) { notify?.(ex.message || 'Could not remove') }
+    catch (ex) { notify?.(ex.message || translate("peopleSettings.couldNotRemove")) }
   }
 
   // ---------- custom fields ----------
@@ -155,9 +157,9 @@
   let fieldChoiceDrafts = $state({})
   let fieldChoiceBusy = $state(null)
   const FIELD_TYPES = {
-    text: 'Text', number: 'Number', date: 'Date', bool: 'Yes / no',
-    select: 'Single choice', multi: 'Multiple choices', url: 'Web link',
-    monetary: 'Money', documentlink: 'Document link',
+    text: translate("peopleSettings.text"), number: translate("peopleSettings.number"), date: translate("peopleSettings.date"), bool: translate("peopleSettings.yesNo"),
+    select: translate("peopleSettings.singleChoice"), multi: translate("peopleSettings.multipleChoices"), url: translate("peopleSettings.webLink"),
+    monetary: translate("peopleSettings.money"), documentlink: translate("peopleSettings.documentLink"),
   }
   async function loadFields() {
     const version = ++fieldsLoadVersion
@@ -174,7 +176,7 @@
         .map(field => [field.id, customFieldChoices(field).join('\n')]))
       fieldsLoaded = true
     } catch (ex) {
-      if (version === fieldsLoadVersion && scopeCurrent(scope) && tab === 'metadata' && taxon === 'custom_fields') fieldsError = ex.message || 'Could not load custom fields.'
+      if (version === fieldsLoadVersion && scopeCurrent(scope) && tab === 'metadata' && taxon === 'custom_fields') fieldsError = ex.message || translate("peopleSettings.couldNotLoadCustomFields")
     } finally {
       if (version === fieldsLoadVersion && scopeCurrent(scope) && tab === 'metadata' && taxon === 'custom_fields') fieldsLoading = false
     }
@@ -200,14 +202,14 @@
     try {
       await createCustomField(payload)
       nf = { name: '', data_type: 'text', choices: '' }
-      notify?.('Field created')
+      notify?.(translate("peopleSettings.fieldCreated"))
       loadFields()
-    } catch (ex) { notify?.(ex.message || 'Could not create the field') }
+    } catch (ex) { notify?.(ex.message || translate("peopleSettings.couldNotCreateTheField")) }
   }
   async function renameField(field, name) {
     if (field.managed_by || !name.trim() || name === field.name) return
-    try { await patchCustomField(field.id, { name: name.trim() }); field.name = name.trim(); notify?.('Renamed') }
-    catch (ex) { notify?.(ex.message || 'Could not rename') }
+    try { await patchCustomField(field.id, { name: name.trim() }); field.name = name.trim(); notify?.(translate("peopleSettings.renamed")) }
+    catch (ex) { notify?.(ex.message || translate("peopleSettings.couldNotRename")) }
   }
   function rmField(field) {
     if (field.managed_by) return
@@ -223,11 +225,11 @@
       await patchCustomField(field.id, { extra_data })
       field.extra_data = extra_data
       fieldChoiceDrafts = { ...fieldChoiceDrafts, [field.id]: choices.join('\n') }
-      notify?.('Choices updated')
+      notify?.(translate("peopleSettings.choicesUpdated"))
     } catch (ex) {
       notify?.(ex.code === 'choice_in_use'
-        ? 'A choice still used by a document cannot be removed.'
-        : (ex.message || 'Could not update choices'))
+        ? translate("peopleSettings.aChoiceStillUsedByADocumentCannot")
+        : (ex.message || translate("peopleSettings.couldNotUpdateChoices")))
     } finally {
       fieldChoiceBusy = null
     }
@@ -235,9 +237,11 @@
 
   // ---------- document metadata ----------
   const TAXA = [
-    { kind: 'tags', label: 'Tags', singular: 'tag', description: 'Labels for finding and grouping documents across your filing tree.', load: listAllTags },
-    { kind: 'correspondents', label: 'Correspondents', singular: 'correspondent', description: 'People and organizations you send documents to or receive them from.', load: listCorrespondents },
-    { kind: 'custom_fields', label: 'Custom fields', description: 'Extra document details, such as an invoice number, renewal date, or web link.' },
+    { kind: 'tags', label: translate("peopleSettings.tags"), description: translate("peopleSettings.labelsForFindingAndGroupingDocumentsAcrossYour"), load: listAllTags,
+      placeholderKey: 'peopleSettings.newTagName', createKey: 'peopleSettings.createTag', existingKey: 'peopleSettings.existingTags', loadingKey: 'peopleSettings.loadingTags', emptyKey: 'peopleSettings.noTagsYet' },
+    { kind: 'correspondents', label: translate("peopleSettings.correspondents"), description: translate("peopleSettings.peopleAndOrganizationsYouSendDocumentsToOr"), load: listCorrespondents,
+      placeholderKey: 'peopleSettings.newCorrespondentName', createKey: 'peopleSettings.createCorrespondent', existingKey: 'peopleSettings.existingCorrespondents', loadingKey: 'peopleSettings.loadingCorrespondents', emptyKey: 'peopleSettings.noCorrespondentsYet' },
+    { kind: 'custom_fields', label: translate("peopleSettings.customFields"), description: translate("peopleSettings.extraDocumentDetailsSuchAsAnInvoiceNumber") },
   ]
   const taxon = $derived(TAXA.some(t => t.kind === initialMetadata) ? initialMetadata : 'tags')
   const selectedTaxon = $derived(TAXA.find(t => t.kind === taxon))
@@ -297,14 +301,14 @@
       const deleted = new Set(request.ids)
       taxRows = taxRows.filter(row => !deleted.has(row.id))
       selectedTagIDs = new Set([...selectedTagIDs].filter(id => !deleted.has(id)))
-      tagDeleteSuccess = `Deleted ${request.ids.length} tag${request.ids.length === 1 ? '' : 's'}.`
+      tagDeleteSuccess = plural("peopleSettings.deletedTagCount", request.ids.length)
       tagDeleteRequest = null
       await loadTaxa()
     } catch (ex) {
       if (tagDeleteRequest === request && version === taxLoadVersion &&
           scopeCurrent(request.scope) && request.scope.code === systems.code &&
           tab === 'metadata' && taxon === 'tags') {
-        tagDeleteError = ex.message || 'Could not delete tags. Please try again.'
+        tagDeleteError = ex.message || translate("peopleSettings.couldNotDeleteTagsPleaseTryAgain")
         tagDeleteRequest = null
       }
     } finally {
@@ -335,7 +339,7 @@
         selectedTagIDs = new Set([...selectedTagIDs].filter(id => available.has(id)))
       }
     } catch (ex) {
-      if (version === taxLoadVersion && scopeCurrent(scope) && tab === 'metadata' && kind === taxon) taxRowsError = ex.message || `Could not load ${spec.label.toLowerCase()}.`
+      if (version === taxLoadVersion && scopeCurrent(scope) && tab === 'metadata' && kind === taxon) taxRowsError = ex.message || translate("peopleSettings.couldNotLoadMetadata", { label: spec.label })
     } finally {
       if (version === taxLoadVersion && scopeCurrent(scope) && tab === 'metadata' && kind === taxon) taxRowsLoading = false
     }
@@ -350,10 +354,10 @@
       await createTaxon(kind, { name: ntName.trim() })
       if (scopeCurrent(scope) && scope.code === systems.code && kind === taxon) {
         ntName = ''
-        notify?.('Created')
+        notify?.(translate("peopleSettings.created"))
         await loadTaxa()
       }
-    } catch (ex) { if (scopeCurrent(scope) && kind === taxon) notify?.(ex.message || 'Could not create') }
+    } catch (ex) { if (scopeCurrent(scope) && kind === taxon) notify?.(ex.message || translate("peopleSettings.couldNotCreate")) }
     finally { taxMutationBusy = false }
   }
   async function renameTaxon(row, name) {
@@ -365,9 +369,9 @@
       await patchTaxon(kind, row.id, { name: name.trim() })
       if (scopeCurrent(scope) && scope.code === systems.code && kind === taxon) {
         row.name = name.trim()
-        notify?.('Renamed')
+        notify?.(translate("peopleSettings.renamed"))
       }
-    } catch (ex) { if (scopeCurrent(scope) && kind === taxon) notify?.(ex.message || 'Could not rename') }
+    } catch (ex) { if (scopeCurrent(scope) && kind === taxon) notify?.(ex.message || translate("peopleSettings.couldNotRename")) }
     finally { taxMutationBusy = false }
   }
   function rmTaxon(row) {
@@ -391,19 +395,19 @@
     const request = deleteRequest
     if (!request) return null
     if (request.kind === 'group') return {
-      title: `Delete group “${request.item.name}”?`,
-      message: 'Its members will be removed. Shared access must be revoked first.',
-      confirmLabel: 'Delete group',
+      title: translate("peopleSettings.deleteGroupValue", { "name": request.item.name }),
+      message: translate("peopleSettings.itsMembersWillBeRemovedSharedAccessMust"),
+      confirmLabel: translate("peopleSettings.deleteGroup"),
     }
     if (request.kind === 'custom_field') return {
-      title: `Delete field “${request.item.name}”?`,
-      message: 'Its values will be removed from every document. This cannot be undone.',
-      confirmLabel: 'Delete field',
+      title: translate("peopleSettings.deleteFieldValue", { "name": request.item.name }),
+      message: translate("peopleSettings.itsValuesWillBeRemovedFromEveryDocument"),
+      confirmLabel: translate("peopleSettings.deleteField"),
     }
     return {
-      title: `Delete “${request.item.name}”?`,
-      message: 'Documents keep working, but this label will be removed.',
-      confirmLabel: 'Delete correspondent',
+      title: translate("peopleSettings.deleteValue", { "name": request.item.name }),
+      message: translate("peopleSettings.documentsKeepWorkingButThisLabelWillBe"),
+      confirmLabel: translate("peopleSettings.deleteCorrespondent"),
     }
   })
 
@@ -420,27 +424,27 @@
         await deleteGroup(request.item.id)
         if (deleteRequestIsCurrent(request)) {
           groups = groups.filter(group => group.id !== request.item.id)
-          notify?.('Group deleted')
+          notify?.(translate("peopleSettings.groupDeleted"))
         }
       } else if (request.kind === 'custom_field') {
         await deleteCustomField(request.item.id)
         if (deleteRequestIsCurrent(request)) {
           fields = fields.filter(field => field.id !== request.item.id)
-          notify?.('Field deleted')
+          notify?.(translate("peopleSettings.fieldDeleted"))
         }
       } else {
         await deleteTaxon(request.metadataKind, request.item.id)
         if (deleteRequestIsCurrent(request)) {
           taxRows = taxRows.filter(row => row.id !== request.item.id)
-          notify?.('Deleted')
+          notify?.(translate("peopleSettings.deleted"))
         }
       }
     } catch (ex) {
       if (deleteRequestIsCurrent(request)) {
         if (request.kind === 'group' && ex.code === 'delete_conflict') {
-          notify?.('This group is still used for shared access. Revoke those grants before deleting it.')
+          notify?.(translate("peopleSettings.thisGroupIsStillUsedForSharedAccess"))
         } else {
-          notify?.(ex.message || (request.kind === 'taxon' ? 'Could not delete (in use?)' : 'Could not delete'))
+          notify?.(ex.message || (request.kind === 'taxon' ? translate("peopleSettings.couldNotDeleteInUse") : translate("peopleSettings.couldNotDelete")))
         }
       }
     } finally {
@@ -482,32 +486,32 @@
 </script>
 
 {#if view === 'people'}
-  <nav class="people-nav" aria-label="People">
-    <button class:on={tab === 'users'} aria-pressed={tab === 'users'} onclick={() => navigatePeople('users')}>Users</button>
-    <button class:on={tab === 'groups'} aria-pressed={tab === 'groups'} onclick={() => navigatePeople('groups')}>Groups</button>
+  <nav class="people-nav" aria-label={translate("peopleSettings.people")}>
+    <button class:on={tab === 'users'} aria-pressed={tab === 'users'} onclick={() => navigatePeople('users')}>{translate("peopleSettings.users")}</button>
+    <button class:on={tab === 'groups'} aria-pressed={tab === 'groups'} onclick={() => navigatePeople('groups')}>{translate("peopleSettings.groups")}</button>
   </nav>
 {/if}
 
 <div class="people-content">
 {#if tab === 'users'}
   <header class="panel-heading">
-    <h3>Users</h3>
-    <p>Manage who can sign in and what they can do.
-      {#if systems.introduced}Accounts are server-wide; system membership and document sharing control access.{/if}
+    <h3>{translate("peopleSettings.users")}</h3>
+    <p>{translate("peopleSettings.manageWhoCanSignInAndWhat")}
+      {#if systems.introduced}{translate("peopleSettings.accountsAreServerWideSystemMembershipAnd")}{/if}
     </p>
   </header>
   <section class="card editor" aria-labelledby="create-user-heading">
-    <h4 id="create-user-heading">Create a user</h4>
+    <h4 id="create-user-heading">{translate("peopleSettings.createAUser")}</h4>
     <UserCreateForm {notify} onCreated={loadUsers} />
   </section>
   <section aria-labelledby="users-heading">
-    <h4 class="list-heading" id="users-heading">Existing users</h4>
+    <h4 class="list-heading" id="users-heading">{translate("peopleSettings.existingUsers")}</h4>
     {#if usersError}
-      <div class="settings-load-state err"><span>{usersError}</span><button class="btn sm" onclick={loadUsers}>Retry</button></div>
+      <div class="settings-load-state err"><span>{usersError}</span><button class="btn sm" onclick={loadUsers}>{translate("common.retry")}</button></div>
     {:else if !usersLoaded || usersLoading}
-      <p class="quiet" role="status">Loading users…</p>
+      <p class="quiet" role="status">{translate("peopleSettings.loadingUsers")}</p>
     {:else if users.length === 0}
-      <p class="empty">No users yet.</p>
+      <p class="empty">{translate("peopleSettings.noUsersYet")}</p>
     {:else}
       <div class="index">
         {#each users as u (u.id)}
@@ -519,22 +523,22 @@
                 {#if u.display_name}<span class="quiet">{u.email}</span>{/if}
               </span>
               <span class="pill">{u.role}</span>
-              <span class="switch-control" title={isCurrentUser ? 'You cannot disable your own account.' : undefined}>
-                <span>{u.disabled ? 'Disabled' : 'Active'}{isCurrentUser ? ' (you)' : ''}</span>
+              <span class="switch-control" title={isCurrentUser ? translate("peopleSettings.youCannotDisableYourOwnAccount") : undefined}>
+                <span>{u.disabled ? translate("peopleSettings.disabled") : translate("peopleSettings.active")}{isCurrentUser ? ' (you)' : ''}</span>
                 <button type="button" class="switch" role="switch" aria-checked={!u.disabled}
-                        aria-label={`User ${u.email} active`} disabled={userBusy || isCurrentUser} onclick={() => toggleDisabled(u)}></button>
+                        aria-label={translate("peopleSettings.userValueActive", { "email": u.email })} disabled={userBusy || isCurrentUser} onclick={() => toggleDisabled(u)}></button>
               </span>
             </div>
             {#if u.role !== 'admin'}
               <details class="user-access">
-                <summary>Additional access <span class="quiet">{(u.capabilities || []).length} granted</span></summary>
+                <summary>{translate("peopleSettings.additionalAccess")} <span class="quiet">{translate("peopleSettings.valueGranted", { "length": (u.capabilities || []).length })}</span></summary>
                 <div class="access-options">
                   {#each USER_CAPABILITIES as cap (cap.key)}
                     <label class="access-option">
                       <span><b>{cap.label}</b><small>{cap.description}</small></span>
                       <button type="button" class="switch" role="switch"
                               aria-checked={(u.capabilities || []).includes(cap.key)}
-                              aria-label={`${cap.label} capability for ${u.email}`} disabled={userBusy}
+                              aria-label={translate("peopleSettings.valueCapabilityForValue", { "label": cap.label, "email": u.email })} disabled={userBusy}
                               onclick={() => toggleUserCap(u, cap)}></button>
                     </label>
                   {/each}
@@ -549,32 +553,32 @@
 
 {:else if tab === 'groups'}
   <header class="panel-heading">
-    <h3>Groups</h3>
-    <p>Share documents with several people at once.
-      {#if systems.introduced}Groups are server-wide; joining one does not grant entry to a filing system.{/if}
+    <h3>{translate("peopleSettings.groups")}</h3>
+    <p>{translate("peopleSettings.shareDocumentsWithSeveralPeopleAtOnce")}
+      {#if systems.introduced}{translate("peopleSettings.groupsAreServerWideJoiningOneDoes")}{/if}
     </p>
   </header>
   <form class="card editor" onsubmit={addGroup}>
-    <h4>Create a group</h4>
-    <label class="field">Group name
-      <input class="input" placeholder="e.g. Family or Accounts team" bind:value={ngName} required />
+    <h4>{translate("peopleSettings.createAGroup")}</h4>
+    <label class="field">{translate("peopleSettings.groupName")}
+      <input class="input" placeholder={translate("peopleSettings.eGFamilyOrAccountsTeam")} bind:value={ngName} required />
     </label>
-    <div class="form-actions"><button class="btn primary" disabled={!ngName.trim()}><Icon name="plus" size={14} />Create group</button></div>
+    <div class="form-actions"><button class="btn primary" disabled={!ngName.trim()}><Icon name="plus" size={14} />{translate("peopleSettings.createGroup")}</button></div>
   </form>
   <section aria-labelledby="groups-heading">
-    <h4 class="list-heading" id="groups-heading">Existing groups</h4>
+    <h4 class="list-heading" id="groups-heading">{translate("peopleSettings.existingGroups")}</h4>
     {#if groupsError}
-      <div class="settings-load-state err"><span>{groupsError}</span><button class="btn sm" onclick={loadGroups}>Retry</button></div>
+      <div class="settings-load-state err"><span>{groupsError}</span><button class="btn sm" onclick={loadGroups}>{translate("common.retry")}</button></div>
     {:else if !groupsLoaded || groupsLoading}
-      <p class="quiet" role="status">Loading groups…</p>
+      <p class="quiet" role="status">{translate("peopleSettings.loadingGroups")}</p>
     {:else}
       <div class="index">
         {#each groups as g (g.id)}
           <div class="group-entry">
             <div class="irow">
               <span class="title grow">{g.name}</span>
-              <button class="btn sm" disabled={deleteBusy || !!deleteRequest} onclick={() => toggleMembers(g)} aria-expanded={openGroup?.id === g.id} aria-controls={`group-members-${g.id}`}>{openGroup?.id === g.id ? 'Hide members' : 'Members'}</button>
-              <button class="btn sm danger" disabled={deleteBusy || !!deleteRequest} onclick={() => rmGroup(g)} title="Delete group" aria-label={`Delete ${g.name}`}><Icon name="trash" size={13} /></button>
+              <button class="btn sm" disabled={deleteBusy || !!deleteRequest} onclick={() => toggleMembers(g)} aria-expanded={openGroup?.id === g.id} aria-controls={`group-members-${g.id}`}>{openGroup?.id === g.id ? translate("peopleSettings.hideMembers") : translate("peopleSettings.members")}</button>
+              <button class="btn sm danger" disabled={deleteBusy || !!deleteRequest} onclick={() => rmGroup(g)} title={translate("peopleSettings.deleteGroup")} aria-label={translate("peopleSettings.deleteValue2", { "name": g.name })}><Icon name="trash" size={13} /></button>
             </div>
             {#if openGroup?.id === g.id}
               <div class="group-members" id={`group-members-${g.id}`}>
@@ -584,30 +588,30 @@
                       <span class="title">{mrow.display_name || mrow.email}</span>
                       {#if mrow.display_name}<span class="quiet">{mrow.email}</span>{/if}
                     </span>
-                    <button class="btn sm" aria-label={`Remove ${mrow.email}`} onclick={() => rmMember(g, mrow.user_id ?? mrow.id)}>Remove</button>
+                    <button class="btn sm" aria-label={translate("peopleSettings.removeValue", { "email": mrow.email })} onclick={() => rmMember(g, mrow.user_id ?? mrow.id)}>{translate("peopleSettings.remove")}</button>
                   </div>
                 {:else}
-                  <p class="quiet">No members yet. Add a person below.</p>
+                  <p class="quiet">{translate("peopleSettings.noMembersYetAddAPersonBelow")}</p>
                 {/each}
                 <div class="member-add">
-                  <label class="field">User to add
+                  <label class="field">{translate("peopleSettings.userToAdd")}
                     <select class="input" bind:value={addUID} disabled={usersLoading || !!usersError}>
-                      <option value="">Select a user by name or email</option>
+                      <option value="">{translate("peopleSettings.selectAUserByNameOrEmail")}</option>
                       {#each availableGroupUsers() as u (u.id)}
                         <option value={String(u.id)} disabled={u.disabled}>
-                          {u.display_name ? `${u.display_name} · ${u.email}` : u.email}{u.disabled ? ' · disabled' : ''}
+                          {u.display_name ? translate("peopleSettings.valueValue", { "display_name": u.display_name, "email": u.email }) : u.email}{u.disabled ? translate("peopleSettings.disabled2") : ''}
                         </option>
                       {/each}
                     </select>
                   </label>
-                  <button class="btn" disabled={!addUID || usersLoading || !!usersError} onclick={() => addMember(g)}><Icon name="plus" size={14} />Add member</button>
+                  <button class="btn" disabled={!addUID || usersLoading || !!usersError} onclick={() => addMember(g)}><Icon name="plus" size={14} />{translate("peopleSettings.addMember")}</button>
                 </div>
-                {#if usersError}<div class="settings-load-state err"><span>{usersError}</span><button class="btn sm" onclick={loadUsers}>Retry</button></div>{/if}
+                {#if usersError}<div class="settings-load-state err"><span>{usersError}</span><button class="btn sm" onclick={loadUsers}>{translate("common.retry")}</button></div>{/if}
               </div>
             {/if}
           </div>
         {:else}
-          <p class="empty">No groups yet. Create one to share documents with your family or team.</p>
+          <p class="empty">{translate("peopleSettings.noGroupsYetCreateOneToShare")}</p>
         {/each}
       </div>
     {/if}
@@ -615,8 +619,8 @@
 
 {:else if tab === 'metadata'}
   <header class="panel-heading metadata-heading">
-    <div><h3>Metadata</h3><p>Manage the labels and extra details used on documents in this filing system.</p></div>
-    <label class="field">Metadata type
+    <div><h3>{translate("peopleSettings.metadata")}</h3><p>{translate("peopleSettings.manageTheLabelsAndExtraDetailsUsed")}</p></div>
+    <label class="field">{translate("peopleSettings.metadataType")}
       <select class="input" value={taxon} disabled={tagDeleteBusy || taxMutationBusy || !!tagDeleteRequest || deleteBusy || !!deleteRequest} onchange={(event) => navigatePeople('metadata', event.currentTarget.value)}>
         {#each TAXA as t}<option value={t.kind}>{t.label}</option>{/each}
       </select>
@@ -628,51 +632,51 @@
     {#if taxon === 'custom_fields'}
       <form onsubmit={addField}>
         <div class="field-grid">
-          <label class="field">Field name
-            <input class="input" placeholder="e.g. Invoice number" bind:value={nf.name} required />
+          <label class="field">{translate("peopleSettings.fieldName")}
+            <input class="input" placeholder={translate("peopleSettings.eGInvoiceNumber")} bind:value={nf.name} required />
           </label>
-          <label class="field">Field type
+          <label class="field">{translate("peopleSettings.fieldType")}
             <select class="input" bind:value={nf.data_type}>
               {#each Object.entries(FIELD_TYPES) as [type, label]}<option value={type}>{label}</option>{/each}
             </select>
           </label>
         </div>
         {#if nf.data_type === 'select' || nf.data_type === 'multi'}
-          <label class="field choice-field">Choices
+          <label class="field choice-field">{translate("peopleSettings.choices")}
             <textarea class="input" rows="4" bind:value={nf.choices}
-                      placeholder={'One choice per line\ne.g. Pending\nApproved'} required></textarea>
-            <small>One choice per line. Choices can be extended later; choices already used by documents cannot be removed.</small>
+                      placeholder={translate("peopleSettings.oneChoicePerLineEGPendingApproved")} required></textarea>
+            <small>{translate("peopleSettings.oneChoicePerLineChoicesCanBe")}</small>
           </label>
         {/if}
-        <div class="form-actions"><button class="btn primary" disabled={!nf.name.trim() || ((nf.data_type === 'select' || nf.data_type === 'multi') && !normalizedChoices(nf.choices).length)}><Icon name="plus" size={14} />Create field</button></div>
+        <div class="form-actions"><button class="btn primary" disabled={!nf.name.trim() || ((nf.data_type === 'select' || nf.data_type === 'multi') && !normalizedChoices(nf.choices).length)}><Icon name="plus" size={14} />{translate("peopleSettings.createField")}</button></div>
       </form>
     {:else}
       <form onsubmit={addTaxon}>
-        <label class="field">Name
-          <input class="input" placeholder={`New ${selectedTaxon.singular} name`} bind:value={ntName} disabled={taxMutationBusy || tagDeleteBusy || !!tagDeleteRequest} required />
+        <label class="field">{translate("peopleSettings.name")}
+          <input class="input" placeholder={translate(selectedTaxon.placeholderKey)} bind:value={ntName} disabled={taxMutationBusy || tagDeleteBusy || !!tagDeleteRequest} required />
         </label>
-        <div class="form-actions"><button class="btn primary" disabled={!ntName.trim() || taxMutationBusy || tagDeleteBusy || !!tagDeleteRequest}><Icon name="plus" size={14} />Create {selectedTaxon.singular}</button></div>
+        <div class="form-actions"><button class="btn primary" disabled={!ntName.trim() || taxMutationBusy || tagDeleteBusy || !!tagDeleteRequest}><Icon name="plus" size={14} />{translate(selectedTaxon.createKey)}</button></div>
       </form>
     {/if}
   </section>
   <section aria-labelledby="metadata-list-heading">
-    <h4 class="list-heading" id="metadata-list-heading">Existing {selectedTaxon.label.toLowerCase()}</h4>
+    <h4 class="list-heading" id="metadata-list-heading">{translate(selectedTaxon.existingKey)}</h4>
     {#if taxon === 'tags'}
       <div class="tag-management">
-        <label class="field tag-search">Search tags
-          <input class="input" type="search" bind:value={tagSearch} placeholder="Filter by name or slug" />
+        <label class="field tag-search">{translate("peopleSettings.searchTags")}
+          <input class="input" type="search" bind:value={tagSearch} placeholder={translate("peopleSettings.filterByNameOrSlug")} />
         </label>
         <div class="tag-selection">
-          <span role="status">{selectedTagIDs.size} selected</span>
-          <button class="btn sm" type="button" disabled={!taxRowsLoaded || taxRowsKind !== 'tags' || taxRowsLoading || matchingTags.length === 0 || matchingTags.length > 500 || tagDeleteBusy || taxMutationBusy || !!tagDeleteRequest} onclick={selectMatchingTags}>Select matching</button>
-          <button class="btn sm danger" type="button" disabled={!selectedTagIDs.size || selectedTagIDs.size > 500 || tagDeleteBusy || taxMutationBusy || !!tagDeleteRequest} onclick={() => requestTagDelete([...selectedTagIDs])}>Delete selected</button>
-          <button class="btn sm" type="button" disabled={!selectedTagIDs.size || tagDeleteBusy || taxMutationBusy || !!tagDeleteRequest} onclick={() => (selectedTagIDs = new Set())}>Clear selection</button>
+          <span role="status">{translate("peopleSettings.valueSelected", { "size": selectedTagIDs.size })}</span>
+          <button class="btn sm" type="button" disabled={!taxRowsLoaded || taxRowsKind !== 'tags' || taxRowsLoading || matchingTags.length === 0 || matchingTags.length > 500 || tagDeleteBusy || taxMutationBusy || !!tagDeleteRequest} onclick={selectMatchingTags}>{translate("peopleSettings.selectMatching")}</button>
+          <button class="btn sm danger" type="button" disabled={!selectedTagIDs.size || selectedTagIDs.size > 500 || tagDeleteBusy || taxMutationBusy || !!tagDeleteRequest} onclick={() => requestTagDelete([...selectedTagIDs])}>{translate("peopleSettings.deleteSelected")}</button>
+          <button class="btn sm" type="button" disabled={!selectedTagIDs.size || tagDeleteBusy || taxMutationBusy || !!tagDeleteRequest} onclick={() => (selectedTagIDs = new Set())}>{translate("peopleSettings.clearSelection")}</button>
         </div>
         {#if taxRowsLoaded && taxRowsKind === 'tags' && matchingTags.length > 500}
-          <p class="quiet">More than 500 tags match. Narrow the filter to select matching tags.</p>
+          <p class="quiet">{translate("peopleSettings.moreThan500TagsMatchNarrowThe")}</p>
         {/if}
         {#if selectedTagIDs.size > 500}
-          <p class="quiet">Narrow your selection to 500 tags or fewer before deleting.</p>
+          <p class="quiet">{translate("peopleSettings.narrowYourSelectionTo500TagsOr")}</p>
         {/if}
         {#if tagDeleteError}<p class="err" role="alert">{tagDeleteError}</p>{/if}
         {#if tagDeleteSuccess}<p role="status">{tagDeleteSuccess}</p>{/if}
@@ -680,12 +684,12 @@
     {/if}
     {#if taxon === 'custom_fields'}
       {#if fieldsError}
-        <div class="settings-load-state err"><span>{fieldsError}</span><button class="btn sm" onclick={loadFields}>Retry</button></div>
+        <div class="settings-load-state err"><span>{fieldsError}</span><button class="btn sm" onclick={loadFields}>{translate("common.retry")}</button></div>
       {:else if !fieldsLoaded || fieldsLoading}
-        <p class="quiet" role="status">Loading custom fields…</p>
+        <p class="quiet" role="status">{translate("peopleSettings.loadingCustomFields")}</p>
       {:else}
         {#if fields.some(field => field.managed_by)}
-          <p class="managed-field-help">Managed fields are required by document extraction. Their definitions cannot be renamed or deleted.</p>
+          <p class="managed-field-help">{translate("peopleSettings.managedFieldsAreRequiredByDocumentExtraction")}</p>
         {/if}
         <div class="index">
           {#each fields as f (f.id)}
@@ -693,24 +697,24 @@
               <div class="irow">
                 <span class="grow">
                   <input class="inline-edit"
-                         aria-label={f.managed_by ? `${f.name} (managed)` : `Rename ${f.name}`}
-                         title={f.managed_by ? 'Required by e-invoice extraction' : ''}
+                         aria-label={f.managed_by ? translate("peopleSettings.valueManaged", { "name": f.name }) : translate("peopleSettings.renameValue", { "name": f.name })}
+                         title={f.managed_by ? translate("peopleSettings.requiredByEInvoiceExtraction") : ''}
                          value={f.name}
                          readonly={!!f.managed_by}
                          onchange={(e) => renameField(f, e.target.value)} />
                 </span>
                 <span class="pill">{FIELD_TYPES[f.data_type] || f.data_type}</span>
                 {#if f.managed_by}
-                  <span class="pill managed-field-pill">Managed</span>
+                  <span class="pill managed-field-pill">{translate("peopleSettings.managed")}</span>
                 {:else}
                   <button class="btn sm danger" disabled={deleteBusy || !!deleteRequest}
-                          onclick={() => rmField(f)} title="Delete field" aria-label={`Delete ${f.name}`}><Icon name="trash" size={13} /></button>
+                          onclick={() => rmField(f)} title={translate("peopleSettings.deleteField")} aria-label={translate("peopleSettings.deleteValue2", { "name": f.name })}><Icon name="trash" size={13} /></button>
                 {/if}
               </div>
               {#if f.data_type === 'select' || f.data_type === 'multi'}
                 <div class="choice-editor">
-                  <label class="field">Choices
-                    <textarea class="input" rows="3" aria-label={`Choices for ${f.name}`}
+                  <label class="field">{translate("peopleSettings.choices")}
+                    <textarea class="input" rows="3" aria-label={translate("peopleSettings.choicesForValue", { "name": f.name })}
                               value={fieldChoiceDrafts[f.id] || ''}
                               oninput={(event) => (fieldChoiceDrafts = { ...fieldChoiceDrafts, [f.id]: event.currentTarget.value })}
                               disabled={!!f.managed_by || fieldChoiceBusy != null}></textarea>
@@ -718,40 +722,40 @@
                   <button class="btn sm" type="button"
                           disabled={!!f.managed_by || fieldChoiceBusy != null || !normalizedChoices(fieldChoiceDrafts[f.id] || '').length}
                           onclick={() => saveFieldChoices(f)}>
-                    {fieldChoiceBusy === f.id ? 'Saving…' : 'Save choices'}
+                    {fieldChoiceBusy === f.id ? translate("common.saving") : translate("peopleSettings.saveChoices")}
                   </button>
                 </div>
               {/if}
             </div>
           {:else}
-            <p class="empty">No custom fields yet. Add a field when a document needs a detail that the standard fields do not cover.</p>
+            <p class="empty">{translate("peopleSettings.noCustomFieldsYetAddAField")}</p>
           {/each}
         </div>
       {/if}
     {:else if taxRowsError}
-      <div class="settings-load-state err"><span>{taxRowsError}</span><button class="btn sm" onclick={loadTaxa}>Retry</button></div>
+      <div class="settings-load-state err"><span>{taxRowsError}</span><button class="btn sm" onclick={loadTaxa}>{translate("common.retry")}</button></div>
     {:else if !taxRowsLoaded || taxRowsKind !== taxon || taxRowsLoading}
-      <p class="quiet" role="status">Loading {selectedTaxon.label.toLowerCase()}…</p>
+      <p class="quiet" role="status">{translate(selectedTaxon.loadingKey)}</p>
     {:else}
       <div class="index">
         {#each taxon === 'tags' ? matchingTags : taxRows as row (row.id)}
           <div class="irow tag-row">
             {#if taxon === 'tags'}
-              <input type="checkbox" class="tag-checkbox" aria-label={`Select tag ${row.name}`}
+              <input type="checkbox" class="tag-checkbox" aria-label={translate("peopleSettings.selectTagValue", { "name": row.name })}
                      checked={selectedTagIDs.has(row.id)} disabled={tagDeleteBusy || taxMutationBusy || !!tagDeleteRequest}
                      onchange={(e) => toggleTag(row.id, e.currentTarget.checked)} />
             {/if}
             <span class="dot" style={row.color ? `background:${row.color}` : ''}></span>
-            <span class="grow"><input class="inline-edit" aria-label={`Rename ${row.name}`} value={row.name}
+            <span class="grow"><input class="inline-edit" aria-label={translate("peopleSettings.renameValue", { "name": row.name })} value={row.name}
                                     disabled={tagDeleteBusy || taxMutationBusy || !!tagDeleteRequest || deleteBusy || !!deleteRequest}
                                     onchange={(e) => renameTaxon(row, e.target.value)} /></span>
-            {#if row.child_count}<span class="quiet">{row.child_count} children</span>{/if}
-            {#if row.document_count != null}<span class="quiet">{row.document_count} docs</span>{/if}
+            {#if row.child_count}<span class="quiet">{plural("peopleSettings.childCount", row.child_count)}</span>{/if}
+            {#if row.document_count != null}<span class="quiet">{plural("peopleSettings.documentCount", row.document_count)}</span>{/if}
             <button class="btn sm danger" disabled={tagDeleteBusy || taxMutationBusy || !!tagDeleteRequest || deleteBusy || !!deleteRequest}
-                    onclick={() => rmTaxon(row)} title="Delete entry" aria-label={`Delete ${row.name}`}><Icon name="trash" size={13} /></button>
+                    onclick={() => rmTaxon(row)} title={translate("peopleSettings.deleteEntry")} aria-label={translate("peopleSettings.deleteValue2", { "name": row.name })}><Icon name="trash" size={13} /></button>
           </div>
         {:else}
-          <p class="empty">{taxon === 'tags' && tagSearch.trim() ? 'No matching tags.' : `No ${selectedTaxon.label.toLowerCase()} yet. Create your first ${selectedTaxon.singular} above.`}</p>
+          <p class="empty">{taxon === 'tags' && tagSearch.trim() ? translate("peopleSettings.noMatchingTags") : translate(selectedTaxon.emptyKey)}</p>
         {/each}
       </div>
     {/if}
@@ -764,7 +768,7 @@
     title={deleteDialog.title}
     message={deleteDialog.message}
     confirmLabel={deleteDialog.confirmLabel}
-    busyLabel="Deleting…"
+    busyLabel={translate("peopleSettings.deleting")}
     busy={deleteBusy}
     onConfirm={confirmDelete}
     onCancel={() => (deleteRequest = null)} />
@@ -772,10 +776,10 @@
 
 {#if tagDeleteRequest}
   <ConfirmDialog
-    title={`Delete ${tagDeleteRequest.ids.length} tag${tagDeleteRequest.ids.length === 1 ? '' : 's'}?`}
-    message={`${tagDeleteRequest.name ? `“${tagDeleteRequest.name}” and its` : 'The selected tags and their'} document-tag links will be removed. Surviving child tags become roots. This cannot be undone.`}
-    confirmLabel="Delete tags"
-    busyLabel="Deleting…"
+    title={plural("peopleSettings.deleteTagCount", tagDeleteRequest.ids.length)}
+    message={tagDeleteRequest.name ? translate("peopleSettings.deleteNamedTagLinks", { name: tagDeleteRequest.name }) : translate("peopleSettings.deleteSelectedTagLinks")}
+    confirmLabel={translate("peopleSettings.deleteTags")}
+    busyLabel={translate("peopleSettings.deleting")}
     busy={tagDeleteBusy}
     onConfirm={confirmTagDelete}
     onCancel={() => (tagDeleteRequest = null)} />

@@ -9,11 +9,12 @@ const { askArchive, changeMyEmail, login, logout, uploadDocument, uploadDocument
 const { systems, resetSystems } = await import('./systems.svelte.js')
 delete globalThis.$state
 
-test('uses the API-provided error message', async () => {
+test('shows client-error text from the server while preserving transport details', async () => {
   const originalFetch = globalThis.fetch
+  const serverMessage = 'Microsoft did not complete sign-in'
   globalThis.fetch = async () => new Response(JSON.stringify({
     code: 'oauth_failed',
-    error: 'Microsoft did not complete sign-in',
+    error: serverMessage,
   }), {
     status: 400,
     headers: { 'content-type': 'application/json' },
@@ -22,7 +23,7 @@ test('uses the API-provided error message', async () => {
     await assert.rejects(
       () => login('admin@example.test', 'wrong-password'),
       (err) => err.status === 400 && err.code === 'oauth_failed' &&
-        err.message === 'Microsoft did not complete sign-in',
+        err.data?.error === serverMessage && err.message === serverMessage,
     )
   } finally {
     globalThis.fetch = originalFetch
@@ -44,7 +45,7 @@ test('preserves JSON error codes despite missing or mislabeled content types', a
       await assert.rejects(
         () => askArchive({ question: 'How much did I spend?' }),
         (err) => err.status === 502 && err.code === 'invalid_provider_response' &&
-          err.message === 'upstream service error',
+          err.data?.error === 'upstream service error' && err.message !== err.data.error,
       )
     }
   } finally {
@@ -60,7 +61,7 @@ test('does not expose a non-JSON gateway error body', async () => {
   try {
     await assert.rejects(
       () => askArchive({ question: 'How much did I spend?' }),
-      (err) => err.status === 502 && err.message === 'HTTP 502' && err.data === null,
+      (err) => err.status === 502 && !err.message.includes('private upstream details') && err.data === null,
     )
   } finally {
     globalThis.fetch = originalFetch
@@ -239,7 +240,7 @@ test('taxonomy export rejects a late download as soon as logout starts', async (
   }
 })
 
-test('taxonomy export invalidates an unavailable system and preserves server validation errors', async () => {
+test('taxonomy export invalidates an unavailable system and preserves the error code', async () => {
   const originalFetch = globalThis.fetch
   resetSystems({ user_id: 1 })
   systems.code = 'S02'
@@ -248,9 +249,8 @@ test('taxonomy export invalidates an unavailable system and preserves server val
     code: 'system_unavailable', error: 'System unavailable',
   }), { status: 404 })
   try {
-    await assert.rejects(exportTaxonomy(), err => err.code === 'system_unavailable' && err.message === 'System unavailable')
+    await assert.rejects(exportTaxonomy(), err => err.code === 'system_unavailable' && err.status === 404)
     assert.equal(systems.ready, false)
-    assert.match(systems.error, /Ask an administrator/)
   } finally {
     globalThis.fetch = originalFetch
     resetSystems()

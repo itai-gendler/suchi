@@ -1,5 +1,7 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script>
+  import { t as translate } from "../lib/i18n.svelte.js";
+  import { formatList } from '../lib/format.js'
   import { listAutomations, createAutomation, patchAutomation, deleteAutomation,
            listTags, listCorrespondents, listCustomFields, listRenderedLayouts,
            adminListUsers, systemMembers, automationsSchema } from '../lib/api.js'
@@ -36,33 +38,71 @@
   const userItems = $derived(items.filter(a => !a.preset_slug))
   const builtInItems = $derived(items.filter(a => a.preset_slug))
 
+  const TRIGGER_LABEL_KEYS = {
+    consumption: 'automations.triggerConsumption',
+    document_added: 'automations.triggerDocumentAdded',
+    document_updated: 'automations.triggerDocumentUpdated',
+  }
+  const TRIGGER_EVENT_KEYS = {
+    consumption: 'automations.eventConsumption',
+    document_added: 'automations.eventDocumentAdded',
+    document_updated: 'automations.eventDocumentUpdated',
+  }
+  const ACTION_LABEL_KEYS = {
+    assign_title: 'automations.actionAssignTitle',
+    assign_tags: 'automations.actionAssignTags',
+    assign_correspondent: 'automations.actionAssignCorrespondent',
+    assign_jd_category: 'automations.actionAssignCategory',
+    assign_storage_path: 'automations.actionAssignFolderLayout',
+    assign_owner: 'automations.actionAssignOwner',
+    assign_custom_field: 'automations.actionAssignCustomField',
+  }
+  const ASK_ANSWER_KEYS = {
+    yes_no: 'automations.yesNo',
+    choice: 'automations.multipleChoice',
+  }
+
+
   let TRIGGER_TYPES = $state([])
   let ACTION_KINDS = $state([])
   let ASK_SCHEMA = $state({
     max_enabled: 5,
-    answers: [{ type: 'yes_no', name: 'Yes / No' }, { type: 'choice', name: 'Multiple choice' }],
+    answers: [{ type: 'yes_no', name: translate("automations.yesNo") }, { type: 'choice', name: translate("automations.multipleChoice") }],
     action_kinds: ['assign_tags', 'assign_correspondent', 'assign_jd_category', 'assign_custom_field'],
   })
 
   const FILTERS = [
-    { kind: 'filename', key: 'filter_filename', label: 'Filename', operator: 'matches', placeholder: '*.pdf' },
-    { kind: 'title', key: 'filter_title_matching', label: 'Title', operator: 'matches', placeholder: 'invoice|statement' },
-    { kind: 'content', key: 'filter_content_matching', label: 'Content', operator: 'matches', placeholder: 'account number' },
-    { kind: 'tag', key: 'filter_has_tag', label: 'Tag', operator: 'is', type: 'tag' },
-    { kind: 'correspondent', key: 'filter_has_correspondent', label: 'Correspondent', operator: 'is', type: 'correspondent' },
+    { kind: 'filename', key: 'filter_filename', label: translate("automations.filename"), operator: translate("automations.matches"), placeholder: '*.pdf' },
+    { kind: 'title', key: 'filter_title_matching', label: translate("automations.title"), operator: translate("automations.matches"), placeholder: 'invoice|statement' },
+    { kind: 'content', key: 'filter_content_matching', label: translate("automations.content"), operator: translate("automations.matches"), placeholder: translate("automations.accountNumber") },
+    { kind: 'tag', key: 'filter_has_tag', label: translate("automations.tag"), operator: translate("automations.is"), type: 'tag' },
+    { kind: 'correspondent', key: 'filter_has_correspondent', label: translate("automations.correspondent"), operator: translate("automations.is"), type: 'correspondent' },
   ]
   const AUTOMATION_PATTERNS = [
-    { value: 'correspondent', label: 'Tag by correspondent' },
-    { value: 'title-route', label: 'Route by title' },
-    { value: 'dated-title', label: 'Title scans by date' },
+    { value: 'correspondent', label: translate("automations.tagByCorrespondent") },
+    { value: 'title-route', label: translate("automations.routeByTitle") },
+    { value: 'dated-title', label: translate("automations.titleScansByDate") },
   ]
   automationsSchema().then(sc => {
-    if (sc?.triggers?.length) TRIGGER_TYPES = sc.triggers.map(t => ({ code: t.code, label: t.name || t.type }))
-    if (sc?.actions?.length) ACTION_KINDS = sc.actions.map(a => ({
-      kind: a.kind, label: a.name || a.kind, description: a.description || '', params: a.params || [],
+    if (sc?.triggers?.length) TRIGGER_TYPES = sc.triggers.map(item => ({
+      code: item.code,
+      type: item.type,
+      label: TRIGGER_LABEL_KEYS[item.type] ? translate(TRIGGER_LABEL_KEYS[item.type]) : item.name || item.type,
+      event: TRIGGER_EVENT_KEYS[item.type] ? translate(TRIGGER_EVENT_KEYS[item.type]) : item.name || item.type,
     }))
-    if (sc?.ask) ASK_SCHEMA = sc.ask
-  }).catch(ex => { err = ex.message || 'Could not load the automation options.' })
+    if (sc?.actions?.length) ACTION_KINDS = sc.actions.map(item => ({
+      kind: item.kind,
+      label: ACTION_LABEL_KEYS[item.kind] ? translate(ACTION_LABEL_KEYS[item.kind]) : item.name || item.kind,
+      params: item.params || [],
+    }))
+    if (sc?.ask) ASK_SCHEMA = {
+      ...sc.ask,
+      answers: (sc.ask.answers || []).map(answer => ({
+        ...answer,
+        name: ASK_ANSWER_KEYS[answer.type] ? translate(ASK_ANSWER_KEYS[answer.type]) : answer.name || answer.type,
+      })),
+    }
+  }).catch(ex => { err = ex.message || translate("automations.couldNotLoadTheAutomationOptions") })
 
   const newTrigger = () => ({
     type: 2, filter_filename: '', filter_path: '', filter_title_matching: '', filter_content_matching: '',
@@ -80,7 +120,7 @@
       const res = await listAutomations()
       items = res?.results || res || []
       if (items.length) loadFacets()
-    } catch (ex) { err = ex.message || 'Could not load automations.' }
+    } catch (ex) { err = ex.message || translate("automations.couldNotLoadAutomations") }
     finally { loading = false }
   }
   async function loadOwners() {
@@ -108,7 +148,7 @@
         }
       })
       .catch((ex) => {
-        facetsError = ex.message || 'Could not load metadata choices.'
+        facetsError = ex.message || translate("automations.couldNotLoadMetadataChoices")
         facetsPromise = null
       })
     return facetsPromise
@@ -137,16 +177,16 @@
     let filters = [[]]
     switch (kind) {
       case 'correspondent':
-        draft.name = 'Tag by correspondent'
+        draft.name = translate("automations.tagByCorrespondent")
         filters = [['correspondent']]
         break
       case 'title-route':
-        draft.name = 'Route by title'
+        draft.name = translate("automations.routeByTitle")
         draft.actions = [{ type: 'assign_jd_category', params: { jd_category_id: 0 } }]
         filters = [['title']]
         break
       case 'dated-title':
-        draft.name = 'Title scans by date'
+        draft.name = translate("automations.titleScansByDate")
         draft.triggers[0].filter_filename = '*.pdf'
         draft.actions = [{ type: 'assign_title', params: { template: '{{date}} {{title}}' } }]
         filters = [['filename']]
@@ -174,7 +214,7 @@
         editing.actions = editing.actions?.length ? editing.actions : [{ type: 'assign_tags', params: { tag_ids: [] } }]
         visibleFilters = editing.triggers.map(configuredFilters)
         mode = 'builder'
-      } catch { draftErr = 'Fix the JSON before switching back to the builder.' }
+      } catch { draftErr = translate("automations.fixTheJsonBeforeSwitchingBackToThe") }
     }
   }
 
@@ -267,7 +307,7 @@
   }
 
   function askAnswerTypeChanged() {
-    editing.ask.answer.choices = editing.ask.answer.type === 'choice' ? ['Option 1', 'Option 2'] : []
+    editing.ask.answer.choices = editing.ask.answer.type === 'choice' ? [translate("automations.option1"), translate("automations.option2")] : []
     normalizeActionBranches()
   }
 
@@ -296,7 +336,7 @@
   }
 
   function tagName(id) {
-    return facets.tags.find(tag => Number(tag.id) === Number(id))?.name || `Tag #${id}`
+    return facets.tags.find(tag => Number(tag.id) === Number(id))?.name || translate("automations.tagValue", { "id": id })
   }
 
   function addTag(action, event) {
@@ -317,9 +357,9 @@
     let body
     if (mode === 'json') {
       try { body = JSON.parse(jsonDraft) }
-      catch (ex) { draftErr = ex.message || 'Not valid JSON.'; return }
+      catch (ex) { draftErr = ex.message || translate("automations.notValidJson"); return }
     } else body = editing
-    if (!body.name?.trim()) { draftErr = 'Give it a name.'; return }
+    if (!body.name?.trim()) { draftErr = translate("automations.giveItAName"); return }
     for (const t of body.triggers || []) for (const k of ['type','filter_has_tag','filter_has_correspondent']) t[k] = Number(t[k]) || 0
     for (const a of body.actions || []) for (const k of Object.keys(a.params || {}))
       if (k.endsWith('_id')) a.params[k] = Number(a.params[k]) || 0
@@ -329,14 +369,14 @@
       if (body.id) await patchAutomation(body.id, body)
       else await createAutomation(body)
       editing = null
-      notify?.('Automation saved')
+      notify?.(translate("automations.automationSaved"))
       await load()
     } catch (ex) {
       if (ex.status === 409 && ex.code === 'duplicate_rule' && ex.data?.match) {
         duplicate = ex.data.match
         return
       }
-      draftErr = ex.message || 'The server rejected this spec.'
+      draftErr = ex.message || translate("automations.theServerRejectedThisSpec")
     } finally {
       saving = false
     }
@@ -350,10 +390,10 @@
       const openID = duplicate.id
       duplicate = null
       editing = null
-      notify?.('Enabled existing automation')
+      notify?.(translate("automations.enabledExistingAutomation"))
       await load()
       queueMicrotask(() => document.getElementById(`automation-${openID}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }))
-    } catch (ex) { draftErr = ex.message || 'Could not enable the existing automation.' }
+    } catch (ex) { draftErr = ex.message || translate("automations.couldNotEnableTheExistingAutomation") }
   }
   async function openExistingDuplicate() {
     if (!duplicate) return
@@ -369,8 +409,8 @@
     try {
       await patchAutomation(a.id, { enabled })
       a.enabled = enabled
-      notify?.(enabled ? 'Enabled' : 'Disabled')
-    } catch (ex) { notify?.(ex.message || 'Could not update the automation') }
+      notify?.(enabled ? translate("automations.enabled") : translate("automations.disabled"))
+    } catch (ex) { notify?.(ex.message || translate("automations.couldNotUpdateTheAutomation")) }
     finally { toggleID = null }
   }
   function remove(automation) {
@@ -386,10 +426,10 @@
       await deleteAutomation(automation.id)
       items = items.filter(item => item.id !== automation.id)
       if (editing?.id === automation.id) editing = null
-      notify?.('Deleted')
+      notify?.(translate("automations.deleted"))
       deleteRequest = null
     } catch (ex) {
-      notify?.(ex.message || 'Could not delete')
+      notify?.(ex.message || translate("automations.couldNotDelete"))
       deleteRequest = null
     } finally {
       deleteBusy = false
@@ -410,7 +450,7 @@
       }
     } catch (ex) {
       items = previous
-      notify?.(ex.message || 'Could not reorder automations')
+      notify?.(ex.message || translate("automations.couldNotReorderAutomations"))
     } finally {
       reorderID = null
     }
@@ -451,66 +491,69 @@
 
   function ownerLabel(owner) {
     if (!owner) return ''
-    return owner.display_name ? `${owner.display_name} · ${owner.email}` : owner.email
+    return owner.display_name ? translate("automations.valueValue", { "display_name": owner.display_name, "email": owner.email }) : owner.email
   }
 
   function triggerDescribe(trigger) {
-    const raw = TRIGGER_TYPES.find(type => Number(type.code) === Number(trigger.type))?.label || `trigger ${trigger.type}`
-    const event = raw.replace(/^After\s+/i, '').replace(/^On\s+/i, '')
-    const details = [event.charAt(0).toLowerCase() + event.slice(1)]
-    if (trigger.filter_filename) details.push(`filename matches ${trigger.filter_filename}`)
-    if (trigger.filter_title_matching) details.push(`title matches ${trigger.filter_title_matching}`)
-    if (trigger.filter_content_matching) details.push(`content matches ${trigger.filter_content_matching}`)
-    if (trigger.filter_has_tag) details.push(`tag is ${tagName(trigger.filter_has_tag)}`)
+    const configured = TRIGGER_TYPES.find(type => Number(type.code) === Number(trigger.type))
+    const details = [configured?.event || translate("automations.triggerValue2", { type: trigger.type })]
+    if (trigger.filter_filename) details.push(translate("automations.filenameMatchesValue", { "filter_filename": trigger.filter_filename }))
+    if (trigger.filter_title_matching) details.push(translate("automations.titleMatchesValue", { "filter_title_matching": trigger.filter_title_matching }))
+    if (trigger.filter_content_matching) details.push(translate("automations.contentMatchesValue", { "filter_content_matching": trigger.filter_content_matching }))
+    if (trigger.filter_has_tag) details.push(translate("automations.tagIsValue", { "filter_has_tag": tagName(trigger.filter_has_tag) }))
     if (trigger.filter_has_correspondent) {
       const name = facets.correspondents.find(item => Number(item.id) === Number(trigger.filter_has_correspondent))?.name
-      details.push(`correspondent is ${name || `#${trigger.filter_has_correspondent}`}`)
+      details.push(translate("automations.correspondentIsValue", { "filter_has_correspondent": name || `#${trigger.filter_has_correspondent}` }))
     }
-    return details.join(' · ')
+    return formatList(details)
   }
 
   function summary(a) {
-    const triggers = (a.triggers || []).map(triggerDescribe).join(' or ') || 'no trigger'
-    const ask = a.ask?.question ? ` · ask “${a.ask.question}”` : ''
-    const actions = (a.actions || []).map(actionDescribe).join(' · ') || 'no actions'
-    return `when ${triggers}${ask} → ${actions}`
+    const triggers = (a.triggers || []).length ? formatList((a.triggers || []).map(triggerDescribe), { type: 'disjunction' }) : translate("automations.noTrigger")
+    const ask = a.ask?.question ? translate("automations.askValue", { "question": a.ask.question }) : ''
+    const actions = (a.actions || []).length ? formatList((a.actions || []).map(actionDescribe)) : translate("automations.noActions")
+    return translate("automations.whenValueValueValue", { "triggers": triggers, "ask": ask, "actions": actions })
   }
 
   function actionDescribe(a) {
     const spec = ACTION_KINDS.find(kind => kind.kind === a.type)
     const p = a.params || {}
-    const branch = a.when ? `if ${a.when}: ` : ''
+    const branch = a.when ? translate("automations.ifValue2", { "when": a.when }) : ''
     switch (a.type) {
       case 'assign_tags': {
         const names = (p.tag_ids || []).map(tagName)
-        return branch + (names.length ? `add ${names.length === 1 ? 'tag' : 'tags'} ${names.join(', ')}` : 'add tags')
+        return branch + (names.length ? translate("automations.addTagList", { names: formatList(names) }) : translate("automations.addTags"))
       }
       case 'assign_correspondent': {
         const name = facets.correspondents.find(item => Number(item.id) === Number(p.correspondent_id))?.name
-        return branch + (name ? `set correspondent ${name}` : 'set correspondent')
+        return branch + (name ? translate("automations.setCorrespondentValue", { "name": name }) : translate("automations.setCorrespondent"))
       }
       case 'assign_jd_category': {
         const jd = jdCategories.find(item => Number(item.id) === Number(p.jd_category_id))
-        return branch + (jd ? `file in ${jd.code} · ${jd.name}` : 'file in a category')
+        return branch + (jd ? translate("automations.fileInValueValue", { "code": jd.code, "name": jd.name }) : translate("automations.fileInACategory"))
       }
       case 'assign_title':
-        return branch + (p.template ? `set title “${p.template}”` : 'set title')
+        return branch + (p.template ? translate("automations.setTitleValue", { "template": p.template }) : translate("automations.setTitle"))
       case 'assign_owner': {
         const owner = facets.owners.find(candidate => Number(candidate.id) === Number(p.owner_id))
-        return branch + (owner ? `set owner ${ownerLabel(owner)}` : 'set owner')
+        return branch + (owner ? translate("automations.setOwnerValue", { "owner": ownerLabel(owner) }) : translate("automations.setOwner"))
       }
       case 'assign_storage_path': {
         const layout = facets.renderedLayouts.find(candidate => Number(candidate.id) === Number(p.storage_path_id))
-        return branch + (layout ? `use folder layout ${layout.name}` : 'use folder layout')
+        return branch + (layout ? translate("automations.useFolderLayoutValue", { "name": layout.name }) : translate("automations.useFolderLayout"))
       }
       case 'assign_custom_field': {
         const field = facets.customFields.find(candidate => Number(candidate.id) === Number(p.field_id))
-        const value = Array.isArray(p.value) ? p.value.join(', ') : String(p.value ?? '')
-        return branch + (field ? `set ${field.name} to ${value}` : 'set custom field')
+        const value = Array.isArray(p.value) ? formatList(p.value.map(item => String(item))) : String(p.value ?? '')
+        return branch + (field ? translate("automations.setValueToValue", { "name": field.name, "value": value }) : translate("automations.setCustomField"))
       }
       default:
-        return branch + (spec?.label?.toLowerCase() || a.type)
+        return branch + (spec?.label || a.type)
     }
+  }
+
+  function automationLabel(automation) {
+    return automation.name || translate("automations.automationValue", { id: automation.id })
   }
 
   load()
@@ -519,11 +562,11 @@
 {#snippet automationRow(a, sortable)}
   <RuleRow class="automation-row"
            id={`automation-${a.id}`}
-           title={a.name || `Automation #${a.id}`}
+           title={a.name || translate("automations.automationValue", { "id": a.id })}
            summary={summary(a)}
            disabled={!a.enabled}
-           actionText={readOnly ? (peekID === a.id ? 'Hide JSON' : 'View JSON') : 'Edit'}
-           actionLabel={readOnly ? (peekID === a.id ? 'Hide JSON' : 'View JSON') : `Edit ${a.name || `automation ${a.id}`}`}
+           actionText={readOnly ? (peekID === a.id ? translate("automations.hideJson") : translate("automations.viewJson")) : translate("automations.edit")}
+           actionLabel={readOnly ? (peekID === a.id ? translate("automations.hideJson") : translate("automations.viewJson")) : translate("automations.editValue", { id: automationLabel(a) })}
            detailText={readOnly && peekID === a.id ? JSON.stringify(a, null, 2) : ''}
            onaction={() => readOnly ? (peekID = peekID === a.id ? null : a.id) : openEditor(a)}
            ondragover={(event) => { if (sortable && !readOnly) event.preventDefault() }}
@@ -532,8 +575,8 @@
       {#if sortable && !readOnly}
         <button class="drag-handle" type="button" draggable="true"
                 disabled={reorderID !== null}
-                aria-label={`Move ${a.name || `automation ${a.id}`}`}
-                title="Drag to reorder; use arrow keys for precise movement"
+                aria-label={translate("automations.moveValue", { id: automationLabel(a) })}
+                title={translate("automations.dragToReorderUseArrowKeysFor")}
                 ondragstart={(event) => startDrag(event, a.id)}
                 ondragend={() => (draggedID = null)}
                 onkeydown={(event) => {
@@ -552,14 +595,14 @@
       {/if}
     {/snippet}
     {#snippet titleMeta()}
-      {#if a.preset_slug}<span class="owner-pill">{a.preset_slug} filing tree</span>{/if}
+      {#if a.preset_slug}<span class="owner-pill">{translate("automations.valueFilingTree", { "preset_slug": a.preset_slug })}</span>{/if}
     {/snippet}
     {#snippet trailing()}
       {#if readOnly}
         <span class="pill" class:ok={a.enabled} class:warn={!a.enabled}>{a.enabled ? 'enabled' : 'disabled'}</span>
       {:else}
         <button type="button" class="switch" role="switch" aria-checked={a.enabled}
-                aria-label={`${a.name || `Automation ${a.id}`} enabled`}
+                aria-label={translate("automations.valueEnabled", { id: automationLabel(a) })}
                 disabled={toggleID !== null}
                 onclick={() => toggle(a)}></button>
       {/if}
@@ -572,34 +615,34 @@
 
   {#if editing !== null}
     <RuleWorkspace class="automation-builder"
-                   title={editing.id ? 'Edit automation' : 'New automation'}
+                   title={editing.id ? translate("automations.editAutomation") : translate("automations.newAutomation")}
                    headingId="automation-editor-heading">
       {#snippet actions()}
         <button class="text-action editor-mode" onclick={() => switchMode(mode === 'builder' ? 'json' : 'builder')}>
-          {mode === 'builder' ? 'Edit as JSON' : 'Back to builder'}
+          {mode === 'builder' ? translate("automations.editAsJson") : translate("automations.backToBuilder")}
         </button>
       {/snippet}
 
       {#if draftErr}<div class="err editor-error">{draftErr}</div>{/if}
       {#if facetsError}
         <div class="err editor-error facet-error">
-          <span>{facetsError}</span><button class="btn sm" onclick={loadFacets}>Retry</button>
+          <span>{facetsError}</span><button class="btn sm" onclick={loadFacets}>{translate("common.retry")}</button>
         </div>
       {/if}
       {#if duplicate}
         <div class="duplicate-warning">
           <div>
-            This automation already exists as <b>“{duplicate.name}”</b>
-            {duplicate.enabled ? '(currently enabled).' : '(currently disabled).'}
+            {translate("automations.thisAutomationAlreadyExistsAs")} <b>“{duplicate.name}”</b>
+            {duplicate.enabled ? translate("automations.currentlyEnabled") : translate("automations.currentlyDisabled")}
           </div>
           <div class="duplicate-actions">
             {#if duplicate.enabled}
-              <button class="btn sm primary" onclick={openExistingDuplicate}>Open existing</button>
+              <button class="btn sm primary" onclick={openExistingDuplicate}>{translate("automations.openExisting")}</button>
             {:else}
-              <button class="btn sm primary" onclick={enableExistingDuplicate}>Use existing</button>
-              <button class="btn sm" onclick={openExistingDuplicate}>Edit existing</button>
+              <button class="btn sm primary" onclick={enableExistingDuplicate}>{translate("automations.useExisting")}</button>
+              <button class="btn sm" onclick={openExistingDuplicate}>{translate("automations.editExisting")}</button>
             {/if}
-            <button class="btn sm" onclick={() => (duplicate = null)}>Dismiss</button>
+            <button class="btn sm" onclick={() => (duplicate = null)}>{translate("automations.dismiss")}</button>
           </div>
         </div>
       {/if}
@@ -607,31 +650,31 @@
       {#if mode === 'json'}
         <div class="json-editor">
           <textarea class="input" rows="22" bind:value={jsonDraft} spellcheck="false"
-                    aria-label="Automation JSON"></textarea>
+                    aria-label={translate("automations.automationJson")}></textarea>
         </div>
       {:else}
         <div class="builder-name">
           <input class="input" bind:this={nameInput}
-                 placeholder="Name, e.g. Tag utility bills"
-                 aria-label="Automation name"
+                 placeholder={translate("automations.nameEGTagUtilityBills")}
+                 aria-label={translate("automations.automationName")}
                  bind:value={editing.name} />
         </div>
 
-        <RuleSection class="builder-section trigger-section" title="When" headingId="when-heading">
+        <RuleSection class="builder-section trigger-section" title={translate("automations.when")} headingId="when-heading">
           {#each editing.triggers as trigger, triggerIndex (triggerIndex)}
             <div class="trigger-block">
               <div class="sentence-row trigger-row">
-                {#if triggerIndex > 0}<span class="conjunction">or</span>{/if}
+                {#if triggerIndex > 0}<span class="conjunction">{translate("automations.or")}</span>{/if}
                 <select class="input sentence-select trigger-select"
                         bind:value={trigger.type}
                         disabled={!!editing.ask}
-                        aria-label={`Trigger ${triggerIndex + 1}`}>
+                        aria-label={translate("automations.triggerValue", { "triggerIndex": triggerIndex + 1 })}>
                   {#each TRIGGER_TYPES as type}<option value={type.code}>{type.label}</option>{/each}
                 </select>
                 {#if editing.triggers.length > 1}
                   <button class="icon-button" type="button"
                           onclick={() => removeTrigger(triggerIndex)}
-                          aria-label={`Remove trigger ${triggerIndex + 1}`}>
+                          aria-label={translate("automations.removeTriggerValue", { "triggerIndex": triggerIndex + 1 })}>
                     <Icon name="x" size={12} />
                   </button>
                 {/if}
@@ -640,32 +683,32 @@
               {#each visibleFilters[triggerIndex] || [] as kind (kind)}
                 {@const filter = filterSpec(kind)}
                 <div class="sentence-row filter-row">
-                  <span class="conjunction">and</span>
+                  <span class="conjunction">{translate("automations.and")}</span>
                   <span class="field-token">{filter.label}</span>
                   <span class="operator-token">{filter.operator}</span>
                   {#if filter.type === 'tag'}
                     <select class="input sentence-value" bind:value={trigger[filter.key]}
-                            aria-label={`Tag filter ${triggerIndex + 1}`}>
-                      <option value={0}>Choose tag…</option>
+                            aria-label={translate("automations.tagFilterValue", { "triggerIndex": triggerIndex + 1 })}>
+                      <option value={0}>{translate("automations.chooseTag")}</option>
                       {#each facets.tags as tag}<option value={tag.id}>{tag.name}</option>{/each}
                     </select>
                   {:else if filter.type === 'correspondent'}
                     <select class="input sentence-value" bind:value={trigger[filter.key]}
-                            aria-label={`Correspondent filter ${triggerIndex + 1}`}>
-                      <option value={0}>Choose correspondent…</option>
+                            aria-label={translate("automations.correspondentFilterValue", { "triggerIndex": triggerIndex + 1 })}>
+                      <option value={0}>{translate("automations.chooseCorrespondent")}</option>
                       {#each facets.correspondents as correspondent}
                         <option value={correspondent.id}>{correspondent.name}</option>
                       {/each}
                     </select>
                   {:else}
                     <input class="input sentence-value filter-text"
-                           aria-label={`${filter.label} filter ${triggerIndex + 1}`}
+                           aria-label={translate("automations.valueFilterValue", { "label": filter.label, "triggerIndex": triggerIndex + 1 })}
                            placeholder={filter.placeholder}
                            bind:value={trigger[filter.key]} />
                   {/if}
                   <button class="icon-button" type="button"
                           onclick={() => removeFilter(triggerIndex, kind)}
-                          aria-label={`Remove ${filter.label.toLowerCase()} filter`}>
+                          aria-label={translate("automations.removeFilter", { label: filter.label })}>
                     <Icon name="x" size={12} />
                   </button>
                 </div>
@@ -675,46 +718,46 @@
                 <div class="add-filter-row">
                   <span class="plus-mark" aria-hidden="true">+</span>
                   <select class="add-filter-select" value=""
-                          aria-label={`Add filter to trigger ${triggerIndex + 1}`}
+                          aria-label={translate("automations.addFilterToTriggerValue", { "triggerIndex": triggerIndex + 1 })}
                           onchange={(event) => addFilter(triggerIndex, event)}>
-                    <option value="">Add a filter</option>
+                    <option value="">{translate("automations.addAFilter")}</option>
                     {#each availableFilters(triggerIndex) as filter}
                       <option value={filter.kind}>{filter.label}</option>
                     {/each}
                   </select>
                   <span class="available-filter-hint">
-                    {availableFilters(triggerIndex).map(filter => filter.label.toLowerCase()).join(' · ')}
+                    {formatList(availableFilters(triggerIndex).map(filter => filter.label))}
                   </span>
                 </div>
               {/if}
             </div>
           {/each}
           <button class="inline-add" type="button" onclick={addTrigger}>
-            <span aria-hidden="true">+</span> Add another trigger
+            <span aria-hidden="true">+</span> {translate("automations.addAnotherTrigger")}
           </button>
         </RuleSection>
 
         <RuleSection class="builder-section model-section" tone="quiet">
           <div class="model-heading">
             <button type="button" class="switch" role="switch" aria-checked={!!editing.ask}
-                    aria-label="Ask the document model"
+                    aria-label={translate("automations.askTheDocumentModel")}
                     onclick={() => setAskEnabled(!editing.ask)}></button>
             <div>
-              <h3 id="ask-heading">Ask the document model</h3>
-              <p>One closed question can choose which fixed actions run.</p>
+              <h3 id="ask-heading">{translate("automations.askTheDocumentModel")}</h3>
+              <p>{translate("automations.oneClosedQuestionCanChooseWhichFixed")}</p>
             </div>
           </div>
           {#if editing.ask}
             <div class="question-grid">
               <label class="question-field question-copy">
-                <span>Question</span>
-                <input class="input" aria-label="Model question" maxlength="1000"
-                       placeholder="Is this a utility bill?"
+                <span>{translate("automations.question")}</span>
+                <input class="input" aria-label={translate("automations.modelQuestion")} maxlength="1000"
+                       placeholder={translate("automations.isThisAUtilityBill")}
                        bind:value={editing.ask.question} />
               </label>
               <label class="question-field answer-type">
-                <span>Answers</span>
-                <select class="input" aria-label="Answer type"
+                <span>{translate("automations.answers")}</span>
+                <select class="input" aria-label={translate("automations.answerType")}
                         bind:value={editing.ask.answer.type}
                         onchange={askAnswerTypeChanged}>
                   {#each ASK_SCHEMA.answers as answer}
@@ -724,17 +767,17 @@
               </label>
             </div>
             {#if editing.ask.answer.type === 'yes_no'}
-              <p class="model-note">Choose Yes or No on each action below. “Unknown” never runs an action.</p>
+              <p class="model-note">{translate("automations.chooseYesOrNoOnEachAction")}</p>
             {:else}
               <div class="choice-editor">
                 {#each editing.ask.answer.choices as choice, choiceIndex (choiceIndex)}
                   <div class="choice-row">
-                    <input class="input" aria-label={`Answer choice ${choiceIndex + 1}`} maxlength="40"
+                    <input class="input" aria-label={translate("automations.answerChoiceValue", { "choiceIndex": choiceIndex + 1 })} maxlength="40"
                            bind:value={editing.ask.answer.choices[choiceIndex]}
                            onblur={normalizeActionBranches} />
                     {#if editing.ask.answer.choices.length > (choiceAnswerSchema().min_choices || 2)}
                       <button class="icon-button" type="button"
-                              aria-label={`Remove answer choice ${choiceIndex + 1}`}
+                              aria-label={translate("automations.removeAnswerChoiceValue", { "choiceIndex": choiceIndex + 1 })}
                               onclick={() => {
                                 editing.ask.answer.choices.splice(choiceIndex, 1)
                                 normalizeActionBranches()
@@ -746,8 +789,8 @@
                 {/each}
                 {#if editing.ask.answer.choices.length < (choiceAnswerSchema().max_choices || 10)}
                   <button class="inline-add" type="button"
-                          onclick={() => editing.ask.answer.choices.push(`Option ${editing.ask.answer.choices.length + 1}`)}>
-                    <span aria-hidden="true">+</span> Add answer
+                          onclick={() => editing.ask.answer.choices.push(translate("automations.optionValue", { "length": editing.ask.answer.choices.length + 1 }))}>
+                    <span aria-hidden="true">+</span> {translate("automations.addAnswer")}
                   </button>
                 {/if}
               </div>
@@ -755,32 +798,32 @@
           {/if}
         </RuleSection>
 
-        <RuleSection class="builder-section action-section" title="Then" headingId="then-heading">
+        <RuleSection class="builder-section action-section" title={translate("automations.then")} headingId="then-heading">
           {#each editing.actions as action, actionIndex (actionIndex)}
             <div class="sentence-row action-row">
-              {#if actionIndex > 0}<span class="conjunction">then</span>{/if}
+              {#if actionIndex > 0}<span class="conjunction">{translate("automations.then2")}</span>{/if}
               {#if editing.ask}
                 <select class="input sentence-select branch-select"
-                        aria-label={`Answer for action ${actionIndex + 1}`}
+                        aria-label={translate("automations.answerForActionValue", { "actionIndex": actionIndex + 1 })}
                         bind:value={action.when}>
-                  {#each answerBranches() as answer}<option value={answer}>If {answer}</option>{/each}
+                  {#each answerBranches() as answer}<option value={answer}>{translate("automations.ifValue", { "answer": answer })}</option>{/each}
                 </select>
               {/if}
               <select class="input sentence-select action-select"
-                      aria-label={`Action ${actionIndex + 1}`}
+                      aria-label={translate("automations.actionValue", { "actionIndex": actionIndex + 1 })}
                       value={action.type}
                       onchange={(event) => {
                         action.type = event.currentTarget.value
                         actionKindChanged(action)
                       }}>
                 {#if editing.ask && !availableActionKinds().some(kind => kind.kind === action.type)}
-                  <option value={action.type}>Unsupported for a question</option>
+                  <option value={action.type}>{translate("automations.unsupportedForAQuestion")}</option>
                 {/if}
                 {#each availableActionKinds() as kind}<option value={kind.kind}>{kind.label}</option>{/each}
               </select>
 
               {#if action.type === 'assign_title'}
-                <input class="input action-input" aria-label="Title template"
+                <input class="input action-input" aria-label={translate("automations.titleTemplate")}
                        placeholder={'e.g. {{correspondent}} {{date}}'}
                        bind:value={action.params.template} />
               {:else if action.type === 'assign_tags'}
@@ -788,118 +831,118 @@
                   {#each action.params.tag_ids || [] as tagID (tagID)}
                     <span class="tag-chip">
                       {tagName(tagID)}
-                      <button type="button" aria-label={`Remove tag ${tagName(tagID)}`}
+                      <button type="button" aria-label={translate("automations.removeTagValue", { "tagID": tagName(tagID) })}
                               onclick={() => removeTag(action, tagID)}>×</button>
                     </span>
                   {/each}
                   <select class="tag-add" value=""
-                          aria-label={`Tags for action ${actionIndex + 1}`}
+                          aria-label={translate("automations.tagsForActionValue", { "actionIndex": actionIndex + 1 })}
                           onchange={(event) => addTag(action, event)}>
-                    <option value="">Add tag…</option>
+                    <option value="">{translate("automations.addTag")}</option>
                     {#each facets.tags.filter(tag => !(action.params.tag_ids || []).map(Number).includes(Number(tag.id))) as tag}
                       <option value={tag.id}>{tag.name}</option>
                     {/each}
                   </select>
                 </div>
               {:else if action.type === 'assign_correspondent'}
-                <select class="input action-value" aria-label="Correspondent" bind:value={action.params.correspondent_id}>
-                  <option value={0}>Choose correspondent…</option>
+                <select class="input action-value" aria-label={translate("automations.correspondent")} bind:value={action.params.correspondent_id}>
+                  <option value={0}>{translate("automations.chooseCorrespondent")}</option>
                   {#each facets.correspondents as correspondent}
                     <option value={correspondent.id}>{correspondent.name}</option>
                   {/each}
                 </select>
               {:else if action.type === 'assign_jd_category'}
-                <select class="input action-value" aria-label="Filing category" bind:value={action.params.jd_category_id}>
-                  <option value={0}>Choose filing category…</option>
+                <select class="input action-value" aria-label={translate("automations.filingCategory")} bind:value={action.params.jd_category_id}>
+                  <option value={0}>{translate("automations.chooseFilingCategory")}</option>
                   {#each jdCategories as category}
                     <option value={category.id}>{category.code} · {category.name}</option>
                   {/each}
                 </select>
               {:else if action.type === 'assign_owner'}
-                <select class="input action-value" aria-label="Owner" bind:value={action.params.owner_id}>
-                  <option value={0}>Choose owner…</option>
+                <select class="input action-value" aria-label={translate("automations.owner")} bind:value={action.params.owner_id}>
+                  <option value={0}>{translate("automations.chooseOwner")}</option>
                   {#each facets.owners as owner}<option value={owner.id}>{ownerLabel(owner)}</option>{/each}
                   {#if action.params.owner_id && !facets.owners.some(owner => Number(owner.id) === Number(action.params.owner_id))}
-                    <option value={action.params.owner_id}>Unavailable owner</option>
+                    <option value={action.params.owner_id}>{translate("automations.unavailableOwner")}</option>
                   {/if}
                 </select>
               {:else if action.type === 'assign_storage_path'}
-                <select class="input action-value" aria-label="Folder layout" bind:value={action.params.storage_path_id}>
-                  <option value={0}>Choose folder layout…</option>
+                <select class="input action-value" aria-label={translate("automations.folderLayout")} bind:value={action.params.storage_path_id}>
+                  <option value={0}>{translate("automations.chooseFolderLayout")}</option>
                   {#each facets.renderedLayouts as layout}
-                    <option value={layout.id}>{layout.name}{layout.uses_asn ? ' (previous archive number required)' : ''}</option>
+                    <option value={layout.id}>{layout.name}{layout.uses_asn ? translate("automations.previousArchiveNumberRequired") : ''}</option>
                   {/each}
                   {#if action.params.storage_path_id && !facets.renderedLayouts.some(layout => Number(layout.id) === Number(action.params.storage_path_id))}
-                    <option value={action.params.storage_path_id}>Unavailable folder layout</option>
+                    <option value={action.params.storage_path_id}>{translate("automations.unavailableFolderLayout")}</option>
                   {/if}
                 </select>
               {:else if action.type === 'assign_custom_field'}
                 {@const field = customFieldFor(action)}
-                <select class="input action-value" aria-label="Custom field"
+                <select class="input action-value" aria-label={translate("automations.customField")}
                         value={action.params.field_id}
                         onchange={(event) => {
                           action.params.field_id = Number(event.currentTarget.value)
                           customFieldChanged(action)
                         }}>
-                  <option value={0}>Choose custom field…</option>
+                  <option value={0}>{translate("automations.chooseCustomField")}</option>
                   {#each availableCustomFields() as candidate}
                     <option value={candidate.id}>{candidate.name} · {candidate.data_type}</option>
                   {/each}
                   {#if action.params.field_id && !availableCustomFields().some(candidate => Number(candidate.id) === Number(action.params.field_id))}
-                    <option value={action.params.field_id}>Unavailable custom field</option>
+                    <option value={action.params.field_id}>{translate("automations.unavailableCustomField")}</option>
                   {/if}
                 </select>
                 {#if field?.data_type === 'bool'}
-                  <select class="input action-value compact-value" aria-label="Custom field value"
+                  <select class="input action-value compact-value" aria-label={translate("automations.customFieldValue")}
                           value={String(action.params.value)}
                           onchange={(event) => (action.params.value = event.currentTarget.value === 'true')}>
-                    <option value="true">Yes</option><option value="false">No</option>
+                    <option value="true">{translate("automations.yes")}</option><option value="false">{translate("automations.no")}</option>
                   </select>
                 {:else if field?.data_type === 'select'}
-                  <select class="input action-value" aria-label="Custom field value" bind:value={action.params.value}>
-                    <option value="">Choose value…</option>
+                  <select class="input action-value" aria-label={translate("automations.customFieldValue")} bind:value={action.params.value}>
+                    <option value="">{translate("automations.chooseValue")}</option>
                     {#each customFieldChoices(field) as choice}<option value={choice}>{choice}</option>{/each}
                   </select>
                 {:else if field?.data_type === 'multi'}
-                  <select class="input action-value" aria-label="Custom field value" multiple size="3"
+                  <select class="input action-value" aria-label={translate("automations.customFieldValue")} multiple size="3"
                           onchange={(event) => (action.params.value = [...event.currentTarget.selectedOptions].map(option => option.value))}>
                     {#each customFieldChoices(field) as choice}
                       <option value={choice} selected={(action.params.value || []).includes(choice)}>{choice}</option>
                     {/each}
                   </select>
                 {:else if field?.data_type === 'number' || field?.data_type === 'monetary'}
-                  <input class="input action-value" aria-label="Custom field value" type="number" step="any"
-                         placeholder={field.data_type === 'monetary' ? 'Amount' : 'Number'}
+                  <input class="input action-value" aria-label={translate("automations.customFieldValue")} type="number" step="any"
+                         placeholder={field.data_type === 'monetary' ? translate("automations.amount") : translate("automations.number")}
                          bind:value={action.params.value} />
                 {:else if field?.data_type === 'date'}
-                  <input class="input action-value" aria-label="Custom field value" type="date"
+                  <input class="input action-value" aria-label={translate("automations.customFieldValue")} type="date"
                          bind:value={action.params.value} />
                 {:else if field?.data_type === 'url'}
-                  <input class="input action-value" aria-label="Custom field value" type="url"
-                         placeholder="https://…" bind:value={action.params.value} />
+                  <input class="input action-value" aria-label={translate("automations.customFieldValue")} type="url"
+                         placeholder={translate("automations.https")} bind:value={action.params.value} />
                 {:else if field}
-                  <input class="input action-value" aria-label="Custom field value"
-                         placeholder="Value" bind:value={action.params.value} />
+                  <input class="input action-value" aria-label={translate("automations.customFieldValue")}
+                         placeholder={translate("automations.value")} bind:value={action.params.value} />
                 {:else}
-                  <span class="field-help">Choose a field to set its typed value.</span>
+                  <span class="field-help">{translate("automations.chooseAFieldToSetItsTyped")}</span>
                 {/if}
               {:else}
-                <input class="input compact-value" type="number" placeholder="ID"
-                       aria-label={`Value for action ${actionIndex + 1}`}
+                <input class="input compact-value" type="number" placeholder={translate("automations.id")}
+                       aria-label={translate("automations.valueForActionValue", { "actionIndex": actionIndex + 1 })}
                        bind:value={action.params[Object.keys(action.params)[0]]} />
               {/if}
 
               {#if editing.actions.length > 1}
                 <button class="icon-button" type="button"
                         onclick={() => editing.actions.splice(actionIndex, 1)}
-                        aria-label={`Remove action ${actionIndex + 1}`}>
+                        aria-label={translate("automations.removeActionValue", { "actionIndex": actionIndex + 1 })}>
                   <Icon name="x" size={12} />
                 </button>
               {/if}
             </div>
           {/each}
           <button class="inline-add" type="button" onclick={addAction}>
-            <span aria-hidden="true">+</span> Add an action
+            <span aria-hidden="true">+</span> {translate("automations.addAnAction")}
           </button>
         </RuleSection>
       {/if}
@@ -907,35 +950,35 @@
       {#snippet footer()}
         <div class="footer-note">
           {#if editing.id && !editing.preset_slug}
-            <button class="delete-action" type="button" disabled={deleteBusy || !!deleteRequest} onclick={() => remove(editing)}>Delete automation</button>
+            <button class="delete-action" type="button" disabled={deleteBusy || !!deleteRequest} onclick={() => remove(editing)}>{translate("automations.deleteAutomation")}</button>
           {:else}
-            Saved automations are on by default. Reorder them in the list.
+            {translate("automations.savedAutomationsAreOnByDefaultReorder")}
           {/if}
         </div>
         <div class="footer-actions">
-          <button class="btn" type="button" disabled={saving} onclick={closeEditor}>Cancel</button>
+          <button class="btn" type="button" disabled={saving} onclick={closeEditor}>{translate("common.cancel")}</button>
           <button class="btn primary save-automation" type="button" disabled={saving} onclick={save}>
-            {saving ? 'Saving…' : 'Save automation'}
+            {saving ? translate("common.saving") : translate("automations.saveAutomation")}
           </button>
         </div>
       {/snippet}
     </RuleWorkspace>
   {:else}
     <RuleWorkspace class="automations-card"
-                   title="Automations"
-                   description="Rules that tag, title and route documents as they arrive."
+                   title={translate("automations.automations")}
+                   description={translate("automations.rulesThatTagTitleAndRouteDocuments")}
                    headingId="automations-heading">
       {#snippet actions()}
-        {#if !loading && userItems.length > 1}<span class="list-order">Run top to bottom</span>{/if}
+        {#if !loading && userItems.length > 1}<span class="list-order">{translate("automations.runTopToBottom")}</span>{/if}
         {#if !readOnly}
           <button class="btn primary new-automation" onclick={() => openEditor(null)}>
-            <Icon name="plus" size={15} /> New automation
+            <Icon name="plus" size={15} /> {translate("automations.newAutomation")}
           </button>
         {/if}
       {/snippet}
 
       {#if loading}
-        <div class="automation-list" role="list" aria-label="Loading automations">
+        <div class="automation-list" role="list" aria-label={translate("automations.loadingAutomations")}>
           {#each Array(3) as _}
             <div class="loading-row"><span></span><div class="skel"></div></div>
           {/each}
@@ -948,8 +991,8 @@
         </div>
       {:else}
         <RuleEmpty class="automation-empty"
-                   title="No automations yet"
-                   description={readOnly ? 'An administrator can create filing and metadata rules.' : 'The first one takes about a minute. Start from a pattern:'}
+                   title={translate("automations.noAutomationsYet")}
+                   description={readOnly ? translate("automations.anAdministratorCanCreateFilingAndMetadataRules") : translate("automations.theFirstOneTakesAboutAMinuteStart")}
                    patterns={readOnly ? [] : AUTOMATION_PATTERNS}
                    onselect={openTemplate} />
       {/if}
@@ -962,8 +1005,8 @@
                 aria-expanded={builtInsOpen}>
           <span class="chev" class:open={builtInsOpen}><Icon name="chev" size={13} /></span>
           <span class="grow">
-            <b>Built-in automations</b>
-            <span>Installed by your filing tree</span>
+            <b>{translate("automations.builtInAutomations")}</b>
+            <span>{translate("automations.installedByYourFilingTree")}</span>
           </span>
           <span class="count-pill">{builtInItems.length}</span>
         </button>
@@ -981,10 +1024,10 @@
 
 {#if deleteRequest}
   <ConfirmDialog
-    title={`Delete automation “${deleteRequest.name}”?`}
-    message="This automation will stop running. This cannot be undone."
-    confirmLabel="Delete automation"
-    busyLabel="Deleting…"
+    title={translate("automations.deleteAutomationValue", { "name": deleteRequest.name })}
+    message={translate("automations.thisAutomationWillStopRunningThisCannot")}
+    confirmLabel={translate("automations.deleteAutomation")}
+    busyLabel={translate("automations.deleting")}
     busy={deleteBusy}
     onConfirm={confirmRemove}
     onCancel={() => (deleteRequest = null)} />

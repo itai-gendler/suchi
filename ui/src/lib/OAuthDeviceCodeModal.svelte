@@ -1,5 +1,6 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script>
+  import { t as translate } from "./i18n.svelte.js";
   import { startEmailOAuth, completeEmailOAuth } from './api.js'
   import Icon from './Icon.svelte'
   import { onDestroy } from 'svelte'
@@ -28,7 +29,7 @@
       now = Math.floor(Date.now() / 1000)
       schedule()
     } catch (ex) {
-      err = ex.data?.message || ex.message || 'Could not start sign-in.'
+      err = ex.data?.message || ex.message || translate("oAuthDeviceCodeModal.couldNotStartSignIn")
     } finally { starting = false }
   }
 
@@ -68,7 +69,7 @@
         await pollDelay(signal)
       } catch (ex) {
         if (signal.aborted) return
-        err = ex.data?.error || ex.data?.message || ex.message || 'Microsoft sign-in failed.'
+        err = ex.data?.error || ex.data?.message || ex.message || translate("oAuthDeviceCodeModal.microsoftSignInFailed")
         stop()
         return
       }
@@ -95,7 +96,7 @@
   function copyCode() {
     if (disposed || !scopeCurrent(scope) || !flow?.user_code) return
     navigator.clipboard?.writeText(flow.user_code)
-    notify?.('Code copied')
+    notify?.(translate("oAuthDeviceCodeModal.codeCopied"))
   }
 
   const remaining = $derived(flow ? Math.max(0, flow.expires_at - now) : 0)
@@ -113,49 +114,49 @@
   <div class="modal" style="width:min(520px,94vw)"
        onclick={(e) => e.stopPropagation()}
        onkeydown={(e) => e.stopPropagation()}
-       role="dialog" aria-modal="true" aria-label="Sign in with Microsoft" tabindex="-1">
+       role="dialog" aria-modal="true" aria-label={translate("oAuthDeviceCodeModal.signInWithMicrosoft")} tabindex="-1">
     <div class="modal-head">
-      <h3>Sign in with Microsoft</h3>
-      <button class="btn sm" onclick={() => onClose?.(false)} title="Close" aria-label="Close Microsoft sign-in"><Icon name="x" size={13} /></button>
+      <h3>{translate("oAuthDeviceCodeModal.signInWithMicrosoft")}</h3>
+      <button class="btn sm" onclick={() => onClose?.(false)} title={translate("common.close")} aria-label={translate("oAuthDeviceCodeModal.closeMicrosoftSignIn")}><Icon name="x" size={13} /></button>
     </div>
 
     {#if err}
       <div class="err">{err}</div>
       <div class="toolbar" style="margin-top:10px">
-        <button class="btn sm" onclick={begin} disabled={starting}>Retry</button>
+        <button class="btn sm" onclick={begin} disabled={starting}>{translate("common.retry")}</button>
       </div>
     {:else if !flow}
-      <p class="sub">Starting sign-in…</p>
+      <p class="sub">{translate("oAuthDeviceCodeModal.startingSignIn")}</p>
     {:else if expired}
-      <p class="sub" style="color:var(--danger)">Sign-in expired — close and retry.</p>
+      <p class="sub" style="color:var(--danger)">{translate("oAuthDeviceCodeModal.signInExpiredCloseAndRetry")}</p>
       <div class="toolbar" style="margin-top:10px">
-        <button class="btn primary sm" onclick={begin} disabled={starting}>Retry</button>
-        <button class="btn sm" onclick={() => onClose?.(false)}>Close</button>
+        <button class="btn primary sm" onclick={begin} disabled={starting}>{translate("common.retry")}</button>
+        <button class="btn sm" onclick={() => onClose?.(false)}>{translate("common.close")}</button>
       </div>
     {:else}
       <ol class="sub" style="margin:0 0 12px 18px;line-height:1.7;color:var(--muted)">
-        <li>Open the link below in a browser.</li>
-        <li>Enter the code.</li>
-        <li>Sign in. This window closes automatically.</li>
+        <li>{translate("oAuthDeviceCodeModal.openTheLinkBelowInABrowser")}</li>
+        <li>{translate("oAuthDeviceCodeModal.enterTheCode")}</li>
+        <li>{translate("oAuthDeviceCodeModal.signInThisWindowClosesAutomatically")}</li>
       </ol>
       <div class="field">
-        <label for="devc-url">Verification URL</label>
+        <label for="devc-url">{translate("oAuthDeviceCodeModal.verificationUrl")}</label>
         <a id="devc-url" class="input mono" style="text-decoration:none;color:var(--accent);display:block"
            href={flow.verification_url} target="_blank" rel="noopener noreferrer">
           {flow.verification_url}
         </a>
       </div>
       <div class="field">
-        <label for="devc-code">Code</label>
+        <label for="devc-code">{translate("oAuthDeviceCodeModal.code")}</label>
         <div class="toolbar" style="margin:0;gap:8px">
             <span id="devc-code" class="input mono" style="flex:1;font-size:1.15rem;font-weight:600">
             {flow.user_code}
           </span>
-          <button class="btn sm" onclick={copyCode}>Copy</button>
+          <button class="btn sm" onclick={copyCode}>{translate("oAuthDeviceCodeModal.copy")}</button>
         </div>
       </div>
       <p class="sub" style="margin:4px 0 0;font-size:.82rem;color:var(--muted)">
-        Waiting for sign-in… code expires in {mm}m {ss}s.
+        {translate("oAuthDeviceCodeModal.waitingForSignInCodeExpiresIn", { "mm": mm, "ss": ss })}
       </p>
     {/if}
   </div>

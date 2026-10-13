@@ -1,5 +1,6 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script>
+  import { t as translate } from "../lib/i18n.svelte.js";
   import { onMount } from 'svelte'
   import { login } from '../lib/api.js'
   import { getLoginPath, usesExternalLogin } from '../lib/login.js'
@@ -23,10 +24,10 @@
     try {
       await login(email.trim(), password)
       await refreshSession()
-      if (!session.user) throw new Error('Sign-in did not stick — check the server log.')
+      if (!session.user) throw new Error(translate("login.signInDidNotStickCheckTheServer"))
       onSignedIn?.()
     } catch (ex) {
-      err = ex.status === 401 ? 'Email or password did not match.' : (ex.message || 'Could not sign in.')
+      err = ex.status === 401 ? translate("login.emailOrPasswordDidNotMatch") : (ex.message || translate("login.couldNotSignIn"))
     } finally { busy = false }
   }
 </script>
@@ -40,15 +41,15 @@
       </div>
       {#if err}<div class="err">{err}</div>{/if}
       <div class="field">
-        <label for="email">Email</label>
+        <label for="email">{translate("login.email")}</label>
         <input id="email" class="input" type="email" bind:value={email} autocomplete="username" required />
       </div>
       <div class="field">
-        <label for="pw">Password</label>
+        <label for="pw">{translate("login.password")}</label>
         <input id="pw" class="input" type="password" bind:value={password} autocomplete="current-password" required />
       </div>
       <button class="btn primary" style="width:100%;justify-content:center" disabled={busy}>
-        {busy ? 'Signing in…' : 'Sign in'}
+        {busy ? translate("login.signingIn") : translate("login.signIn")}
       </button>
     </form>
   </div>

@@ -1,5 +1,6 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script>
+  import { t as translate } from "../lib/i18n.svelte.js";
   import { onDestroy } from 'svelte'
   import { scopedHash as filingHref } from '../lib/systems.svelte.js'
   import { listSavedViews, createSavedView, patchSavedView, deleteSavedView,
@@ -12,7 +13,7 @@
     parseFieldPresenceSelection,
     parseSavedViewFilters,
   } from '../lib/documentFilters.js'
-  import { SENSITIVITY_OPTIONS, sensitivityLabel } from '../lib/format.js'
+  import { SENSITIVITY_OPTIONS, plural, sensitivityLabel } from '../lib/format.js'
   import { DATE_ROLES, intelligenceRoleLabel } from '../lib/intelligence.js'
   import Icon from '../lib/Icon.svelte'
   import ISODateInput from '../lib/ISODateInput.svelte'
@@ -59,15 +60,15 @@
     { kind: 'jd', label: 'category', keys: ['jd'] },
     { kind: 'tag', label: 'tag', keys: ['tag'] },
     { kind: 'corr', label: 'correspondent', keys: ['corr'] },
-    { kind: 'fieldPresence', label: 'custom field', keys: ['fieldPresence'] },
+    { kind: 'fieldPresence', label: translate("views.customField2"), keys: ['fieldPresence'] },
     { kind: 'sens', label: 'sensitivity', keys: ['sens'] },
     { kind: 'dates', label: 'dates', keys: ['dateFrom', 'dateTo', 'dateRole'] },
-    { kind: 'q', label: 'search text', keys: ['q'] },
+    { kind: 'q', label: translate("views.searchText2"), keys: ['q'] },
   ]
   const DEFAULT_VIEW_PATTERNS = [
-    { value: 'waiting', label: 'Waiting to file' },
-    { value: 'taxes', label: 'This year’s taxes' },
-    { value: 'correspondent', label: 'From one correspondent' },
+    { value: 'waiting', label: translate("views.waitingToFile") },
+    { value: 'taxes', label: translate("views.thisYearSTaxes") },
+    { value: 'correspondent', label: translate("views.fromOneCorrespondent") },
   ]
   const viewPatterns = $derived.by(() => {
     const categories = filingCategories.filter((category) => !category.system)
@@ -77,7 +78,7 @@
     const add = (category) => {
       selected.push({
         value: `category:${category.id}`,
-        label: `${category.code} ${category.name}`,
+        label: translate("views.valueValue", { "code": category.code, "name": category.name }),
       })
       selectedIDs.add(category.id)
     }
@@ -120,7 +121,7 @@
       const raw = r?.results || r || []
       views = raw.map(view => ({ ...view, filters: parseSavedViewFilters(view.filter_json) }))
     } catch (ex) {
-      if (version === loadVersion) loadError = ex.message || 'Could not load saved views.'
+      if (version === loadVersion) loadError = ex.message || translate("views.couldNotLoadSavedViews2")
     } finally {
       if (version === loadVersion) loading = false
     }
@@ -139,17 +140,17 @@
   function filterSummary(filters) {
     const summary = []
     if (Array.isArray(filters.document_ids) && filters.document_ids.length) {
-      summary.push(`${filters.document_ids.length} saved documents`)
+      summary.push(plural("views.savedDocumentCount", filters.document_ids.length))
     }
-    if (filters.q) summary.push(filters.q === 'is:inbox' ? 'in Inbox' : filters.q)
+    if (filters.q) summary.push(filters.q === 'is:inbox' ? translate("views.inInbox") : filters.q)
     if (filters.jd_category_id) {
-      summary.push(`filed under ${nameFor(filingCategories, filters.jd_category_id, 'a category', (category) => `${category.code} ${category.name}`)}`)
+      summary.push(translate("views.filedUnderValue", { name: nameFor(filingCategories, filters.jd_category_id, translate("views.aCategory"), (category) => `${category.code} ${category.name}`) }))
     }
-    if (filters.tags__id__in) summary.push(`tag ${nameFor(tags, filters.tags__id__in, 'selected tag')}`)
-    if (filters.correspondents__id__in) summary.push(`correspondent ${nameFor(corrs, filters.correspondents__id__in, 'selected correspondent')}`)
-    if (filters.sensitivity) summary.push(sensitivityLabel(filters.sensitivity).toLowerCase())
-    if (filters.ordering) summary.push(filters.ordering === 'title' ? 'title order' : filters.ordering === '-created_at' ? 'newest first' : 'custom order')
-    return summary.join(' · ') || 'all documents'
+    if (filters.tags__id__in) summary.push(translate("views.tagValue", { tag: nameFor(tags, filters.tags__id__in, translate("views.selectedTag")) }))
+    if (filters.correspondents__id__in) summary.push(translate("views.correspondentValue", { correspondent: nameFor(corrs, filters.correspondents__id__in, translate("views.selectedCorrespondent")) }))
+    if (filters.sensitivity) summary.push(sensitivityLabel(filters.sensitivity))
+    if (filters.ordering) summary.push(filters.ordering === 'title' ? translate("views.titleOrder") : filters.ordering === '-created_at' ? translate("views.newestFirst") : translate("views.customOrder"))
+    return summary.join(' · ') || translate("views.allDocuments")
   }
 
 
@@ -160,8 +161,8 @@
 
   function fieldPresenceLabel(value) {
     const selection = parseFieldPresenceSelection(value)
-    if (!selection) return 'Saved custom field'
-    return `${selection.missing ? 'Missing value' : 'Has value'} — ${selection.name}`
+    if (!selection) return translate("views.savedCustomField")
+    return translate("views.valueValue2", { value: translate(selection.missing ? "views.missingValue" : "views.hasValue"), name: selection.name })
   }
 
   function configuredFilters(draft) {
@@ -205,22 +206,22 @@
       ? filingCategories.find((item) => `category:${item.id}` === kind)
       : null
     if (category) {
-      nv.name = `${category.code} ${category.name}`
+      nv.name = translate("views.valueValue", { "code": category.code, "name": category.name })
       nv.jd = category.id
       filters = ['jd']
     } else if (kind === 'waiting') {
-      nv.name = 'Waiting to file'
+      nv.name = translate("views.waitingToFile")
       nv.q = 'is:inbox'
       filters = ['q']
     } else if (kind === 'taxes') {
       const year = new Date().getFullYear()
-      nv.name = 'This year’s taxes'
+      nv.name = translate("views.thisYearSTaxes")
       nv.q = 'tax'
       nv.dateFrom = `${year}-01-01`
       nv.dateTo = `${year}-12-31`
       filters = ['q', 'dates']
     } else if (kind === 'correspondent') {
-      nv.name = 'From one correspondent'
+      nv.name = translate("views.fromOneCorrespondent")
       filters = ['corr']
     }
     openEditor(filters)
@@ -261,7 +262,7 @@
       listCustomFields().then((r) => (customFields = r?.results || r || [])),
     ]).then((results) => {
       if (results.some((result) => result.status === 'rejected')) {
-        facetsError = 'Some filters could not be loaded.'
+        facetsError = translate("views.someFiltersCouldNotBeLoaded")
         facetsPromise = null
       }
     })
@@ -328,14 +329,14 @@
           position: views.filter((view) => !view.owner_id).length,
         })
       }
-      notify?.(editing ? 'View updated' : 'View saved')
+      notify?.(editing ? translate("views.viewUpdated") : translate("views.viewSaved"))
       nv = emptyView()
       editing = null
       editorOpen = false
       visibleFilters = []
       if (startCreate) go('#/views')
       await load()
-    } catch (ex) { saveError = ex.message || 'Could not save the view.' }
+    } catch (ex) { saveError = ex.message || translate("views.couldNotSaveTheView") }
     finally { saving = false }
   }
 
@@ -357,10 +358,10 @@
         visibleFilters = []
         nv = emptyView()
       }
-      notify?.('View deleted')
+      notify?.(translate("views.viewDeleted"))
       deleteRequest = null
     } catch (ex) {
-      notify?.(ex.message || 'Could not delete')
+      notify?.(ex.message || translate("views.couldNotDelete"))
       deleteRequest = null
     } finally {
       deleteBusy = false
@@ -425,33 +426,33 @@
 <div class="views-page">
   {#if editorOpen}
     <RuleWorkspace class="view-builder"
-                   title={editing ? 'Edit view' : 'New view'}
+                   title={editing ? translate("views.editView") : translate("views.newView")}
                    headingId="view-editor-heading">
       <form id="view-editor-form" onsubmit={save}>
         {#if saveError}<div class="err editor-error" role="alert">{saveError}</div>{/if}
 
         <div class="builder-name">
           <input class="input" bind:this={nameInput}
-                 aria-label="View name"
-                 placeholder="Name, e.g. Tax documents to review"
+                 aria-label={translate("views.viewName")}
+                 placeholder={translate("views.nameEGTaxDocumentsToReview")}
                  bind:value={nv.name}
                  required />
         </div>
 
-        <RuleSection class="view-filter-section" title="Show documents where" headingId="view-filters-heading">
+        <RuleSection class="view-filter-section" title={translate("views.showDocumentsWhere")} headingId="view-filters-heading">
           {#if nv.ids.length}
             <div class="snapshot-note">
               <span class="snapshot-mark"><Icon name="docs" size={18} /></span>
               <span>
-                <strong>Exact document set</strong>
-                <small>This view keeps these {nv.ids.length} documents together. Access is checked whenever it opens.</small>
+                <strong>{translate("views.exactDocumentSet")}</strong>
+                <small>{plural("views.keepsDocumentCount", nv.ids.length)}</small>
               </span>
             </div>
           {:else}
             {#if facetsError}
               <div class="err facet-error">
                 <span>{facetsError}</span>
-                <button type="button" class="btn sm" onclick={loadFacets}>Retry</button>
+                <button type="button" class="btn sm" onclick={loadFacets}>{translate("common.retry")}</button>
               </div>
             {/if}
 
@@ -460,53 +461,53 @@
                 <div class="filter-row">
                   <span class="conjunction">{filterIndex ? 'and' : ''}</span>
                   {#if kind === 'jd'}
-                    <span class="field-token">Filed under</span>
-                    <span class="operator-token">is</span>
-                    <select class="input filter-value" aria-label="Filing category" bind:value={nv.jd}>
-                      <option value="">Choose category…</option>
+                    <span class="field-token">{translate("views.filedUnder")}</span>
+                    <span class="operator-token">{translate("views.is")}</span>
+                    <select class="input filter-value" aria-label={translate("views.filingCategory")} bind:value={nv.jd}>
+                      <option value="">{translate("views.chooseCategory")}</option>
                       {#each filingCategories as category}<option value={category.id}>{category.code} {category.name}</option>{/each}
                       {#if nv.jd && !filingCategories.some(category => String(category.id) === String(nv.jd))}
-                        <option value={nv.jd}>Saved category: {nv.jd}</option>
+                        <option value={nv.jd}>{translate("views.savedCategoryValue", { "jd": nv.jd })}</option>
                       {/if}
                     </select>
                   {:else if kind === 'tag'}
-                    <span class="field-token">Tag</span>
-                    <span class="operator-token">is</span>
-                    <select class="input filter-value" aria-label="Tag" bind:value={nv.tag}>
-                      <option value="">Choose tag…</option>
+                    <span class="field-token">{translate("views.tag")}</span>
+                    <span class="operator-token">{translate("views.is")}</span>
+                    <select class="input filter-value" aria-label={translate("views.tag")} bind:value={nv.tag}>
+                      <option value="">{translate("views.chooseTag")}</option>
                       {#each tags as tag}<option value={tag.id}>{tag.name}</option>{/each}
                       {#if nv.tag && !tags.some(tag => String(tag.id) === String(nv.tag))}
-                        <option value={nv.tag}>Saved tags: {nv.tag}</option>
+                        <option value={nv.tag}>{translate("views.savedTagsValue", { "tag": nv.tag })}</option>
                       {/if}
                     </select>
                   {:else if kind === 'corr'}
-                    <span class="field-token">Correspondent</span>
-                    <span class="operator-token">is</span>
-                    <select class="input filter-value" aria-label="Correspondent" bind:value={nv.corr}>
-                      <option value="">Choose correspondent…</option>
+                    <span class="field-token">{translate("views.correspondent")}</span>
+                    <span class="operator-token">{translate("views.is")}</span>
+                    <select class="input filter-value" aria-label={translate("views.correspondent")} bind:value={nv.corr}>
+                      <option value="">{translate("views.chooseCorrespondent")}</option>
                       {#each corrs as correspondent}<option value={correspondent.id}>{correspondent.name}</option>{/each}
                       {#if nv.corr && !corrs.some(correspondent => String(correspondent.id) === String(nv.corr))}
-                        <option value={nv.corr}>Saved correspondents: {nv.corr}</option>
+                        <option value={nv.corr}>{translate("views.savedCorrespondentsValue", { "corr": nv.corr })}</option>
                       {/if}
                     </select>
                   {:else if kind === 'fieldPresence'}
-                    <span class="field-token">Custom field</span>
-                    <span class="operator-token">is</span>
-                    <select class="input filter-value" aria-label="Custom field value" bind:value={nv.fieldPresence}>
-                      <option value="">Choose field condition…</option>
+                    <span class="field-token">{translate("views.customField")}</span>
+                    <span class="operator-token">{translate("views.is")}</span>
+                    <select class="input filter-value" aria-label={translate("views.customFieldValue")} bind:value={nv.fieldPresence}>
+                      <option value="">{translate("views.chooseFieldCondition")}</option>
                       {#each customFields as field}
-                        <option value={fieldPresenceSelection(field.name)}>Has value — {field.name}</option>
-                        <option value={fieldPresenceSelection(field.name, true)}>Missing value — {field.name}</option>
+                        <option value={fieldPresenceSelection(field.name)}>{translate("views.hasValueValue", { "name": field.name })}</option>
+                        <option value={fieldPresenceSelection(field.name, true)}>{translate("views.missingValueValue", { "name": field.name })}</option>
                       {/each}
                       {#if nv.fieldPresence && !knownFieldPresence(nv.fieldPresence)}
                         <option value={nv.fieldPresence}>{fieldPresenceLabel(nv.fieldPresence)}</option>
                       {/if}
                     </select>
                   {:else if kind === 'sens'}
-                    <span class="field-token">Sensitivity</span>
-                    <span class="operator-token">is</span>
-                    <select class="input filter-value" aria-label="Sensitivity" bind:value={nv.sens}>
-                      <option value="">Choose sensitivity…</option>
+                    <span class="field-token">{translate("views.sensitivity")}</span>
+                    <span class="operator-token">{translate("views.is")}</span>
+                    <select class="input filter-value" aria-label={translate("views.sensitivity")} bind:value={nv.sens}>
+                      <option value="">{translate("views.chooseSensitivity")}</option>
                       {#each SENSITIVITY_OPTIONS as option (option.value)}
                         <option value={option.value}>{option.label}</option>
                       {/each}
@@ -515,27 +516,27 @@
                       {/if}
                     </select>
                   {:else if kind === 'dates'}
-                    <span class="field-token">Document date</span>
-                    <span class="operator-token">is within</span>
+                    <span class="field-token">{translate("views.documentDate")}</span>
+                    <span class="operator-token">{translate("views.isWithin")}</span>
                     <div class="date-values">
-                      <ISODateInput id="view-date-from" bind:value={nv.dateFrom} label="Document date from" compact />
-                      <span>to</span>
-                      <ISODateInput id="view-date-to" bind:value={nv.dateTo} label="Document date to" compact />
-                      <select class="input date-role" aria-label="Document date role" bind:value={nv.dateRole}>
-                        <option value="">Every role</option>
+                      <ISODateInput id="view-date-from" bind:value={nv.dateFrom} label={translate("views.documentDateFrom")} compact />
+                      <span>{translate("views.to")}</span>
+                      <ISODateInput id="view-date-to" bind:value={nv.dateTo} label={translate("views.documentDateTo")} compact />
+                      <select class="input date-role" aria-label={translate("views.documentDateRole")} bind:value={nv.dateRole}>
+                        <option value="">{translate("views.everyRole")}</option>
                         {#each DATE_ROLES as role}<option value={role}>{intelligenceRoleLabel(role)}</option>{/each}
                       </select>
                     </div>
                   {:else if kind === 'q'}
-                    <span class="field-token">Search text</span>
-                    <span class="operator-token">matches</span>
+                    <span class="field-token">{translate("views.searchText")}</span>
+                    <span class="operator-token">{translate("views.matches")}</span>
                     <input class="input filter-value search-value"
-                           aria-label="Query"
-                           placeholder="e.g. invoice -is:trash"
+                           aria-label={translate("views.query")}
+                           placeholder={translate("views.eGInvoiceIsTrash")}
                            bind:value={nv.q} />
                   {/if}
                   <button class="remove-filter" type="button"
-                          aria-label={`Remove ${VIEW_FILTERS.find(filter => filter.kind === kind)?.label || kind} filter`}
+                          aria-label={translate("views.removeValueFilter", { "kind": VIEW_FILTERS.find(filter => filter.kind === kind)?.label || kind })}
                           onclick={() => removeFilter(kind)}>
                     <Icon name="x" size={12} />
                   </button>
@@ -546,8 +547,8 @@
             {#if availableFilters().length}
               <div class="add-filter-row">
                 <span class="plus-mark" aria-hidden="true">+</span>
-                <select class="add-filter-select" value="" aria-label="Add view filter" onchange={addFilter}>
-                  <option value="">Add a filter</option>
+                <select class="add-filter-select" value="" aria-label={translate("views.addViewFilter")} onchange={addFilter}>
+                  <option value="">{translate("views.addAFilter")}</option>
                   {#each availableFilters() as filter}<option value={filter.kind}>{filter.label}</option>{/each}
                 </select>
                 <span class="available-filter-hint">{availableFilters().map(filter => filter.label).join(' · ')}</span>
@@ -560,11 +561,11 @@
           <RuleSection class="share-section" tone="quiet">
             <div class="share-heading">
               <button type="button" class="switch" role="switch"
-                      aria-label="Share this view" aria-checked={nv.shared}
+                      aria-label={translate("views.shareThisView")} aria-checked={nv.shared}
                       onclick={() => (nv.shared = !nv.shared)}></button>
               <div>
-                <h3>Share this view</h3>
-                <p>Shows in every user’s Views and dashboard.</p>
+                <h3>{translate("views.shareThisView")}</h3>
+                <p>{translate("views.showsInEveryUserSViewsAnd")}</p>
               </div>
             </div>
           </RuleSection>
@@ -575,52 +576,52 @@
         <div class="footer-note">
           <span class="match-count" aria-live="polite">
             {#if matchLoading}
-              <b>Counting matching documents…</b>
+              <b>{translate("views.countingMatchingDocuments")}</b>
             {:else if matchError}
-              <b>Match count unavailable.</b>
+              <b>{translate("views.matchCountUnavailable")}</b>
             {:else}
-              <b>Matches {matchCount ?? 0} document{matchCount === 1 ? '' : 's'}</b> right now.
+              <b>{plural("views.matchingDocumentCount", matchCount ?? 0)}</b> {translate("views.rightNow")}
             {/if}
           </span>
           {#if editing}
-            <button class="delete-view" type="button" disabled={deleteBusy || !!deleteRequest} onclick={() => remove(editing)}>Delete view</button>
+            <button class="delete-view" type="button" disabled={deleteBusy || !!deleteRequest} onclick={() => remove(editing)}>{translate("views.deleteView")}</button>
           {/if}
         </div>
         <div class="footer-actions">
-          <button class="btn" type="button" disabled={saving} onclick={closeEditor}>Cancel</button>
+          <button class="btn" type="button" disabled={saving} onclick={closeEditor}>{translate("common.cancel")}</button>
           <button class="btn primary save-view" type="submit" form="view-editor-form"
                   disabled={saving || !nv.name.trim()}>
-            {saving ? 'Saving…' : editing ? 'Save changes' : 'Save view'}
+            {saving ? translate("common.saving") : editing ? translate("views.saveChanges") : translate("views.saveView")}
           </button>
         </div>
       {/snippet}
     </RuleWorkspace>
   {:else}
     <RuleWorkspace class="views-panel"
-                   title="Views"
-                   description="Saved filters that reopen exactly where you left off."
+                   title={translate("views.views")}
+                   description={translate("views.savedFiltersThatReopenExactlyWhereYou")}
                    headingId="views-heading">
       {#snippet actions()}
         <button class="btn primary new-view" onclick={() => openCreate()}>
-          <Icon name="plus" size={15} /> New view
+          <Icon name="plus" size={15} /> {translate("views.newView")}
         </button>
       {/snippet}
 
       {#if loading}
-        <div class="views-list" role="list" aria-label="Loading saved views">
+        <div class="views-list" role="list" aria-label={translate("views.loadingSavedViews")}>
           {#each Array(3) as _}
             <div class="loading-row"><div class="skel"></div></div>
           {/each}
         </div>
       {:else if loadError}
-        <RuleEmpty title="Could not load saved views" description={loadError}>
+        <RuleEmpty title={translate("views.couldNotLoadSavedViews")} description={loadError}>
           {#snippet actions()}
-            <button class="btn sm retry-views" onclick={load}><Icon name="refresh" size={13} /> Retry</button>
+            <button class="btn sm retry-views" onclick={load}><Icon name="refresh" size={13} /> {translate("common.retry")}</button>
           {/snippet}
         </RuleEmpty>
       {:else if views.length === 0}
-        <RuleEmpty title="No views yet"
-                   description="A view is a filter you keep. Start from a pattern:"
+        <RuleEmpty title={translate("views.noViewsYet")}
+                   description={translate("views.aViewIsAFilterYouKeep")}
                    patterns={viewPatterns}
                    onselect={openPattern} />
       {:else}
@@ -630,12 +631,12 @@
                      title={view.name}
                      summary={filterSummary(view.filters)}
                      href={filingHref(href(view))}
-                     actionText={view.owner_id ? '' : 'Edit'}
-                     actionLabel={`Edit ${view.name}`}
+                     actionText={view.owner_id ? '' : translate("views.edit")}
+                     actionLabel={translate("views.editValue", { "name": view.name })}
                      onaction={() => openEdit(view)}>
               {#snippet trailing()}
                 {#if view.shared}
-                  <span class="shared-pill" title={view.owner_id ? `Shared by user #${view.owner_id}` : 'Shared with every user'}>Shared</span>
+                  <span class="shared-pill" title={view.owner_id ? translate("views.sharedByUserValue", { "owner_id": view.owner_id }) : translate("views.sharedWithEveryUser")}>{translate("views.shared")}</span>
                 {/if}
               {/snippet}
             </RuleRow>
@@ -648,10 +649,10 @@
 
 {#if deleteRequest}
   <ConfirmDialog
-    title={`Delete the view “${deleteRequest.name}”?`}
-    message="The saved filter will be removed. Documents are not affected."
-    confirmLabel="Delete view"
-    busyLabel="Deleting…"
+    title={translate("views.deleteTheViewValue", { "name": deleteRequest.name })}
+    message={translate("views.theSavedFilterWillBeRemovedDocuments")}
+    confirmLabel={translate("views.deleteView")}
+    busyLabel={translate("views.deleting")}
     busy={deleteBusy}
     onConfirm={confirmRemove}
     onCancel={() => (deleteRequest = null)} />

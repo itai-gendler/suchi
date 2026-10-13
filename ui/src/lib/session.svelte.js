@@ -3,6 +3,7 @@
 import { logout, whoami } from './api.js'
 import { getLoginPath, usesExternalLogin } from './login.js'
 import { resetSystems } from './systems.svelte.js'
+import { setLocale } from './i18n.svelte.js'
 
 export const session = $state({
   user: null,        // { user_id, email, role, ... } | null
@@ -14,6 +15,8 @@ export async function refreshSession() {
   const user = session.user
   try {
     const current = await whoami()
+    if (session.user !== user) return
+    await setLocale(current.locale || 'auto')
     if (session.user !== user) return
     session.user = current
   } catch {

@@ -1,5 +1,6 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script>
+  import { t as translate } from "./i18n.svelte.js";
   import { adminCreateUser } from './api.js'
   import { USER_CAPABILITIES } from './capabilities.js'
   import { systems } from './systems.svelte.js'
@@ -23,41 +24,41 @@
     error = ''
     try {
       await adminCreateUser({ ...user, capabilities: user.role === 'admin' ? [] : user.capabilities })
-      notify?.(`Created ${user.email}`)
+      notify?.(translate("userCreateForm.createdValue", { "email": user.email }))
       user = { email: '', display_name: '', password: '', role: 'member', capabilities: [] }
       await onCreated?.()
-    } catch (ex) { error = ex.message || 'Could not create the user.' }
+    } catch (ex) { error = ex.message || translate("userCreateForm.couldNotCreateTheUser") }
     finally { busy = false }
   }
 </script>
 
-<form onsubmit={create} aria-label="Create a user">
+<form onsubmit={create} aria-label={translate("userCreateForm.createAUser")}>
   <fieldset disabled={busy} class="user-fields">
     <div class="identity-fields">
-      <label class="field">Email
+      <label class="field">{translate("userCreateForm.email")}
         <input class="input" type="email" bind:value={user.email} autocomplete="off" required />
       </label>
-      <label class="field">Display name
+      <label class="field">{translate("userCreateForm.displayName")}
         <input class="input" bind:value={user.display_name} autocomplete="off" />
       </label>
-      <label class="field">Password
+      <label class="field">{translate("userCreateForm.password")}
         <input class="input" type="password" bind:value={user.password} autocomplete="new-password" required />
       </label>
-      <label class="field">Role
-        <select class="input" bind:value={user.role}><option value="member">Member</option><option value="admin">Admin</option></select>
+      <label class="field">{translate("userCreateForm.role")}
+        <select class="input" bind:value={user.role}><option value="member">{translate("userCreateForm.member")}</option><option value="admin">{translate("userCreateForm.admin")}</option></select>
       </label>
     </div>
     <p class="role-note">
       {#if user.role === 'admin'}
-        Admins manage archive settings and can access all documents.
+        {translate("userCreateForm.adminsManageArchiveSettingsAndCanAccess")}
       {:else}
-        Members see their own documents and documents shared with them.
-        {#if systems.introduced}They also need access to the document's filing system.{/if}
+        {translate("userCreateForm.membersSeeTheirOwnDocumentsAndDocuments")}
+        {#if systems.introduced}{translate("userCreateForm.theyAlsoNeedAccessToTheDocument")}{/if}
       {/if}
     </p>
     {#if user.role === 'member'}
       <details class="additional-access">
-        <summary>Additional access <span>{user.capabilities.length ? `${user.capabilities.length} selected` : 'Optional'}</span></summary>
+        <summary>{translate("userCreateForm.additionalAccess")} <span>{user.capabilities.length ? translate("userCreateForm.valueSelected", { "length": user.capabilities.length }) : translate("userCreateForm.optional")}</span></summary>
         <div class="capability-options">
           {#each USER_CAPABILITIES as cap (cap.key)}
             <label class="capability-option">
@@ -70,8 +71,8 @@
     {/if}
     {#if error}<p class="err" role="alert">{error}</p>{/if}
     <div class="form-actions">
-      {#if onSkip}<button type="button" class="btn" onclick={onSkip}>Just me for now</button>{/if}
-      <button class="btn primary create-user"><Icon name="plus" size={14} />{busy ? 'Creating…' : 'Create user'}</button>
+      {#if onSkip}<button type="button" class="btn" onclick={onSkip}>{translate("userCreateForm.justMeForNow")}</button>{/if}
+      <button class="btn primary create-user"><Icon name="plus" size={14} />{busy ? translate("userCreateForm.creating") : translate("userCreateForm.createUser")}</button>
     </div>
   </fieldset>
 </form>

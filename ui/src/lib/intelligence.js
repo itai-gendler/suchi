@@ -1,4 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import { formatDate } from './format.js'
+import { t } from './i18n.svelte.js'
+
 
 export const DATE_ROLES = Object.freeze([
   'issued', 'due', 'start', 'end', 'expiry', 'renewal', 'service', 'other',
@@ -6,7 +9,7 @@ export const DATE_ROLES = Object.freeze([
 
 export function intelligenceRoleLabel(value) {
   const role = String(value || '').trim()
-  return role ? role.charAt(0).toUpperCase() + role.slice(1) : 'Date'
+  return t(`intelligence.role.${DATE_ROLES.includes(role) ? role : 'date'}`)
 }
 
 export function intelligenceDateValue(candidate) {
@@ -32,20 +35,10 @@ export function groupCalendarEvents(items) {
   return grouped
 }
 
-const dateFormatters = new Map()
-
 export function formatArchiveDate(value, options = { year: 'numeric', month: 'short', day: 'numeric' }) {
-  if (!value) return 'Unknown date'
+  if (!value) return t('intelligence.unknownDate')
   const date = new Date(`${value}T00:00:00`)
-  if (Number.isNaN(date.getTime())) return 'Invalid Date'
-  // Calendar can format hundreds of dates; constructing Intl formatters dominates that render.
-  const key = Object.entries(options).sort().map(([name, setting]) => `${name}:${setting}`).join('|')
-  let formatter = dateFormatters.get(key)
-  if (!formatter) {
-    formatter = new Intl.DateTimeFormat(undefined, options)
-    dateFormatters.set(key, formatter)
-  }
-  return formatter.format(date)
+  return formatDate(date, options)
 }
 
 export function formatIntelligenceDate(candidate, options) {
@@ -57,9 +50,12 @@ export function formatIntelligenceDate(candidate, options) {
 
 export function formatIntelligenceValue(candidate) {
   if (candidate?.type === 'date') {
-    return `${formatIntelligenceDate(candidate)} · ${candidate.role || 'date'}`
+    return t('intelligence.dateValue', {
+      date: formatIntelligenceDate(candidate),
+      role: intelligenceRoleLabel(candidate.role),
+    })
   }
-  return candidate?.raw_text || candidate?.sort_value || candidate?.type || 'Extracted fact'
+  return candidate?.raw_text || candidate?.sort_value || candidate?.type || t('intelligence.extractedFact')
 }
 
 // A score never selects or authorizes a candidate. Only the live review
@@ -73,28 +69,28 @@ export function canReviewDate(candidate) {
 export function reviewFailure(error) {
   const code = typeof error === 'string' ? error : error?.code
   if (['stale_source', 'stale_proposal', 'source_changed'].includes(code)) {
-    return 'The document or saved value changed. Nothing was applied; refresh and Rescan the document for a new suggestion.'
+    return t('intelligence.reviewFailure.staleSource')
   }
   if (['conflict', 'review_conflict', 'human_changed', 'already_resolved'].includes(code)) {
-    return 'This suggestion or the saved value changed. Nothing was applied; refresh before reviewing again.'
+    return t('intelligence.reviewFailure.conflict')
   }
   if (['invalid_evidence', 'evidence_mismatch', 'evidence_missing'].includes(code)) {
-    return 'The document text no longer matches this suggestion. Nothing was applied; Rescan the document for a new suggestion.'
+    return t('intelligence.reviewFailure.evidence')
   }
   if (['hidden', 'reveal_required', 'sensitive_reveal_required'].includes(code)) {
-    return 'The document text is hidden. Open the document and choose Reveal before reviewing.'
+    return t('intelligence.reviewFailure.hidden')
   }
   if (['forbidden', 'unauthorized', 'interactive_required', 'interactive_session_required'].includes(code) || [401, 403].includes(error?.status)) {
-    return 'You can no longer review this item. Sign in again with an account that can review it, then refresh.'
+    return t('intelligence.reviewFailure.forbidden')
   }
   if (['not_found', 'no_task', 'system_unavailable', 'source_unavailable'].includes(code) || error?.status === 404) {
-    return 'This document or suggestion is no longer available to you. Refresh the review list.'
+    return t('intelligence.reviewFailure.notFound')
   }
   if (['unsupported', 'unknown_action', 'unknown_handler'].includes(code)) {
-    return 'This action is not supported here. It remains read-only.'
+    return t('intelligence.reviewFailure.unsupported')
   }
   if (error?.name === 'TypeError' || error?.status === 503) {
-    return 'Suchi could not be reached. The decision may not have been saved; reconnect and refresh before trying again.'
+    return t('intelligence.reviewFailure.offline')
   }
-  return 'The decision could not be confirmed. Refresh before trying again.'
+  return t('intelligence.reviewFailure.unknown')
 }

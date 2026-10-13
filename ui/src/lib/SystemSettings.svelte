@@ -1,5 +1,6 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script>
+  import { t as translate } from "./i18n.svelte.js";
   import { onDestroy } from 'svelte'
   import { systems, captureScope, scopeCurrent } from './systems.svelte.js'
   import { refreshSystems } from './system-routing.js'
@@ -32,7 +33,7 @@
       members = new Set(initial)
       users = directory.results || []
       loaded = true
-    } catch (ex) { if (current()) error = ex.message || 'Could not load system memberships.' }
+    } catch (ex) { if (current()) error = ex.message || translate("systemSettings.couldNotLoadSystemMemberships") }
   }
   void load()
 
@@ -50,8 +51,8 @@
       if (!current()) return
       members = new Set(result.user_ids)
       initial = new Set(result.user_ids)
-      notify?.('System memberships saved')
-    } catch (ex) { if (current()) error = ex.message || 'Could not save memberships.' }
+      notify?.(translate("systemSettings.systemMembershipsSaved"))
+    } catch (ex) { if (current()) error = ex.message || translate("systemSettings.couldNotSaveMemberships") }
     finally { if (current()) busy = false }
   }
   async function saveName(event) {
@@ -62,38 +63,38 @@
       await renameSystem(code, name.trim())
       if (!current()) return
       await refreshSystems()
-      if (current()) notify?.('System name saved')
-    } catch (ex) { if (current()) error = ex.message || 'Could not save system name.' }
+      if (current()) notify?.(translate("systemSettings.systemNameSaved"))
+    } catch (ex) { if (current()) error = ex.message || translate("systemSettings.couldNotSaveSystemName") }
     finally { if (current()) busy = false }
   }
 </script>
 
-<section class="card" aria-label="Filing system access" style="padding:18px;margin-bottom:18px">
-  <h3>Filing system · {code}</h3>
-  <p class="sub">The code is permanent. Members may enter this system, but still need permission to open each document. Administrators enter all systems implicitly.</p>
+<section class="card" aria-label={translate("systemSettings.filingSystemAccess")} style="padding:18px;margin-bottom:18px">
+  <h3>{translate("systemSettings.filingSystemValue", { "code": code })}</h3>
+  <p class="sub">{translate("systemSettings.theCodeIsPermanentMembersMayEnter")}</p>
   <form class="toolbar" onsubmit={saveName}>
-    <label>System name <input class="input" bind:value={name} maxlength="80" required disabled={busy} /></label>
-    <button class="btn sm" disabled={busy || !name.trim()}>Save system name</button>
+    <label>{translate("systemSettings.systemName")} <input class="input" bind:value={name} maxlength="80" required disabled={busy} /></label>
+    <button class="btn sm" disabled={busy || !name.trim()}>{translate("systemSettings.saveSystemName")}</button>
   </form>
-  <h4>Members</h4>
-  <p class="sub">Removing access revokes this system’s shares, API tokens and outstanding mobile pairings. Re-adding a member does not restore those credentials.</p>
+  <h4>{translate("systemSettings.members")}</h4>
+  <p class="sub">{translate("systemSettings.removingAccessRevokesThisSystemSShares")}</p>
   {#if error}<p class="err" role="alert">{error}</p>{/if}
   {#if loaded}
     {#each visible as user (user.id)}
       <label style="display:flex;gap:10px;align-items:center;padding:8px 0;overflow-wrap:anywhere">
-        <input type="checkbox" aria-label={`System access for ${user.email}`}
+        <input type="checkbox" aria-label={translate("systemSettings.systemAccessForValue", { "email": user.email })}
           checked={user.role === 'admin' || members.has(user.id)}
           disabled={busy || user.role === 'admin' || (user.disabled && !initial.has(user.id))}
           onchange={event => toggle(user.id, event.currentTarget.checked)} />
         <span>{user.display_name || user.email}{#if user.display_name} · {user.email}{/if}
-          {#if user.role === 'admin'} · Administrator (implicit){:else if user.disabled} · Inactive{/if}</span>
+          {#if user.role === 'admin'} {translate("systemSettings.administratorImplicit")}{:else if user.disabled} {translate("systemSettings.inactive")}{/if}</span>
       </label>
     {/each}
     <div class="toolbar">
-      <button class="btn sm" disabled={page === 1} onclick={() => page--}>Previous members</button>
-      <span>Page {page} of {pages}</span>
-      <button class="btn sm" disabled={page === pages} onclick={() => page++}>Next members</button>
-      <button class="btn primary sm" disabled={busy} onclick={saveMembers}>Save memberships</button>
+      <button class="btn sm" disabled={page === 1} onclick={() => page--}>{translate("systemSettings.previousMembers")}</button>
+      <span>{translate("systemSettings.pageValueOfValue", { "page": page, "pages": pages })}</span>
+      <button class="btn sm" disabled={page === pages} onclick={() => page++}>{translate("systemSettings.nextMembers")}</button>
+      <button class="btn primary sm" disabled={busy} onclick={saveMembers}>{translate("systemSettings.saveMemberships")}</button>
     </div>
-  {:else if !error}<p role="status">Loading memberships…</p>{/if}
+  {:else if !error}<p role="status">{translate("systemSettings.loadingMemberships")}</p>{/if}
 </section>

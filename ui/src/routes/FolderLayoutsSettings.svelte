@@ -1,5 +1,6 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script>
+  import { t as translate } from "../lib/i18n.svelte.js";
   import { onDestroy, onMount } from 'svelte'
   import {
     listRenderedLayouts, createRenderedLayout, patchRenderedLayout,
@@ -12,10 +13,10 @@
 
   const STARTER_TEMPLATE = '{{ jd.area.code_start }}-{{ jd.area.code_end }} {{ jd.area.name }}/{{ jd.category.code }} {{ jd.category.name }}'
   const VARIABLES = [
-    ['Document', ['title', 'doc_pk', 'created', 'created_year', 'created_month', 'created_day', 'added', 'added_year', 'added_month', 'added_day']],
-    ['Filing tree', ['jd.area.code_start', 'jd.area.code_end', 'jd.area.name', 'jd.category.code', 'jd.category.name', 'jd.system.code', 'jd.system.name', 'jd.address']],
-    ['Metadata', ['correspondent', 'tag_list', 'owner']],
-    ['Compatibility', ['storage_path', 'asn']],
+    [translate("folderLayoutsSettings.document"), ['title', 'doc_pk', 'created', 'created_year', 'created_month', 'created_day', 'added', 'added_year', 'added_month', 'added_day']],
+    [translate("folderLayoutsSettings.filingTree"), ['jd.area.code_start', 'jd.area.code_end', 'jd.area.name', 'jd.category.code', 'jd.category.name', 'jd.system.code', 'jd.system.name', 'jd.address']],
+    [translate("folderLayoutsSettings.metadata"), ['correspondent', 'tag_list', 'owner']],
+    [translate("folderLayoutsSettings.compatibility"), ['storage_path', 'asn']],
   ]
 
   let rows = $state([])
@@ -41,7 +42,7 @@
       const result = await listRenderedLayouts()
       rows = result?.results || result || []
     } catch (ex) {
-      error = ex.message || 'Could not load folder layouts.'
+      error = ex.message || translate("folderLayoutsSettings.couldNotLoadFolderLayouts")
     } finally {
       loading = false
     }
@@ -68,7 +69,7 @@
     } catch (ex) {
       if (version === previewVersion) {
         sample = null
-        previewError = ex.message || 'This template could not be rendered.'
+        previewError = ex.message || translate("folderLayoutsSettings.thisTemplateCouldNotBeRendered")
       }
     } finally {
       if (version === previewVersion) previewBusy = false
@@ -102,15 +103,15 @@
     try {
       if (editingID != null) {
         await patchRenderedLayout(editingID, { name: draft.name.trim(), path: draft.template.trim() })
-        notify?.('Folder layout updated')
+        notify?.(translate("folderLayoutsSettings.folderLayoutUpdated"))
       } else {
         await createRenderedLayout({ name: draft.name.trim(), path: draft.template.trim() })
-        notify?.('Folder layout created')
+        notify?.(translate("folderLayoutsSettings.folderLayoutCreated"))
       }
       await load()
       cancelEdit()
     } catch (ex) {
-      previewError = ex.message || 'Could not save this folder layout.'
+      previewError = ex.message || translate("folderLayoutsSettings.couldNotSaveThisFolderLayout")
     } finally {
       busy = false
     }
@@ -125,10 +126,10 @@
       rows = rows.filter(candidate => candidate.id !== row.id)
       deleteRequest = null
       if (editingID === row.id) cancelEdit()
-      notify?.('Folder layout deleted')
+      notify?.(translate("folderLayoutsSettings.folderLayoutDeleted"))
     } catch (ex) {
       deleteRequest = null
-      error = ex.message || 'Could not delete this folder layout.'
+      error = ex.message || translate("folderLayoutsSettings.couldNotDeleteThisFolderLayout")
     } finally {
       busy = false
     }
@@ -138,73 +139,73 @@
 <section class="layout-workspace" aria-labelledby="folder-layouts-heading">
   <header class="layout-heading">
     <div>
-      <span class="eyebrow">Local filesystem</span>
-      <h3 id="folder-layouts-heading">Folder layouts</h3>
-      <p>Control how assigned documents appear in the local rendered filesystem. The filing tree and immutable originals stay unchanged.</p>
+      <span class="eyebrow">{translate("folderLayoutsSettings.localFilesystem")}</span>
+      <h3 id="folder-layouts-heading">{translate("folderLayoutsSettings.folderLayouts")}</h3>
+      <p>{translate("folderLayoutsSettings.controlHowAssignedDocumentsAppearInThe")}</p>
     </div>
-    <span class="pill">{rows.length} saved</span>
+    <span class="pill">{translate("folderLayoutsSettings.valueSaved", { "length": rows.length })}</span>
   </header>
 
   <div class="layout-grid">
     <form class="card layout-editor" onsubmit={save}>
       <div class="editor-heading">
-        <div><h4>{editingID == null ? 'Create a layout' : 'Edit layout'}</h4><p>Templates produce a relative path beneath this filing system.</p></div>
-        {#if sample?.uses_asn}<span class="pill warn">Uses previous archive number</span>{/if}
+        <div><h4>{editingID == null ? translate("folderLayoutsSettings.createALayout") : translate("folderLayoutsSettings.editLayout")}</h4><p>{translate("folderLayoutsSettings.templatesProduceARelativePathBeneathThis")}</p></div>
+        {#if sample?.uses_asn}<span class="pill warn">{translate("folderLayoutsSettings.usesPreviousArchiveNumber")}</span>{/if}
       </div>
-      <label class="field">Layout name
-        <input class="input" bind:value={draft.name} placeholder="e.g. Household bills by year" required />
+      <label class="field">{translate("folderLayoutsSettings.layoutName")}
+        <input class="input" bind:value={draft.name} placeholder={translate("folderLayoutsSettings.eGHouseholdBillsByYear")} required />
       </label>
-      <label class="field">Path template
+      <label class="field">{translate("folderLayoutsSettings.pathTemplate")}
         <textarea class="input mono" rows="5" bind:value={draft.template} oninput={schedulePreview}
-                  placeholder={'Bills/{{ created_year }}/{{ title }}'} required></textarea>
+                  placeholder={translate("folderLayoutsSettings.billsValueValue")} required></textarea>
       </label>
 
       <div class="variable-reference">
-        <strong>Supported variables</strong>
+        <strong>{translate("folderLayoutsSettings.supportedVariables")}</strong>
         {#each VARIABLES as [group, names]}
           <div class="variable-group">
             <span>{group}</span>
-            <div>{#each names as name}<button class="variable" type="button" onclick={() => insertVariable(name)}>{`{{ ${name} }}`}</button>{/each}</div>
+            <div>{#each names as name}<button class="variable" type="button" onclick={() => insertVariable(name)}>{translate("folderLayoutsSettings.value", { "name": name })}</button>{/each}</div>
           </div>
         {/each}
-        <p><code>{`{{ asn }}`}</code> is compatibility-only and works only for imported documents that retain a previous archive number.</p>
+        <p><code>{`{{ asn }}`}</code> {translate("folderLayoutsSettings.isCompatibilityOnlyAndWorksOnlyFor")}</p>
       </div>
 
       <div class="sample" class:error={!!previewError}>
-        <span>Sample preview</span>
-        {#if previewBusy}<code>Rendering…</code>
+        <span>{translate("folderLayoutsSettings.samplePreview")}</span>
+        {#if previewBusy}<code>{translate("folderLayoutsSettings.rendering")}</code>
         {:else if previewError}<code role="alert">{previewError}</code>
         {:else if sample}<code>{sample.path}</code>
-        {:else}<code>Enter a valid template to preview its path.</code>{/if}
+        {:else}<code>{translate("folderLayoutsSettings.enterAValidTemplateToPreviewIts")}</code>{/if}
       </div>
       <div class="editor-actions">
-        {#if editingID != null}<button class="btn" type="button" disabled={busy} onclick={cancelEdit}>Cancel</button>{/if}
+        {#if editingID != null}<button class="btn" type="button" disabled={busy} onclick={cancelEdit}>{translate("common.cancel")}</button>{/if}
         <button class="btn primary" disabled={busy || previewBusy || !!previewError || !draft.name.trim() || !draft.template.trim()}>
-          <Icon name={editingID == null ? 'plus' : 'check'} size={14} />{busy ? 'Saving…' : editingID == null ? 'Create layout' : 'Save layout'}
+          <Icon name={editingID == null ? 'plus' : 'check'} size={14} />{busy ? translate("common.saving") : editingID == null ? translate("folderLayoutsSettings.createLayout") : translate("folderLayoutsSettings.saveLayout")}
         </button>
       </div>
     </form>
 
     <section class="saved-layouts" aria-labelledby="saved-layouts-heading">
-      <h4 id="saved-layouts-heading">Saved layouts</h4>
-      {#if error}<div class="err" role="alert">{error} <button class="btn sm" onclick={load}>Retry</button></div>
-      {:else if loading}<p class="empty">Loading folder layouts…</p>
+      <h4 id="saved-layouts-heading">{translate("folderLayoutsSettings.savedLayouts")}</h4>
+      {#if error}<div class="err" role="alert">{error} <button class="btn sm" onclick={load}>{translate("common.retry")}</button></div>
+      {:else if loading}<p class="empty">{translate("folderLayoutsSettings.loadingFolderLayouts")}</p>
       {:else}
         <div class="layout-list">
           {#each rows as row (row.id)}
             <article class="layout-row" class:active={editingID === row.id}>
               <div class="layout-row-heading">
                 <strong>{row.name}</strong>
-                {#if row.uses_asn}<span class="pill warn">Previous archive number</span>{/if}
+                {#if row.uses_asn}<span class="pill warn">{translate("folderLayoutsSettings.previousArchiveNumber")}</span>{/if}
               </div>
               <code>{row.path}</code>
               <div class="row-actions">
-                <button class="btn sm" onclick={() => edit(row)}>Edit</button>
-                <button class="btn sm danger" onclick={() => (deleteRequest = row)}><Icon name="trash" size={12} />Delete</button>
+                <button class="btn sm" onclick={() => edit(row)}>{translate("folderLayoutsSettings.edit")}</button>
+                <button class="btn sm danger" onclick={() => (deleteRequest = row)}><Icon name="trash" size={12} />{translate("common.delete")}</button>
               </div>
             </article>
           {:else}
-            <p class="empty">No folder layouts yet. Documents use the default filing-tree folders until a layout is assigned.</p>
+            <p class="empty">{translate("folderLayoutsSettings.noFolderLayoutsYetDocumentsUseThe")}</p>
           {/each}
         </div>
       {/if}
@@ -214,10 +215,10 @@
 
 {#if deleteRequest}
   <ConfirmDialog
-    title="Delete folder layout?"
-    message={`“${deleteRequest.name}” will be removed. Documents assigned to it return to the default filing-tree folders.`}
-    confirmLabel="Delete layout"
-    busyLabel="Deleting…"
+    title={translate("folderLayoutsSettings.deleteFolderLayout")}
+    message={translate("folderLayoutsSettings.valueWillBeRemovedDocumentsAssignedToIt", { "name": deleteRequest.name })}
+    confirmLabel={translate("folderLayoutsSettings.deleteLayout")}
+    busyLabel={translate("folderLayoutsSettings.deleting")}
     busy={busy}
     onConfirm={remove}
     onCancel={() => (deleteRequest = null)} />

@@ -1,10 +1,11 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script>
+  import { t as translate } from "./i18n.svelte.js";
   import { captureScope, scopeCurrent, scopedHash as filingHref } from './systems.svelte.js'
   import { onMount, onDestroy } from 'svelte'
   import { session } from './session.svelte.js'
   import { uploadDocument, getDocument, listTasks } from './api.js'
-  import { fmtBytes } from './format.js'
+  import { fmtBytes, plural } from './format.js'
   import { markUploaded } from './upload_bus.svelte.js'
   import Icon from './Icon.svelte'
 
@@ -36,15 +37,15 @@
   const summary = $derived.by(() => {
     if (!queue.length) return ''
     if (waitingCount || uploadingCount) {
-      const parts = [`${settledTransfers} of ${queue.length} finished`]
-      if (acceptedCount) parts.push(`${acceptedCount} uploaded`)
-      if (failedCount) parts.push(`${failedCount} failed`)
+      const parts = [translate("uploadBox.valueOfValueFinished", { "settledTransfers": settledTransfers, "length": queue.length })]
+      if (acceptedCount) parts.push(translate("uploadBox.valueUploaded", { "acceptedCount": acceptedCount }))
+      if (failedCount) parts.push(translate("uploadBox.valueFailed", { "failedCount": failedCount }))
       return parts.join(' · ')
     }
-    const parts = [`${acceptedCount} uploaded`]
-    if (readyCount) parts.push(`${readyCount} ready`)
-    if (processingCount) parts.push(`${processingCount} processing`)
-    if (failedCount) parts.push(`${failedCount} failed`)
+    const parts = [translate("uploadBox.valueUploaded", { "acceptedCount": acceptedCount })]
+    if (readyCount) parts.push(translate("uploadBox.valueReady", { "readyCount": readyCount }))
+    if (processingCount) parts.push(translate("uploadBox.valueProcessing", { "processingCount": processingCount }))
+    if (failedCount) parts.push(translate("uploadBox.valueFailed", { "failedCount": failedCount }))
     return parts.join(' · ')
   })
 
@@ -131,8 +132,8 @@
       entry.state = 'upload_failed'
       entry.statusCode = ex.status || 0
       entry.error = ex.status === 413
-        ? 'Choose a smaller file or ask the administrator to raise the upload limit.'
-        : ex.message || 'The upload did not finish.'
+        ? translate("uploadBox.chooseASmallerFileOrAskTheAdministrator")
+        : ex.message || translate("uploadBox.theUploadDidNotFinish")
     }
   }
 
@@ -178,7 +179,7 @@
     try {
       const tasks = await listTasks({ include: 'jobs', doc_id: entry.id, kind: 'post-', limit: 200 })
       if (!current(user)) return
-      if (!Array.isArray(tasks?.results)) throw new Error('Invalid processing response')
+      if (!Array.isArray(tasks?.results)) throw new Error(translate("uploadBox.invalidProcessingResponse"))
       const active = tasks.results.some(job => job.state === 'pending' || job.state === 'running')
       const failed = tasks.results.some(job => job.state === 'dead')
       if (active) {
@@ -217,26 +218,26 @@
 
   function statusLabel(entry) {
     switch (entry.state) {
-      case 'waiting': return 'Waiting'
-      case 'uploading': return 'Uploading'
+      case 'waiting': return translate("uploadBox.waiting")
+      case 'uploading': return translate("uploadBox.uploading")
       case 'processing': return entry.receipt === 'duplicate'
-        ? 'Already in the archive · Processing'
+        ? translate("uploadBox.alreadyInTheArchiveProcessing")
         : entry.receipt === 'restored'
-          ? 'Restored · Processing'
-          : 'Uploaded · Processing'
+          ? translate("uploadBox.restoredProcessing")
+          : translate("uploadBox.uploadedProcessing")
       case 'ready': return entry.receipt === 'duplicate'
-        ? 'Already in the archive · Ready'
+        ? translate("uploadBox.alreadyInTheArchiveReady")
         : entry.receipt === 'restored'
-          ? 'Restored · Ready'
-          : 'Ready'
+          ? translate("uploadBox.restoredReady")
+          : translate("uploadBox.ready")
       case 'no_text': return entry.receipt === 'duplicate'
-        ? 'Already in the archive · No text found'
+        ? translate("uploadBox.alreadyInTheArchiveNoTextFound")
         : entry.receipt === 'restored'
-          ? 'Restored · No text found'
-          : 'Ready · No text found'
-      case 'upload_failed': return 'Upload failed'
-      case 'processing_failed': return 'Processing needs attention'
-      case 'status_unknown': return 'Could not check processing status'
+          ? translate("uploadBox.restoredNoTextFound")
+          : translate("uploadBox.readyNoTextFound")
+      case 'upload_failed': return translate("uploadBox.uploadFailed")
+      case 'processing_failed': return translate("uploadBox.processingNeedsAttention")
+      case 'status_unknown': return translate("uploadBox.couldNotCheckProcessingStatus")
       default: return ''
     }
   }
@@ -273,9 +274,9 @@
 
 <div class="upload-surface" bind:this={surface}>
   {#if queue.length}
-    <section class="queue-summary" aria-label="Upload progress">
+    <section class="queue-summary" aria-label={translate("uploadBox.uploadProgress")}>
       <div>
-        <b>Upload files</b>
+        <b>{translate("uploadBox.uploadFiles")}</b>
         <span role="status" aria-live="polite" aria-atomic="true">{summary}</span>
       </div>
       <progress max={queue.length} value={settledTransfers} aria-label={summary}></progress>
@@ -283,7 +284,7 @@
   {/if}
 
   <div class="drop" class:over class:compact={queue.length > 0}
-       role="button" tabindex="0" aria-label="Add files"
+       role="button" tabindex="0" aria-label={translate("uploadBox.addFiles")}
        ondragover={(event) => { event.preventDefault(); over = true }}
        ondragleave={() => (over = false)}
        ondrop={onDrop}
@@ -291,36 +292,36 @@
        onkeydown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); fileInput.click() } }}>
     <Icon name="upload" size={queue.length ? 20 : 44} />
     {#if queue.length}
-      <b>Add more files</b>
+      <b>{translate("uploadBox.addMoreFiles")}</b>
     {:else}
-      <p class="drop-title"><b>Drop documents here</b> or click to choose</p>
-      <p class="drop-help">PDF, office documents, images, and email files. You can also focus here and paste a screenshot.</p>
+      <p class="drop-title"><b>{translate("uploadBox.dropDocumentsHere")}</b> {translate("uploadBox.orClickToChoose")}</p>
+      <p class="drop-help">{translate("uploadBox.pdfOfficeDocumentsImagesAndEmailFiles")}</p>
     {/if}
     <input bind:this={fileInput} type="file" multiple hidden
       onchange={(event) => { const files = [...event.target.files]; event.target.value = ''; enqueue(files) }} />
   </div>
 
   {#if previews.length}
-    <section class="card pasted" aria-label="Pasted images">
-      <b>Ready to upload?</b>
-      <p class="sub">These images stay in this browser until you confirm.</p>
+    <section class="card pasted" aria-label={translate("uploadBox.pastedImages")}>
+      <b>{translate("uploadBox.readyToUpload")}</b>
+      <p class="sub">{translate("uploadBox.theseImagesStayInThisBrowserUntil")}</p>
       <div class="pasted-images">
         {#each previews as preview}
           <figure>
-            <img src={preview.url} alt={`Preview of ${preview.file.name}`} />
+            <img src={preview.url} alt={translate("uploadBox.previewOfValue", { "name": preview.file.name })} />
             <figcaption>{preview.file.name} · {fmtBytes(preview.file.size)}</figcaption>
           </figure>
         {/each}
       </div>
       <div class="queue-actions">
-        <button class="btn primary" onclick={uploadPasted}>Upload {previews.length === 1 ? 'image' : `${previews.length} images`}</button>
-        <button class="btn" onclick={clearPreviews}>Discard</button>
+        <button class="btn primary" onclick={uploadPasted}>{translate("uploadBox.uploadValue", { images: plural("uploadBox.imageCount", previews.length) })}</button>
+        <button class="btn" onclick={clearPreviews}>{translate("uploadBox.discard")}</button>
       </div>
     </section>
   {/if}
 
   {#if queue.length}
-    <section class="upload-queue" aria-label="Files">
+    <section class="upload-queue" aria-label={translate("uploadBox.files")}>
       {#each queue as entry (entry.key)}
         <article class="card queue-row">
           <span class="state-dot"
@@ -335,30 +336,30 @@
               <span>{fmtBytes(entry.size)}</span>
             </div>
             {#if entry.doc?.title && entry.doc.title !== entry.name}
-              <span title={entry.doc.title}>Filed as “{entry.doc.title}”</span>
+              <span title={entry.doc.title}>{translate("uploadBox.filedAsValue", { "title": entry.doc.title })}</span>
             {/if}
             {#if entry.error}<span class="row-error" role="alert">{entry.error}</span>{/if}
-            {#if entry.paused}<span>Automatic checks paused. Processing continues on the server.</span>{/if}
+            {#if entry.paused}<span>{translate("uploadBox.automaticChecksPausedProcessingContinuesOnThe")}</span>{/if}
           </div>
           <div class="row-actions">
             {#if entry.state === 'upload_failed' && entry.statusCode !== 413}
-              <button class="btn sm" onclick={() => retry(entry)}>Retry</button>
+              <button class="btn sm" onclick={() => retry(entry)}>{translate("common.retry")}</button>
             {/if}
             {#if entry.state === 'upload_failed'}
-              <button class="btn sm" onclick={() => remove(entry)}>Remove</button>
+              <button class="btn sm" onclick={() => remove(entry)}>{translate("uploadBox.remove")}</button>
             {/if}
             {#if entry.id && (entry.paused || entry.state === 'processing_failed')}
-              <button class="btn sm" onclick={() => watchProcessing(entry)}>Check again</button>
+              <button class="btn sm" onclick={() => watchProcessing(entry)}>{translate("uploadBox.checkAgain")}</button>
             {/if}
-            {#if entry.id}<a class="btn sm" href={filingHref(`#/doc/${entry.id}`)}>Open document</a>{/if}
+            {#if entry.id}<a class="btn sm" href={filingHref(`#/doc/${entry.id}`)}>{translate("uploadBox.openDocument")}</a>{/if}
           </div>
         </article>
       {/each}
     </section>
 
     <div class="queue-footer">
-      <button class="btn" disabled={!completedCount} onclick={clearCompleted}>Clear completed</button>
-      <a class="btn" href={filingHref('#/documents')}>View documents</a>
+      <button class="btn" disabled={!completedCount} onclick={clearCompleted}>{translate("uploadBox.clearCompleted")}</button>
+      <a class="btn" href={filingHref('#/documents')}>{translate("uploadBox.viewDocuments")}</a>
     </div>
   {/if}
 </div>

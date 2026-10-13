@@ -1,30 +1,32 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import { t } from './i18n.svelte.js'
+
 
 export const USER_CAPABILITIES = Object.freeze([
   Object.freeze({
     key: 'archive_chat',
-    label: 'Ask your documents',
-    description: 'Ask questions across documents they can read, with links back to each document.',
+    get label() { return t('capabilities.archiveChat.label') },
+    get description() { return t('capabilities.archiveChat.description') },
   }),
   Object.freeze({
     key: 'archive_intelligence',
-    label: 'Manage document dates',
-    description: 'Extract dates, review uncertain results, and use Calendar dates in answers and search.',
+    get label() { return t('capabilities.archiveIntelligence.label') },
+    get description() { return t('capabilities.archiveIntelligence.description') },
   }),
   Object.freeze({
     key: 'mailboxes',
-    label: 'Manage mailboxes',
-    description: 'Connect and manage their own mail intake.',
+    get label() { return t('capabilities.mailboxes.label') },
+    get description() { return t('capabilities.mailboxes.description') },
   }),
   Object.freeze({
     key: 'share_links',
-    label: 'Create share links',
-    description: 'Share documents using revocable links.',
+    get label() { return t('capabilities.shareLinks.label') },
+    get description() { return t('capabilities.shareLinks.description') },
   }),
   Object.freeze({
     key: 'share_views',
-    label: 'Share saved views',
-    description: 'Publish saved views to others in the same filing system.',
+    get label() { return t('capabilities.shareViews.label') },
+    get description() { return t('capabilities.shareViews.description') },
   }),
 ])
 

@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import { t } from './i18n.svelte.js'
+
 
 // Filing context only: server records remain authoritative, never cached here.
 export const systems = $state({
@@ -19,7 +21,7 @@ export function scopeCurrent(scope) {
 }
 export function unavailableSystem() {
   systems.ready = false
-  systems.error = 'This filing system is unavailable. Ask an administrator to grant access.'
+  systems.error = t('systems.unavailableAskAdministrator')
   systems.generation++
 }
 

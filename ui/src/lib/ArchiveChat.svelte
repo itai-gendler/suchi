@@ -1,5 +1,7 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script>
+  import { t as translate } from "./i18n.svelte.js";
+  import { formatNumber, plural } from './format.js'
   import { scopedHash as filingHref } from './systems.svelte.js'
   import { onDestroy } from 'svelte'
   import { askArchive } from './api.js'
@@ -8,7 +10,7 @@
 
   let {
     open = false,
-    request = { id: 0, question: '', scope: { label: 'All documents' } },
+    request = { id: 0, question: '', scope: { label: translate("archiveChat.allDocuments") } },
     status = { provider: '', local: false },
     canReviewIntelligence = false,
     onClose,
@@ -30,9 +32,9 @@
   const maxTranscriptTurns = 20
 
   const prompts = [
-    'Find the next renewal dates',
-    'Summarize documents about a topic',
-    'Compare what two documents say',
+    translate("archiveChat.findTheNextRenewalDates"),
+    translate("archiveChat.summarizeDocumentsAboutATopic"),
+    translate("archiveChat.compareWhatTwoDocumentsSay"),
   ]
 
   function completedTurns() {
@@ -126,12 +128,12 @@
       if (activeRequest !== requestState || requestState.invalidated) return
       const canceled = ex?.name === 'AbortError'
       const error = canceled
-        ? 'Request canceled.'
+        ? translate("archiveChat.requestCanceled")
         : ex?.code === 'invalid_provider_response'
-          ? 'The model returned an answer without usable document links. Try again.'
+          ? translate("archiveChat.theModelReturnedAnAnswerWithoutUsableDocument")
           : ex?.code === 'provider_response_truncated'
-            ? 'The model reached its output limit before finishing. Try a narrower question or another model.'
-          : (ex?.message || 'The question could not be answered.')
+            ? translate("archiveChat.theModelReachedItsOutputLimitBeforeFinishing")
+          : (ex?.message || translate("archiveChat.theQuestionCouldNotBeAnswered"))
       updateTurn(turn.id, { error })
       if (canceled && requestState.restoreDraft && !draft) draft = question
     } finally {
@@ -197,15 +199,15 @@
 
 
   function providerLabel() {
-    if (status?.local) return status.provider ? `Local model · ${status.provider}` : 'Local model'
-    return status?.provider || 'Configured hosted model'
+    if (status?.local) return status.provider ? translate("archiveChat.localModelValue", { "provider": status.provider }) : translate("archiveChat.localModel")
+    return status?.provider || translate("archiveChat.configuredHostedModel")
   }
 
   function questionPlaceholder() {
     const documentIDs = request?.scope?.document_ids || []
-    if (documentIDs.length === 1) return 'Ask about this document'
-    if (request?.scope?.label === 'All documents') return 'Ask about all documents'
-    return 'Ask about these documents'
+    if (documentIDs.length === 1) return translate("archiveChat.askAboutThisDocument")
+    if (documentIDs.length === 0) return translate("archiveChat.askAboutAllDocuments")
+    return translate("archiveChat.askAboutTheseDocuments")
   }
 
   function acceptedDateCount(turn) {
@@ -283,27 +285,27 @@
 </script>
 
 {#if open}
-  <button class="research-veil" aria-label="Close Ask your documents" onclick={close}></button>
+  <button class="research-veil" aria-label={translate("archiveChat.closeAskYourDocuments")} onclick={close}></button>
   <div class="research-drawer" bind:this={drawer} role="dialog" aria-modal="true" aria-labelledby="research-title" tabindex="-1" onkeydown={onKey}>
     <header class="research-head">
       <div>
-        <h2 id="research-title">Ask your documents</h2>
-        <p class="research-intro">Ask questions and follow each answer back to your documents.</p>
-        <span class="scope-chip"><Icon name="search" size={11} />{request?.scope?.label || 'All documents'}</span>
+        <h2 id="research-title">{translate("archiveChat.askYourDocuments")}</h2>
+        <p class="research-intro">{translate("archiveChat.askQuestionsAndFollowEachAnswerBack")}</p>
+        <span class="scope-chip"><Icon name="search" size={11} />{request?.scope?.label || translate("archiveChat.allDocuments")}</span>
       </div>
       <div class="research-head-actions">
-        <button class="btn sm" onclick={clearConversation} disabled={!turns.length && !includeSensitive}>Clear</button>
-        <button class="btn sm icon-only" onclick={close} aria-label="Close Ask your documents" title="Close"><Icon name="x" size={14} /></button>
+        <button class="btn sm" onclick={clearConversation} disabled={!turns.length && !includeSensitive}>{translate("archiveChat.clear")}</button>
+        <button class="btn sm icon-only" onclick={close} aria-label={translate("archiveChat.closeAskYourDocuments")} title={translate("common.close")}><Icon name="x" size={14} /></button>
       </div>
     </header>
 
     <div class="research-transcript" aria-live="polite">
       {#if turns.length === 0}
         <div class="research-empty">
-          <span class="empty-index">R / 01</span>
+          <span class="empty-index">{translate("archiveChat.r01")}</span>
           <span class="research-empty-mark"><Icon name="ask" size={24} /></span>
-          <b>Start with a question, not a search query</b>
-          <p>Suchi searches only the documents named above and links each answer back to them.</p>
+          <b>{translate("archiveChat.startWithAQuestionNotASearch")}</b>
+          <p>{translate("archiveChat.suchiSearchesOnlyTheDocumentsNamedAbove")}</p>
           <div class="prompt-list">
             {#each prompts as prompt}
               <button onclick={() => { draft = prompt; queueMicrotask(() => composer?.focus()) }}>{prompt}<Icon name="chev" size={11} /></button>
@@ -314,10 +316,10 @@
 
       {#each turns as turn (turn.id)}
         <article class="research-turn" id={`research-turn-${turn.id}`}>
-          <header class="turn-question"><span>Question</span><p>{turn.question}</p></header>
+          <header class="turn-question"><span>{translate("archiveChat.question")}</span><p>{turn.question}</p></header>
 
           {#if sending && turn === turns.at(-1) && !turn.answer && !turn.error}
-            <div class="research-thinking"><span></span><span></span><span></span><em>Reading the documents…</em></div>
+            <div class="research-thinking"><span></span><span></span><span></span><em>{translate("archiveChat.readingTheDocuments")}</em></div>
           {/if}
 
           {#if turn.answer}
@@ -327,7 +329,7 @@
                   {#if part.citation}
                     {@const citedSource = turn.sources[part.citation - 1]}
                     <a class="inline-citation" href={filingHref(`#/doc/${citedSource.id}`)} onclick={closeForNavigation}
-                       aria-label={`Open document used in answer ${part.citation}: ${citedSource.title || `Document #${citedSource.id}`}`}>{part.text}</a>
+                       aria-label={translate("archiveChat.openDocumentUsedInAnswerValueValue", { "citation": part.citation, "id": citedSource.title || `Document #${citedSource.id}` })}>{part.text}</a>
                   {:else}{part.text}{/if}
                 {/each}
               </p>
@@ -337,37 +339,37 @@
           {#if turn.error}
             <div class="research-error" role="alert">
               <span>{turn.error}</span>
-              <button class="btn sm" disabled={sending} onclick={() => send(turn.question)}>Retry</button>
+              <button class="btn sm" disabled={sending} onclick={() => send(turn.question)}>{translate("common.retry")}</button>
             </div>
           {/if}
 
           {#if turn.sources.length}
             {@const groups = sourceGroups(turn)}
-            <div class="research-actions" aria-label="Actions for these documents">
+            <div class="research-actions" aria-label={translate("archiveChat.actionsForTheseDocuments")}>
               <a class="research-action" href={filingHref(`#/views?new=1&ids=${turn.sources.map(source => source.id).join(',')}`)} onclick={closeForNavigation}>
-                <Icon name="eye" size={14} /><span><b>Save these documents as a view</b><small>{turn.sources.length} document{turn.sources.length === 1 ? '' : 's'}</small></span>
+                <Icon name="eye" size={14} /><span><b>{translate("archiveChat.saveTheseDocumentsAsAView")}</b><small>{plural("archiveChat.documentCount", turn.sources.length)}</small></span>
               </a>
               {#if canReviewIntelligence}
                 {#if pendingDateCount(turn) > 0}
                   <a class="research-action" href={filingHref("#/tasks")} onclick={closeForNavigation}>
-                    <Icon name="tasks" size={14} /><span><b>Review {pendingDateCount(turn)} date{pendingDateCount(turn) === 1 ? '' : 's'}</b><small>Check suggested dates in Approvals</small></span>
+                    <Icon name="tasks" size={14} /><span><b>{plural("archiveChat.reviewDateCount", pendingDateCount(turn))}</b><small>{translate("archiveChat.checkSuggestedDatesInApprovals")}</small></span>
                   </a>
                 {:else if acceptedDateCount(turn) > 0}
                   <a class="research-action" href={filingHref(`#/calendar?document_ids=${sourceIDQuery(turn)}`)} onclick={closeForNavigation}>
-                    <Icon name="calendar" size={14} /><span><b>Open {acceptedDateCount(turn)} calendar date{acceptedDateCount(turn) === 1 ? '' : 's'}</b><small>Dates from these documents</small></span>
+                    <Icon name="calendar" size={14} /><span><b>{plural("archiveChat.openCalendarDateCount", acceptedDateCount(turn))}</b><small>{translate("archiveChat.datesFromTheseDocuments")}</small></span>
                   </a>
                 {/if}
               {/if}
             </div>
 
-            <section class="evidence-stack" aria-label="From your documents">
-              <header><span>From your documents</span><small>{turn.citations.length || 0} used in the answer · {turn.sources.length} document{turn.sources.length === 1 ? '' : 's'} found</small></header>
+            <section class="evidence-stack" aria-label={translate("archiveChat.fromYourDocuments")}>
+              <header><span>{translate("archiveChat.fromYourDocuments")}</span><small>{translate("archiveChat.usedInAnswer", { count: formatNumber(turn.citations.length || 0), documents: plural("archiveChat.documentCount", turn.sources.length) })}</small></header>
               {#each groups.primary as item (item.source.id)}
                 <ArchiveChatSource {item} cited onOpen={closeForNavigation} />
               {/each}
               {#if groups.extra.length}
                 <details class="extra-sources">
-                  <summary>{groups.extra.length} more document{groups.extra.length === 1 ? '' : 's'}</summary>
+                  <summary>{plural("archiveChat.moreDocumentCount", groups.extra.length)}</summary>
                   {#each groups.extra as item (item.source.id)}
                     <ArchiveChatSource {item} onOpen={closeForNavigation} />
                   {/each}
@@ -382,19 +384,19 @@
     <footer class="research-compose">
       <label class="sensitive-toggle">
         <input type="checkbox" checked={includeSensitive} disabled={sending} onchange={(event) => setSensitive(event.currentTarget.checked)} />
-        <span><b>Include Confidential and Restricted</b><small>Text from the listed documents is sent to {providerLabel()} for this conversation</small></span>
+        <span><b>{translate("archiveChat.includeConfidentialAndRestricted")}</b><small>{translate("archiveChat.textFromTheListedDocumentsIsSent", { "providerLabel": providerLabel() })}</small></span>
       </label>
       <form onsubmit={(event) => { event.preventDefault(); send() }}>
         <textarea bind:this={composer} bind:value={draft} maxlength="2000" rows="2" placeholder={questionPlaceholder()}
-                  aria-label="Question" disabled={sending}
+                  aria-label={translate("archiveChat.question")} disabled={sending}
                   onkeydown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); send() } }}></textarea>
         {#if sending}
-          <button type="button" class="btn research-send" onclick={cancel}>Cancel</button>
+          <button type="button" class="btn research-send" onclick={cancel}>{translate("common.cancel")}</button>
         {:else}
-          <button class="btn primary research-send" disabled={!draft.trim()}><Icon name="ask" size={14} /> Ask</button>
+          <button class="btn primary research-send" disabled={!draft.trim()}><Icon name="ask" size={14} /> {translate("archiveChat.ask")}</button>
         {/if}
       </form>
-      <small class="research-note">Saved details can help answer questions; open the linked documents to check them.</small>
+      <small class="research-note">{translate("archiveChat.savedDetailsCanHelpAnswerQuestionsOpen")}</small>
     </footer>
   </div>
 {/if}

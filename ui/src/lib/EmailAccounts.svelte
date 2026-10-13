@@ -1,5 +1,6 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script>
+  import { t as translate } from "./i18n.svelte.js";
   // List of mailboxes. Each row shows liveness at a glance: last sync
   // recency + a red pill when last_error is set. Add/edit/delete flows
   // route through MailAccountForm, which owns the wire shape.
@@ -20,13 +21,13 @@
   let deleteRequest = $state(null)
 
   const PROVIDER_LABELS = {
-    microsoft: 'Microsoft',
-    gmail: 'Gmail',
-    fastmail: 'Fastmail',
+    microsoft: translate("emailAccounts.microsoft"),
+    gmail: translate("emailAccounts.gmail"),
+    fastmail: translate("emailAccounts.fastmail"),
     icloud: 'iCloud',
-    proton: 'Proton',
-    zoho: 'Zoho',
-    custom: 'Custom',
+    proton: translate("emailAccounts.proton"),
+    zoho: translate("emailAccounts.zoho"),
+    custom: translate("emailAccounts.custom"),
   }
 
   // usersByID drives ownerLabel — only populated for admins (members
@@ -34,9 +35,9 @@
   const usersByID = $derived(Object.fromEntries((users || []).map(u => [u.id, u])))
   function ownerLabel(id) {
     const u = usersByID[id]
-    if (!u) return `Owner #${id}`
-    if (u.display_name) return `${u.display_name} <${u.email}>`
-    return u.email || `Owner #${id}`
+    if (!u) return translate("emailAccounts.ownerValue", { "id": id })
+    if (u.display_name) return translate("emailAccounts.valueValue", { "display_name": u.display_name, "email": u.email })
+    return u.email || translate("emailAccounts.ownerValue", { "id": id })
   }
 
   async function load() {
@@ -49,34 +50,34 @@
       accounts = r?.accounts || []
       capabilities = r?.capabilities || capabilities
     } catch (ex) {
-      if (version === loadVersion) loadError = ex.data?.message || ex.message || 'Could not load mailboxes.'
+      if (version === loadVersion) loadError = ex.data?.message || ex.message || translate("emailAccounts.couldNotLoadMailboxes")
     } finally {
       if (version === loadVersion) loaded = true
     }
   }
 
   function relTime(value) {
-    if (!value) return 'never synced'
+    if (!value) return translate("emailAccounts.neverSynced")
     const seconds = Number(value)
     const t = Number.isFinite(seconds) ? seconds * 1000 : Date.parse(value)
-    if (!Number.isFinite(t)) return 'never synced'
+    if (!Number.isFinite(t)) return translate("emailAccounts.neverSynced")
     const secs = Math.max(0, Math.floor((Date.now() - t) / 1000))
-    if (secs < 60) return `${secs}s ago`
+    if (secs < 60) return translate("emailAccounts.valueSAgo", { "secs": secs })
     const mins = Math.floor(secs / 60)
-    if (mins < 60) return `last sync ${mins} min ago`
+    if (mins < 60) return translate("emailAccounts.lastSyncValueMinAgo", { "mins": mins })
     const hrs = Math.floor(mins / 60)
-    if (hrs < 24) return `last sync ${hrs}h ago`
-    return `last sync ${Math.floor(hrs / 24)}d ago`
+    if (hrs < 24) return translate("emailAccounts.lastSyncValueHAgo", { "hrs": hrs })
+    return translate("emailAccounts.lastSyncValueDAgo", { "hrs": Math.floor(hrs / 24) })
   }
 
   async function testOne(a) {
     busy = true
     try {
       const r = await testEmailAccount(a.id)
-      notify?.(r?.message || (r?.ok ? 'Mailbox reachable.' : 'Test failed.'))
+      notify?.(r?.message || (r?.ok ? translate("emailAccounts.mailboxReachable") : translate("emailAccounts.testFailed")))
       load()
     } catch (ex) {
-      notify?.(ex.data?.message || ex.message || 'Test failed.')
+      notify?.(ex.data?.message || ex.message || translate("emailAccounts.testFailed"))
     } finally { busy = false }
   }
 
@@ -91,11 +92,11 @@
     busy = true
     try {
       await deleteEmailAccount(account.id)
-      notify?.('Mailbox deleted')
+      notify?.(translate("emailAccounts.mailboxDeleted"))
       deleteRequest = null
       load()
     } catch (ex) {
-      notify?.(ex.data?.message || ex.message || 'Could not delete')
+      notify?.(ex.data?.message || ex.message || translate("emailAccounts.couldNotDelete"))
       deleteRequest = null
     } finally { busy = false }
   }
@@ -110,19 +111,19 @@
 
 <div class="mailbox-toolbar">
   <button class="btn primary sm" onclick={() => (openForm = { mode: 'create' })}>
-    <Icon name="plus" size={13} /> Add mailbox
+    <Icon name="plus" size={13} /> {translate("emailAccounts.addMailbox")}
   </button>
 </div>
 
 {#if !loaded}
-  <p class="mailbox-empty">Loading…</p>
+  <p class="mailbox-empty">{translate("common.loading")}</p>
 {:else if loadError}
   <div class="mailbox-error">
     <span>{loadError}</span>
-    <button class="btn sm" onclick={load}><Icon name="refresh" size={13} /> Retry</button>
+    <button class="btn sm" onclick={load}><Icon name="refresh" size={13} /> {translate("common.retry")}</button>
   </div>
 {:else if accounts.length === 0}
-  <p class="mailbox-empty">No mailboxes connected.</p>
+  <p class="mailbox-empty">{translate("emailAccounts.noMailboxesConnected")}</p>
 {:else}
   <div class="mailbox-list">
     {#each accounts as a (a.id)}
@@ -131,7 +132,7 @@
               class:warn={!a.last_sync_at && !a.last_error}
               class:danger={!!a.last_error}></span>
         <div class="mailbox-identity">
-          <span class="mailbox-name">{a.name || `Mailbox #${a.id}`}</span>
+          <span class="mailbox-name">{a.name || translate("emailAccounts.mailboxValue", { "id": a.id })}</span>
           <span class="mailbox-owner">
             {#if viewerRole === 'admin'}
               {a.username || ''} · {ownerLabel(a.owner_id)}
@@ -143,16 +144,16 @@
         <span class="chip mailbox-provider">{PROVIDER_LABELS[a.provider] || a.provider}</span>
         <div class="mailbox-status">
           {#if a.last_error}
-            <span class="pill danger" title={a.last_error}>error</span>
+            <span class="pill danger" title={a.last_error}>{translate("emailAccounts.error")}</span>
           {:else}
             <span>{relTime(a.last_sync_at)}</span>
           {/if}
-          {#if !a.enabled}<span class="pill warn">disabled</span>{/if}
+          {#if !a.enabled}<span class="pill warn">{translate("emailAccounts.disabled")}</span>{/if}
         </div>
         <div class="mailbox-actions">
-          <button class="btn sm" disabled={busy} onclick={() => testOne(a)}>Test</button>
-          <button class="btn sm" disabled={busy} onclick={() => (openForm = { mode: 'edit', account: a })}>Edit</button>
-          <button class="btn sm danger" disabled={busy} onclick={() => del(a)} title="Delete mailbox" aria-label="Delete mailbox"><Icon name="trash" size={13} /></button>
+          <button class="btn sm" disabled={busy} onclick={() => testOne(a)}>{translate("emailAccounts.test")}</button>
+          <button class="btn sm" disabled={busy} onclick={() => (openForm = { mode: 'edit', account: a })}>{translate("emailAccounts.edit")}</button>
+          <button class="btn sm danger" disabled={busy} onclick={() => del(a)} title={translate("emailAccounts.deleteMailbox")} aria-label={translate("emailAccounts.deleteMailbox")}><Icon name="trash" size={13} /></button>
         </div>
       </div>
     {/each}
@@ -172,10 +173,10 @@
 
 {#if deleteRequest}
   <ConfirmDialog
-    title={`Delete “${deleteRequest.name}”?`}
-    message="This mailbox and its saved connection details will be removed."
-    confirmLabel="Delete mailbox"
-    busyLabel="Deleting…"
+    title={translate("emailAccounts.deleteValue", { "name": deleteRequest.name })}
+    message={translate("emailAccounts.thisMailboxAndItsSavedConnectionDetails")}
+    confirmLabel={translate("emailAccounts.deleteMailbox")}
+    busyLabel={translate("emailAccounts.deleting")}
     {busy}
     onConfirm={confirmDelete}
     onCancel={() => (deleteRequest = null)} />

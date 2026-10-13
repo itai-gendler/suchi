@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import { t } from './i18n.svelte.js'
 
 import { DATE_ROLES, intelligenceRoleLabel } from './intelligence.js'
 
@@ -45,15 +46,15 @@ function foldLine(value) {
 
 export function calendarDateFile(event, appURL, now = new Date()) {
   const bounds = dayBounds(event)
-  if (!bounds) throw new Error('Only reviewed dates with an exact day can be exported.')
+  if (!bounds) throw new Error(t('calendarExport.exactDayOnly'))
   const documentURL = new URL(appURL)
-  if (!['http:', 'https:'].includes(documentURL.protocol)) throw new Error('Calendar export requires an HTTP or HTTPS document URL.')
+  if (!['http:', 'https:'].includes(documentURL.protocol)) throw new Error(t('calendarExport.httpURLRequired'))
   documentURL.username = ''
   documentURL.password = ''
   documentURL.search = ''
   const system = new URLSearchParams(documentURL.hash.split('?')[1] || '').get('system')
   documentURL.hash = `/doc/${event.document_id}${system ? `?system=${encodeURIComponent(system)}` : ''}`
-  const title = event.document_title || `Document #${event.document_id}`
+  const title = event.document_title || t('calendarExport.documentNumber', { id: event.document_id })
   const stamp = now.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z')
   const lines = [
     'BEGIN:VCALENDAR',
@@ -65,7 +66,7 @@ export function calendarDateFile(event, appURL, now = new Date()) {
     `DTSTART;VALUE=DATE:${bounds.start}`,
     `DTEND;VALUE=DATE:${bounds.end}`,
     `SUMMARY:${escapeText(`${intelligenceRoleLabel(event.role)}: ${title}`)}`,
-    `DESCRIPTION:${escapeText(`Reviewed document date from Suchi.\n${documentURL.href}`)}`,
+    `DESCRIPTION:${escapeText(`${t('calendarExport.reviewedDateDescription')}\n${documentURL.href}`)}`,
     `URL:${documentURL.href}`,
     'CLASS:PRIVATE',
     'TRANSP:TRANSPARENT',

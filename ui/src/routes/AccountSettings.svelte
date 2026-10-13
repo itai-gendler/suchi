@@ -1,5 +1,7 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script>
+  import { t as translate } from '../lib/i18n.svelte.js'
+  import { availableLocales, displayLanguage } from '../lib/locale-options.js'
   import { scopedHash as filingHref } from '../lib/systems.svelte.js'
   import { onDestroy, tick, untrack } from 'svelte'
   import { listTokens, createToken, deleteToken, patchMe, uploadAvatar,
@@ -34,8 +36,8 @@
   const accountToolsAvailable = $derived(!profileOnly && !demoVisitor)
   const emailChangeMode = $derived(session.user?.email_change_mode || 'disabled')
   const signInMethod = $derived(emailChangeMode === 'oidc'
-    ? 'Identity provider'
-    : emailChangeMode === 'password' ? 'Password' : 'Managed account')
+    ? translate('accountSettings.identityProvider')
+    : emailChangeMode === 'password' ? translate('accountSettings.password') : translate('accountSettings.managedAccount'))
 
   function isOwnMobileToken(token) {
     return token.source === 'mobile_pairing' && token.user_id === session.user?.user_id
@@ -43,7 +45,7 @@
   const mobileTokens = $derived(tokens.filter(isOwnMobileToken))
   const apiTokens = $derived(tokens.filter(token => !isOwnMobileToken(token)))
 
-  let profile = $state({ display_name: session.user?.display_name || '' })
+  let profile = $state({ display_name: session.user?.display_name || '', locale: session.user?.locale || '' })
   let profileBusy = $state(false)
   let avatarInput = $state()
   let emailDialogOpen = $state(false)
@@ -58,26 +60,26 @@
     emailDialogOpen = false
     await refreshSession()
     await tick()
-    notifyResult?.('Sign-in email changed')
+    notifyResult?.(translate('accountSettings.signInEmailChanged'))
   }
   async function saveProfile() {
     if (demoVisitor) return
     const notifyResult = notify
     profileBusy = true
     try {
-      await patchMe({ display_name: profile.display_name.trim() })
+      await patchMe({ display_name: profile.display_name.trim(), locale: profile.locale })
       await refreshSession()
-      notifyResult?.('Profile saved')
+      notifyResult?.(translate('accountSettings.profileSaved'))
     } catch (ex) {
-      notifyResult?.(ex.message || 'Could not save the profile')
+      notifyResult?.(ex.message || translate('accountSettings.couldNotSaveTheProfile'))
     } finally { if (!disposed) profileBusy = false }
   }
   async function sendAvatar(file) {
     if (!file || demoVisitor) return
     const notifyResult = notify
-    try { await uploadAvatar(file); await refreshSession(); notifyResult?.('Avatar updated') }
+    try { await uploadAvatar(file); await refreshSession(); notifyResult?.(translate("accountSettings.avatarUpdated")) }
     catch (ex) {
-      notifyResult?.(ex.message || 'Could not upload the avatar')
+      notifyResult?.(ex.message || translate("accountSettings.couldNotUploadTheAvatar"))
     }
   }
 
@@ -98,7 +100,7 @@
       err = ''
     } catch (ex) {
       if (!disposed && generation === loadGeneration && session.user === user && !controller.signal.aborted) {
-        err = ex.message || 'Could not load connected apps and API tokens.'
+        err = ex.message || translate("accountSettings.couldNotLoadConnectedAppsAndApiTokens")
       }
     } finally {
       if (generation === loadGeneration) {
@@ -144,7 +146,7 @@
     try {
       const res = await listDecryptionPasswords()
       vault = res?.results || res || []
-    } catch (ex) { vaultErr = ex.message || 'Could not load the vault.' }
+    } catch (ex) { vaultErr = ex.message || translate("accountSettings.couldNotLoadTheVault") }
   }
   async function renameVault(v, next) {
     const trimmed = (next || '').trim()
@@ -153,8 +155,8 @@
       await renameDecryptionPassword(v.id, trimmed)
       v.label = trimmed
       vault = vault
-      notify?.('Label updated')
-    } catch (ex) { notify?.(ex.message || 'Could not rename') }
+      notify?.(translate("accountSettings.labelUpdated"))
+    } catch (ex) { notify?.(ex.message || translate("accountSettings.couldNotRename")) }
   }
   function removeVault(entry) {
     if (destructiveBusy || destructiveRequest) return
@@ -165,7 +167,7 @@
     e.preventDefault()
     const name = newName.trim()
     if (!name) {
-      notify?.('Give the token a name')
+      notify?.(translate("accountSettings.giveTheTokenAName"))
       return
     }
     try {
@@ -175,9 +177,9 @@
       const res = await createToken({ name, scopes })
       minted = res?.token || ''
       newName = ''
-      notify?.('Token created — copy it now, it is shown once')
+      notify?.(translate("accountSettings.tokenCreatedCopyItNowItIsShown"))
       load()
-    } catch (ex) { notify?.(ex.message || 'Could not create a token') }
+    } catch (ex) { notify?.(ex.message || translate("accountSettings.couldNotCreateAToken")) }
   }
 
   function revoke(token) {
@@ -189,19 +191,19 @@
     const request = destructiveRequest
     if (!request) return null
     if (request.kind === 'vault') return {
-      title: `Delete${request.item.label ? ` “${request.item.label}”` : ' saved password'}?`,
-      message: 'Documents already unlocked stay unlocked. Future uploads with the same password will not decrypt automatically.',
-      confirmLabel: 'Delete saved password',
-      busyLabel: 'Deleting…',
+      title: request.item.label ? translate("accountSettings.deleteNamedPassword", { name: request.item.label }) : translate("accountSettings.deleteSavedPassword"),
+      message: translate("accountSettings.documentsAlreadyUnlockedStayUnlockedFutureUploadsWith"),
+      confirmLabel: translate("common.delete"),
+      busyLabel: translate("accountSettings.deleting"),
     }
     const connected = isOwnMobileToken(request.item)
     return {
-      title: `${connected ? 'Disconnect' : 'Revoke'} “${request.item.name}”?`,
+      title: translate(connected ? "accountSettings.disconnectNamed" : "accountSettings.revokeNamed", { name: request.item.name }),
       message: connected
-        ? 'This mobile app will lose access immediately.'
-        : 'Anything using this token will lose access immediately.',
-      confirmLabel: connected ? 'Disconnect app' : 'Revoke token',
-      busyLabel: connected ? 'Disconnecting…' : 'Revoking…',
+        ? translate("accountSettings.thisMobileAppWillLoseAccessImmediately")
+        : translate("accountSettings.anythingUsingThisTokenWillLoseAccessImmediately"),
+      confirmLabel: connected ? translate("accountSettings.disconnectApp") : translate("accountSettings.revokeToken"),
+      busyLabel: connected ? translate("accountSettings.disconnecting") : translate("accountSettings.revoking"),
     }
   })
 
@@ -216,19 +218,18 @@
     try {
       if (request.kind === 'vault') {
         await deleteDecryptionPassword(request.item.id)
-        if (disposed || session.user !== request.user) return
         vault = vault.filter(entry => entry.id !== request.item.id)
-        notify?.('Vault entry removed')
+        notify?.(translate("accountSettings.vaultEntryRemoved"))
       } else {
         await deleteToken(request.item.id)
         if (disposed || session.user !== request.user) return
         tokens = tokens.filter(token => token.id !== request.item.id)
-        notify?.(isOwnMobileToken(request.item) ? 'Mobile app disconnected' : 'Token revoked')
+        notify?.(isOwnMobileToken(request.item) ? translate("accountSettings.mobileAppDisconnected") : translate("accountSettings.tokenRevoked"))
         void load()
       }
     } catch (ex) {
       if (!disposed && session.user === request.user) {
-        notify?.(ex.message || (request.kind === 'vault' ? 'Could not remove' : 'Could not revoke'))
+        notify?.(ex.message || (request.kind === 'vault' ? translate("accountSettings.couldNotRemove") : translate("accountSettings.couldNotRevoke")))
       }
     } finally {
       if (!disposed && request.kind === 'token') {
@@ -241,9 +242,9 @@
 
   function tokenAccessLabel(scopes) {
     const values = (scopes || '').split(',').map(value => value.trim()).filter(Boolean).sort()
-    if (values.length === 1 && values[0] === 'documents:read') return 'Read only'
-    if (values.length === 2 && values[0] === 'documents:read' && values[1] === 'documents:write') return 'Read & write'
-    return 'Custom'
+    if (values.length === 1 && values[0] === 'documents:read') return translate("accountSettings.readOnly")
+    if (values.length === 2 && values[0] === 'documents:read' && values[1] === 'documents:write') return translate("accountSettings.readWrite")
+    return translate("accountSettings.custom")
   }
 
   // Administrators manage every mailbox in Archive configuration. Members
@@ -266,10 +267,10 @@
           {#if t.system_code}<span class="pill">{t.system_code}</span>{/if}
           <span class="pill" title={t.scopes}>{tokenAccessLabel(t.scopes)}</span>
           <span class="row-date">
-            <span>{connected ? 'Connected' : 'Created'} {t.created_at ? fmtDate(t.created_at) : '—'}</span>
-            {#if connected}<span>{t.last_used_at ? 'Last used ' + fmtDate(t.last_used_at) : 'Not used yet'}</span>{/if}
+            <span>{connected ? translate("accountSettings.connected") : translate("accountSettings.created")} {t.created_at ? fmtDate(t.created_at) : '—'}</span>
+            {#if connected}<span>{t.last_used_at ? translate("accountSettings.lastUsed") + fmtDate(t.last_used_at) : translate("accountSettings.notUsedYet")}</span>{/if}
           </span>
-          <button class="act-quiet" disabled={revoking.includes(t.id) || destructiveBusy || !!destructiveRequest} onclick={() => revoke(t)}>Revoke</button>
+          <button class="act-quiet" disabled={revoking.includes(t.id) || destructiveBusy || !!destructiveRequest} onclick={() => revoke(t)}>{translate("accountSettings.revoke")}</button>
         </div>
       {/each}
     </div>
@@ -280,10 +281,10 @@
 
   <section class="settings-section" aria-labelledby="profile-heading">
     <div class="section-heading">
-      <h2 id="profile-heading">Profile</h2>
+      <h2 id="profile-heading">{translate("accountSettings.profile")}</h2>
       <div class="profile-meta">
         <span class="pill">{session.user?.role}</span>
-        <span>Sign-in: {signInMethod}</span>
+        <span>{translate("accountSettings.signInValue", { "signInMethod": signInMethod })}</span>
       </div>
     </div>
     <div class="profile-layout">
@@ -292,41 +293,51 @@
           {#if session.user?.avatar_url}<img src={session.user.avatar_url} alt="" />{:else}{(profile.display_name || session.user?.email || '?').split(/[\s@._-]+/).filter(Boolean).slice(0,2).map(w=>w[0].toUpperCase()).join('')}{/if}
         </span>
         {#if !demoVisitor}
-          <button class="act-link" onclick={() => avatarInput.click()}>Change photo</button>
+          <button class="act-link" onclick={() => avatarInput.click()}>{translate("accountSettings.changePhoto")}</button>
           <input bind:this={avatarInput} type="file" accept="image/png,image/jpeg" hidden onchange={(e) => sendAvatar(e.target.files[0])} />
         {/if}
       </div>
       <div class="profile-fields">
         <div class="field">
-          <label for="p-name">Display name</label>
+          <label for="p-name">{translate("accountSettings.displayName")}</label>
           <input id="p-name" class="input" bind:value={profile.display_name} readonly={demoVisitor} />
-          {#if demoVisitor}<span class="sub">Demo profiles are read-only.</span>{/if}
+          {#if demoVisitor}<span class="sub">{translate("accountSettings.demoProfilesAreReadOnly")}</span>{/if}
         </div>
         <div class="field">
-          <label for="p-email">Email</label>
+          <label for="p-email">{translate("accountSettings.email")}</label>
           <input id="p-email" class="input" type="email" value={session.user?.email || ''} readonly />
           {#if emailChangeMode === 'password'}
             <div class="help-row">
-              <span class="sub">This address is your sign-in identifier.</span>
+              <span class="sub">{translate("accountSettings.thisAddressIsYourSignInIdentifier")}</span>
               <button class="act-link email-change-action" type="button" bind:this={emailChangeButton}
-                      onclick={() => (emailDialogOpen = true)}>Change email</button>
+                      onclick={() => (emailDialogOpen = true)}>{translate("accountSettings.changeEmail")}</button>
             </div>
           {:else if emailChangeMode === 'oidc'}
             <div class="help-row">
-              <span class="sub">Your identity provider manages this address. Reauthenticate to check for an updated email.</span>
+              <span class="sub">{translate("accountSettings.yourIdentityProviderManagesThisAddressReauthenticate")}</span>
               <form method="post" action="/oidc/email-change" class="oidc-sync-form">
-                <button class="act-link" type="submit">Sync from identity provider</button>
+                <button class="act-link" type="submit">{translate("accountSettings.syncFromIdentityProvider")}</button>
               </form>
             </div>
           {:else}
-            <span class="sub">Sign-in email changes are not available for this account.</span>
+            <span class="sub">{translate("accountSettings.signInEmailChangesAreNotAvailable")}</span>
           {/if}
+        </div>
+        <div class="field">
+          <label for="p-language">{translate('language.label')}</label>
+          <select id="p-language" class="input" bind:value={profile.locale} disabled={demoVisitor}>
+            <option value="">{translate('language.automatic')}</option>
+            {#each availableLocales() as locale}
+              <option value={locale}>{displayLanguage(locale)}</option>
+            {/each}
+          </select>
+          <span class="sub">{translate('language.help')}</span>
         </div>
       </div>
     </div>
     {#if !demoVisitor}
       <div class="card-foot">
-        <button class="btn primary sm" disabled={profileBusy} onclick={saveProfile}>Save profile</button>
+        <button class="btn primary sm" disabled={profileBusy} onclick={saveProfile}>{translate("accountSettings.saveProfile")}</button>
       </div>
     {/if}
   </section>
@@ -341,17 +352,17 @@
     <section class="settings-section" aria-labelledby="mobile-heading">
       <div class="section-heading">
         <div>
-          <h2 id="mobile-heading">Mobile app</h2>
-          <p>Connect the Suchi app to this archive using a short-lived QR code.</p>
+          <h2 id="mobile-heading">{translate("accountSettings.mobileApp")}</h2>
+          <p>{translate("accountSettings.connectTheSuchiAppToThisArchive")}</p>
         </div>
-        <button class="btn sm" onclick={() => pairingOpen = true}>Pair mobile app</button>
+        <button class="btn sm" onclick={() => pairingOpen = true}>{translate("accountSettings.pairMobileApp")}</button>
       </div>
       {#if err}
-        <div class="err" role="alert">{err} <button class="btn sm" onclick={() => void load()}>Retry</button></div>
+        <div class="err" role="alert">{err} <button class="btn sm" onclick={() => void load()}>{translate("common.retry")}</button></div>
       {:else if tokensLoading && !tokens.length}
-        <p class="empty-setting" role="status">Loading connected apps…</p>
+        <p class="empty-setting" role="status">{translate("accountSettings.loadingConnectedApps")}</p>
       {/if}
-      {@render tokenRows(mobileTokens, 'No connected mobile apps. Pair the app to add one here.', true)}
+      {@render tokenRows(mobileTokens, translate("accountSettings.noConnectedMobileAppsPairTheAppTo"), true)}
     </section>
   {#if pairingOpen}
     <Lazy load={loadMobilePairing} props={{ notify, onClose: () => { pairingOpen = false; load() } }} />
@@ -360,50 +371,50 @@
   <section class="settings-section" aria-labelledby="tokens-heading">
     <div class="section-heading">
       <div>
-        <h2 id="tokens-heading">API tokens</h2>
-        <p>Named access for mobile apps, scripts, and <code>suchi mcp</code>.</p>
+        <h2 id="tokens-heading">{translate("accountSettings.apiTokens")}</h2>
+        <p>{translate("accountSettings.namedAccessForMobileAppsScriptsAnd")} <code>{translate("accountSettings.suchiMcp")}</code>.</p>
       </div>
       <div class="auth-syntax">
-        <span>Request header</span>
-        <code>Authorization: Token &lt;token&gt;</code>
+        <span>{translate("accountSettings.requestHeader")}</span>
+        <code>{translate("accountSettings.authorizationTokenToken")}</code>
       </div>
     </div>
     {#if err}<div class="err">{err}</div>{/if}
     {#if minted}
       <div class="minted-token">
-        <label for="minted">New token — copy it now, it is not shown again</label>
+        <label for="minted">{translate("accountSettings.newTokenCopyItNowItIs")}</label>
         <div>
           <input id="minted" class="input mono" readonly value={minted} />
-          <button class="btn sm" type="button" onclick={() => { navigator.clipboard?.writeText(minted); notify?.('Token copied') }}>Copy</button>
+          <button class="btn sm" type="button" onclick={() => { navigator.clipboard?.writeText(minted); notify?.(translate("accountSettings.tokenCopied")) }}>{translate("accountSettings.copy")}</button>
         </div>
       </div>
     {/if}
     <form class="token-form" onsubmit={mint}>
       <div class="field">
-        <label for="token-name">Token name</label>
-        <input id="token-name" class="input" placeholder="e.g. phone or archive-script"
+        <label for="token-name">{translate("accountSettings.tokenName")}</label>
+        <input id="token-name" class="input" placeholder={translate("accountSettings.eGPhoneOrArchiveScript")}
                maxlength="64" required bind:value={newName} />
       </div>
       <div class="field">
-        <span class="field-label">Access</span>
-        <span class="seg token-access" aria-label="Token access">
+        <span class="field-label">{translate("accountSettings.access")}</span>
+        <span class="seg token-access" aria-label={translate("accountSettings.tokenAccess")}>
           <button type="button" class:on={tokenAccess === 'read'} aria-pressed={tokenAccess === 'read'}
-                  onclick={() => tokenAccess = 'read'}>Read only</button>
+                  onclick={() => tokenAccess = 'read'}>{translate("accountSettings.readOnly")}</button>
           <button type="button" class:on={tokenAccess === 'write'} aria-pressed={tokenAccess === 'write'}
-                  onclick={() => tokenAccess = 'write'}>Read &amp; write</button>
+                  onclick={() => tokenAccess = 'write'}>{translate("accountSettings.readWrite")}</button>
         </span>
       </div>
-      <button class="btn primary token-create"><Icon name="plus" size={13} /> Create token</button>
+      <button class="btn primary token-create"><Icon name="plus" size={13} /> {translate("accountSettings.createToken")}</button>
     </form>
-    {@render tokenRows(apiTokens, 'No API tokens.', false)}
+    {@render tokenRows(apiTokens, translate("accountSettings.noApiTokens"), false)}
   </section>
 
   {#if mailboxesVisible}
     <section class="settings-section" aria-labelledby="mailboxes-heading">
       <div class="section-heading">
         <div>
-          <h2 id="mailboxes-heading">Mailboxes</h2>
-          <p>Connected inboxes and their latest sync status.</p>
+          <h2 id="mailboxes-heading">{translate("accountSettings.mailboxes")}</h2>
+          <p>{translate("accountSettings.connectedInboxesAndTheirLatestSyncStatus")}</p>
         </div>
       </div>
         <div class="card-body"><Lazy load={loadMailboxes} props={{ notify, viewerRole: session.user?.role }} /></div>
@@ -413,8 +424,8 @@
   <section class="settings-section" aria-labelledby="passwords-heading">
       <div class="section-heading">
         <div>
-          <h2 id="passwords-heading">Saved decryption passwords</h2>
-          <p>Encrypted passwords reused when matching protected documents arrive.</p>
+          <h2 id="passwords-heading">{translate("accountSettings.savedDecryptionPasswords")}</h2>
+          <p>{translate("accountSettings.encryptedPasswordsReusedWhenMatchingProtectedDocuments")}</p>
         </div>
       </div>
       {#if vaultErr}<div class="err">{vaultErr}</div>{/if}
@@ -424,27 +435,27 @@
             <div class="vault-row">
               <span class="row-ico"><Icon name="lock" size={15} /></span>
               <input class="inline-edit vault-label" value={v.label || ''}
-                     placeholder="unlabeled"
-                     title={v.label || 'Unlabeled saved password'}
+                     placeholder={translate("accountSettings.unlabeled")}
+                     title={v.label || translate("accountSettings.unlabeledSavedPassword")}
                      onblur={(e) => renameVault(v, e.target.value)}
                      onkeydown={(e) => { if (e.key === 'Enter') e.target.blur() }}
-                     aria-label="Saved password label" />
+                     aria-label={translate("accountSettings.savedPasswordLabel")} />
               <div class="vault-use">
-                <span>{v.last_used_at ? `Last used ${fmtDate(v.last_used_at)}` : 'Not used yet'}</span>
+                <span>{v.last_used_at ? translate("accountSettings.lastUsedValue", { "last_used_at": fmtDate(v.last_used_at) }) : translate("accountSettings.notUsedYet")}</span>
                 {#if v.last_used_doc_id}
                   {#if v.last_used_doc_title}
                     <a href={filingHref(`#/doc/${v.last_used_doc_id}`)} title={v.last_used_doc_title}>{v.last_used_doc_title}</a>
                   {:else}
-                    <button class="linkish" onclick={() => notify?.('That document is no longer available')}>(no longer available)</button>
+                    <button class="linkish" onclick={() => notify?.(translate("accountSettings.thatDocumentIsNoLongerAvailable"))}>{translate("accountSettings.noLongerAvailable")}</button>
                   {/if}
                 {/if}
               </div>
-              <button class="act-quiet" disabled={destructiveBusy || !!destructiveRequest} onclick={() => removeVault(v)} title="Delete saved password" aria-label="Delete saved password">Remove</button>
+              <button class="act-quiet" disabled={destructiveBusy || !!destructiveRequest} onclick={() => removeVault(v)} title={translate("accountSettings.deleteSavedPassword")} aria-label={translate("accountSettings.deleteSavedPassword")}>{translate("accountSettings.remove")}</button>
             </div>
           {/each}
         </div>
       {:else}
-        <p class="empty-setting">No saved passwords. Unlock a protected document from Inbox to save one.</p>
+        <p class="empty-setting">{translate("accountSettings.noSavedPasswordsUnlockAProtectedDocument")}</p>
       {/if}
   </section>
   {/if}

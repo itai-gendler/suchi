@@ -1,5 +1,7 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script>
+  import { t as translate } from '../lib/i18n.svelte.js'
+  import { formatDate, plural } from '../lib/format.js'
   import { scopedHash as filingHref } from '../lib/systems.svelte.js'
   import { onDestroy } from 'svelte'
   import { listIntelligence, listSavedViews } from '../lib/api.js'
@@ -42,14 +44,14 @@
   const rangeEnd = $derived(addDays(rangeStart, rangeDays - 1))
   const rangeLabel = $derived(rollingRange
     ? formatRangeLabel(rangeStart, rangeEnd)
-    : calendarMonth.toLocaleDateString(undefined, { month: 'long', year: 'numeric' }))
+    : formatDate(calendarMonth, { month: 'long', year: 'numeric' }))
   const defaultCalendar = $derived(!rollingRange && sameMonth(calendarMonth, currentMonth))
-  const currentMonthLabel = currentMonth.toLocaleDateString(undefined, { month: 'long' })
+  const currentMonthLabel = $derived(formatDate(currentMonth, { month: 'long' }))
   const documentCount = $derived(new Set(documentIDs.split(',').filter(Boolean)).size)
   const calendarDays = $derived(buildRollingCalendarDays(rangeStart, rangeDays))
   const eventMap = $derived(groupCalendarEvents(events))
-  const prevAccepted = event => dateOriginLabel(event).startsWith('Previously')
-  const reviewedDate = event => dateOriginLabel(event) === 'Reviewed'
+  const prevAccepted = event => dateOrigin(event) === 'previously-accepted'
+  const reviewedDate = event => dateOrigin(event) === 'reviewed'
   const agendaGroups = $derived.by(() => {
     const groups = []
     const groupsByKey = new Map()
@@ -118,7 +120,7 @@
   function formatRangeLabel(start, end) {
     const sameYear = start.getFullYear() === end.getFullYear()
     const startOptions = { month: 'short', day: 'numeric', ...(sameYear ? {} : { year: 'numeric' }) }
-    return `${start.toLocaleDateString(undefined, startOptions)} – ${end.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}`
+    return translate("calendar.valueValue", { "startOptions": formatDate(start, startOptions), "numeric": formatDate(end, { month: 'short', day: 'numeric', year: 'numeric' }) })
   }
 
   function calendarHref({
@@ -167,11 +169,19 @@
     })
   }
 
+  function dateOrigin(event) {
+    if (event.extractor === 'demo-corpus') return 'demo'
+    if (event.reviewed_at) return 'reviewed'
+    if (event.status === 'accepted' && !event.reviewed_by && event.policy_version === 'threshold-auto-v1') return 'automatic'
+    return 'previously-accepted'
+  }
+
   function dateOriginLabel(event) {
-    if (event.extractor === 'demo-corpus') return 'Demo example'
-    if (event.reviewed_at) return 'Reviewed'
-    if (event.status === 'accepted' && !event.reviewed_by && event.policy_version === 'threshold-auto-v1') return 'Automatic'
-    return 'Previously accepted'
+    const key = dateOrigin(event)
+    if (key === 'demo') return translate('calendar.demoExample')
+    if (key === 'reviewed') return translate('calendar.reviewed')
+    if (key === 'automatic') return translate('calendar.automatic')
+    return translate('calendar.previouslyAccepted')
   }
 
   function downloadDate(event) {
@@ -185,7 +195,7 @@
       setTimeout(() => URL.revokeObjectURL(url), 10_000)
       link.click()
     } catch (ex) {
-      exportError = ex.message || 'Could not download the calendar event.'
+      exportError = ex.message || translate("calendar.couldNotDownloadTheCalendarEvent")
     }
   }
 
@@ -212,7 +222,7 @@
       eventTotal = response?.count ?? events.length
       if (agendaOnly) pageNumber = Math.min(pageNumber, Math.max(1, Math.ceil(eventTotal / calendarPageSize)))
     } catch (ex) {
-      if (version === loadVersion) error = ex.message || 'Could not load dates.'
+      if (version === loadVersion) error = ex.message || translate("calendar.couldNotLoadDates")
     } finally {
       if (activeController === controller) activeController = undefined
       if (version === loadVersion) loading = false
@@ -275,15 +285,15 @@
 
 <div class="calendar-page">
   <RuleWorkspace class="calendar-panel"
-                 title="Document dates"
-                 description={demo ? 'Read-only examples from the demo documents.' : 'Dates found in your documents. Suggestions awaiting review stay in Approvals.'}
+                 title={translate("calendar.documentDates")}
+                 description={demo ? translate("calendar.readOnlyExamplesFromTheDemoDocuments") : translate("calendar.datesFoundInYourDocumentsSuggestionsAwaitingReview")}
                  headingId="calendar-heading">
     {#snippet actions()}
       {#if !agendaOnly}
-        <nav class="calendar-ranges" aria-label="Calendar range">
-          <a class:active={defaultCalendar} aria-current={defaultCalendar ? 'page' : undefined} aria-label={defaultCalendar ? `${currentMonthLabel}, current calendar month` : `Return to ${currentMonthLabel}`} title={defaultCalendar ? 'Current calendar month' : `Return to ${currentMonthLabel}`} href={filingHref(currentCalendarHref())}>{currentMonthLabel}</a>
-          <a class:active={rollingDays === 30} aria-current={rollingDays === 30 ? 'page' : undefined} href={filingHref(rollingHref(30))}>30 Days</a>
-          <a class:active={rollingDays === 14} aria-current={rollingDays === 14 ? 'page' : undefined} href={filingHref(rollingHref(14))}>2 Weeks</a>
+        <nav class="calendar-ranges" aria-label={translate("calendar.calendarRange")}>
+          <a class:active={defaultCalendar} aria-current={defaultCalendar ? 'page' : undefined} aria-label={defaultCalendar ? translate("calendar.valueCurrentCalendarMonth", { "currentMonthLabel": currentMonthLabel }) : translate("calendar.returnToValue", { "currentMonthLabel": currentMonthLabel })} title={defaultCalendar ? translate("calendar.currentCalendarMonth") : translate("calendar.returnToValue", { "currentMonthLabel": currentMonthLabel })} href={filingHref(currentCalendarHref())}>{currentMonthLabel}</a>
+          <a class:active={rollingDays === 30} aria-current={rollingDays === 30 ? 'page' : undefined} href={filingHref(rollingHref(30))}>{translate("calendar.30Days")}</a>
+          <a class:active={rollingDays === 14} aria-current={rollingDays === 14 ? 'page' : undefined} href={filingHref(rollingHref(14))}>{translate("calendar.2Weeks")}</a>
         </nav>
       {/if}
     {/snippet}
@@ -292,33 +302,33 @@
       <div class="calendar-toolbar" class:agenda-toolbar={agendaOnly}>
         {#if allDates}
           <div class="calendar-scope">
-            <p>{documentIDs ? `Dates from ${documentCount} selected document${documentCount === 1 ? '' : 's'}` : 'Demo document dates'} · All dates</p>
-            <a class="btn sm" href={filingHref(demo ? `#/calendar?month=${monthToken(currentMonth)}` : '#/calendar')}>Open full calendar</a>
+            <p>{translate("calendar.valueAllDates", { dates: documentIDs ? plural("calendar.selectedDocumentDateCount", documentCount) : translate("calendar.demoDocumentDates") })}</p>
+            <a class="btn sm" href={filingHref(demo ? `#/calendar?month=${monthToken(currentMonth)}` : '#/calendar')}>{translate("calendar.openFullCalendar")}</a>
           </div>
         {:else if selectedDay}
           <div class="calendar-scope">
             <p>{formatArchiveDate(selectedDay, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</p>
-            <a class="btn sm" href={filingHref(currentCalendarHref())}>Back to Calendar</a>
+            <a class="btn sm" href={filingHref(currentCalendarHref())}>{translate("calendar.backToCalendar")}</a>
           </div>
         {:else}
-          <nav class="calendar-nav" aria-label="Calendar period">
-            <button class="btn sm" onclick={() => moveRange(-1)} aria-label={rollingRange ? `Previous ${rangeDays} days` : 'Previous month'}><Icon name="left" size={13} /></button>
+          <nav class="calendar-nav" aria-label={translate("calendar.calendarPeriod")}>
+            <button class="btn sm" onclick={() => moveRange(-1)} aria-label={rollingRange ? translate("calendar.previousValueDays", { "rangeDays": rangeDays }) : translate("calendar.previousMonth")}><Icon name="left" size={13} /></button>
             <strong class="range-title">{rangeLabel}</strong>
-            <button class="btn sm" onclick={() => moveRange(1)} aria-label={rollingRange ? `Next ${rangeDays} days` : 'Next month'}><Icon name="chev" size={13} /></button>
+            <button class="btn sm" onclick={() => moveRange(1)} aria-label={rollingRange ? translate("calendar.nextValueDays", { "rangeDays": rangeDays }) : translate("calendar.nextMonth")}><Icon name="chev" size={13} /></button>
           </nav>
         {/if}
         <div class="calendar-filters">
           {#if !allDates}
             <label>
-              <select class="input" aria-label="Document view" onchange={event => go(calendarHref({ viewID: event.currentTarget.value }))} autocomplete="off">
-                <option value="" selected={!selectedViewID}>All documents</option>
+              <select class="input" aria-label={translate("calendar.documentView")} onchange={event => go(calendarHref({ viewID: event.currentTarget.value }))} autocomplete="off">
+                <option value="" selected={!selectedViewID}>{translate("calendar.allDocuments")}</option>
                 {#each views as view (view.id)}<option value={view.id} selected={String(view.id) === selectedViewID}>{view.name}</option>{/each}
               </select>
             </label>
           {/if}
           <label>
-            <select class="input" aria-label="Date role" value={role} onchange={event => go(calendarHref({ dateRole: event.currentTarget.value }))}>
-              <option value="">Every role</option>
+            <select class="input" aria-label={translate("calendar.dateRole")} value={role} onchange={event => go(calendarHref({ dateRole: event.currentTarget.value }))}>
+              <option value="">{translate("calendar.everyRole")}</option>
               {#each DATE_ROLES as value}<option value={value}>{intelligenceRoleLabel(value)}</option>{/each}
             </select>
           </label>
@@ -326,7 +336,7 @@
       </div>
 
       {#if error}
-        <div class="err calendar-error"><span>{error}</span><button class="btn sm" onclick={load}>Retry</button></div>
+        <div class="err calendar-error"><span>{error}</span><button class="btn sm" onclick={load}>{translate("common.retry")}</button></div>
       {/if}
       {#if exportError}<p class="err" role="alert">{exportError}</p>{/if}
 
@@ -334,24 +344,24 @@
     {#if !agendaOnly}
     <section class="month-grid" aria-label={rangeLabel}>
       <div class="weekday-row" aria-hidden="true">
-        {#each ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as day}<span>{day}</span>{/each}
+        {#each [translate("calendar.sun"), translate("calendar.mon"), translate("calendar.tue"), translate("calendar.wed"), translate("calendar.thu"), translate("calendar.fri"), translate("calendar.sat")] as day}<span>{day}</span>{/each}
       </div>
       <div class="day-grid" class:loading>
         {#each calendarDays as day (day.iso)}
           {@const dayEvents = day.inRange ? eventMap.get(day.iso) || [] : []}
           <div class="day" class:outside={!day.inRange} class:today={day.iso === todayISO} class:selected={day.iso === focusedDay} class:has-events={dayEvents.length > 0}>
             {#if day.inRange}
-              <button class="day-number" onclick={() => selectCalendarDay(day)} aria-pressed={day.iso === focusedDay} aria-label={`Show dates for ${formatArchiveDate(day.iso)}`}>{day.date.getDate()}</button>
+              <button class="day-number" onclick={() => selectCalendarDay(day)} aria-pressed={day.iso === focusedDay} aria-label={translate("calendar.showDatesForValue", { "iso": formatArchiveDate(day.iso) })}>{formatDate(day.date, { day: 'numeric' })}</button>
               <div class="day-events">
                 {#each dayEvents.slice(0, 3) as event (event.id)}
-                  <a class:prev={prevAccepted(event)} class:rev={reviewedDate(event)} href={filingHref(`#/doc/${event.document_id}`)} title={`${intelligenceRoleLabel(event.role)} · ${dateOriginLabel(event)} · ${event.document_title}`}>
-                    <span class="day-event-title">{event.document_title || `Document #${event.document_id}`}</span>
+                  <a class:prev={prevAccepted(event)} class:rev={reviewedDate(event)} href={filingHref(`#/doc/${event.document_id}`)} title={translate("calendar.valueValueValue", { "role": intelligenceRoleLabel(event.role), "event": dateOriginLabel(event), "document_title": event.document_title })}>
+                    <span class="day-event-title">{event.document_title || translate("calendar.documentValue", { "document_id": event.document_id })}</span>
                   </a>
                 {/each}
-                {#if dayEvents.length > 3}<button class="day-more" onclick={() => selectCalendarDay(day)}>+{dayEvents.length - 3} more</button>{/if}
+                {#if dayEvents.length > 3}<button class="day-more" onclick={() => selectCalendarDay(day)}>{translate("calendar.valueMore", { "length": dayEvents.length - 3 })}</button>{/if}
               </div>
             {:else}
-              <span class="day-number" aria-hidden="true">{day.date.getDate()}</span>
+              <span class="day-number" aria-hidden="true">{formatDate(day.date, { day: 'numeric' })}</span>
             {/if}
           </div>
         {/each}
@@ -361,49 +371,49 @@
 
     <aside class="agenda" aria-labelledby="agenda-title">
       <header>
-        <b class="agenda-month">{allDates ? 'All dates' : selectedDay ? formatArchiveDate(selectedDay, { day: 'numeric', month: 'long' }) : rangeLabel}</b>
+        <b class="agenda-month">{allDates ? translate("calendar.allDates") : selectedDay ? formatArchiveDate(selectedDay, { day: 'numeric', month: 'long' }) : rangeLabel}</b>
         <h3 id="agenda-title" class="agenda-count">
-          {#if loading}Loading…
-          {:else if error}Unavailable
-          {:else}{events.length}{eventTotal > events.length ? ` of ${eventTotal}` : ''} date{eventTotal === 1 ? '' : 's'}{/if}
+          {#if loading}{translate("common.loading")}
+          {:else if error}{translate("calendar.unavailable")}
+          {:else}{plural("calendar.dateCount", eventTotal)}{/if}
         </h3>
       </header>
-      {#if !agendaOnly && !loading && eventTotal > events.length}<small class="agenda-limit">Showing the first {calendarPageSize}. Narrow the view or date role to see the rest.</small>{/if}
+      {#if !agendaOnly && !loading && eventTotal > events.length}<small class="agenda-limit">{translate("calendar.showingTheFirstValueNarrowTheView", { "calendarPageSize": calendarPageSize })}</small>{/if}
       {#if loading && !events.length}
         {#each Array(4) as _}<div class="agenda-skeleton"><div class="skel"></div><div class="skel"></div></div>{/each}
       {:else if error}
-        <div class="agenda-empty"><Icon name="calendar" size={34} /><b>Dates unavailable</b><span>Retry to load dates for this scope.</span></div>
+        <div class="agenda-empty"><Icon name="calendar" size={34} /><b>{translate("calendar.datesUnavailable")}</b><span>{translate("calendar.retryToLoadDatesForThisScope")}</span></div>
       {:else if !events.length}
-        <div class="agenda-empty"><Icon name="calendar" size={34} /><b>{allDates ? 'No matching dates' : selectedDay ? 'No dates this day' : 'No dates in this range'}</b></div>
+        <div class="agenda-empty"><Icon name="calendar" size={34} /><b>{allDates ? translate("calendar.noMatchingDates") : selectedDay ? translate("calendar.noDatesThisDay") : translate("calendar.noDatesInThisRange")}</b></div>
       {:else}
         <div class="agenda-list" bind:this={agendaList}>
           {#each agendaGroups as group (group.key)}
             <section class="feed-group" class:focused={group.precision === 'day' && group.date === focusedDay} data-feed-date={group.precision === 'day' ? group.date : undefined}>
-              <div class="feed-day"><b>{groupLabel(group)}</b>{#if group.items.length > 1}<span>{group.items.length} dates</span>{/if}</div>
+              <div class="feed-day"><b>{groupLabel(group)}</b>{#if group.items.length > 1}<span>{plural("calendar.dateCount", group.items.length)}</span>{/if}</div>
               {#each group.items as event (event.id)}
                 <article class="agenda-event">
                   <span class="feed-thumb" aria-hidden="true"></span>
                   <div class="agenda-copy">
-                    <a class="agenda-document" href={filingHref(`#/doc/${event.document_id}`)}><b>{event.document_title || `Document #${event.document_id}`}</b><Icon name="chev" size={13} /></a>
+                    <a class="agenda-document" href={filingHref(`#/doc/${event.document_id}`)}><b>{event.document_title || translate("calendar.documentValue", { "document_id": event.document_id })}</b><Icon name="chev" size={13} /></a>
                     <div class="agenda-meta">
                       <strong>{intelligenceRoleLabel(event.role)}</strong>
-                      {#if prevAccepted(event)}<span class="pill-prev">Previously accepted</span>{:else if reviewedDate(event)}<span class="pill-rev">Reviewed</span>{/if}
+                      {#if prevAccepted(event)}<span class="pill-prev">{translate("calendar.previouslyAccepted")}</span>{:else if reviewedDate(event)}<span class="pill-rev">{translate("calendar.reviewed")}</span>{/if}
                       {#if event.extractor === 'demo-corpus'}
-                        <span class="date-origin">Demo example</span>
+                        <span class="date-origin">{translate("calendar.demoExample")}</span>
                       {:else if typeof event.confidence === 'number' || event.evidence_text}
                         <details class="date-details">
-                          <summary class="date-origin">From the document</summary>
+                          <summary class="date-origin">{translate("calendar.fromTheDocument")}</summary>
                           {#if event.evidence_text}<p>“{event.evidence_text}”</p>{/if}
-                          {#if typeof event.confidence === 'number'}<p>Model confidence: {Math.round(event.confidence * 100)}%</p>{/if}
+                          {#if typeof event.confidence === 'number'}<p>{translate("calendar.modelConfidenceValue", { "confidence": Math.round(event.confidence * 100) })}</p>{/if}
                         </details>
                       {/if}
                     </div>
                     {#if agendaOnly}<small>{formatIntelligenceDate(event, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}</small>{/if}
                     {#if canExportCalendarDate(event)}
                       <details class="calendar-export">
-                        <summary>Add to calendar</summary>
-                        <p>The .ics file includes the document title, date, and a private document link. Importing it into a synced calendar shares those details with your calendar provider. The document still requires Suchi access.</p>
-                        <button class="btn sm" onclick={() => downloadDate(event)}><Icon name="download" size={13} />Download .ics</button>
+                        <summary>{translate("calendar.addToCalendar")}</summary>
+                        <p>{translate("calendar.theIcsFileIncludesTheDocumentTitle")}</p>
+                        <button class="btn sm" onclick={() => downloadDate(event)}><Icon name="download" size={13} />{translate("calendar.downloadIcs")}</button>
                       </details>
                     {/if}
                   </div>
@@ -414,10 +424,10 @@
         </div>
       {/if}
       {#if agendaOnly && !loading && !error && eventTotal > calendarPageSize}
-        <nav class="agenda-pages" aria-label="Date pages">
-          <button class="btn sm" disabled={pageNumber === 1} onclick={() => { pageNumber-- }}>Previous</button>
-          <span>Page {pageNumber} of {Math.ceil(eventTotal / calendarPageSize)}</span>
-          <button class="btn sm" disabled={pageNumber * calendarPageSize >= eventTotal} onclick={() => { pageNumber++ }}>Next</button>
+        <nav class="agenda-pages" aria-label={translate("calendar.datePages")}>
+          <button class="btn sm" disabled={pageNumber === 1} onclick={() => { pageNumber-- }}>{translate("calendar.previous")}</button>
+          <span>{translate("calendar.pageValueOfValue", { "pageNumber": pageNumber, "calendarPageSize": Math.ceil(eventTotal / calendarPageSize) })}</span>
+          <button class="btn sm" disabled={pageNumber * calendarPageSize >= eventTotal} onclick={() => { pageNumber++ }}>{translate("calendar.next")}</button>
         </nav>
       {/if}
     </aside>

@@ -2,7 +2,7 @@
 
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { canReviewDate, formatIntelligenceDate, formatIntelligenceValue, groupCalendarEvents, intelligenceDateValue, reviewFailure } from './intelligence.js'
+import { canReviewDate, formatIntelligenceDate, groupCalendarEvents, intelligenceDateValue, reviewFailure } from './intelligence.js'
 
 test('formats dates only to their recorded precision, including storage placeholders', () => {
   const fullDate = { year: 'numeric', month: 'short', day: 'numeric' }
@@ -18,7 +18,6 @@ test('formats dates only to their recorded precision, including storage placehol
     const expected = new Intl.DateTimeFormat(undefined, options).format(dateValue)
     assert.equal(intelligenceDateValue(candidate), date)
     assert.equal(formatIntelligenceDate(candidate), expected)
-    assert.equal(formatIntelligenceValue(candidate), `${expected} · renewal`)
     assert.equal(formatIntelligenceDate(candidate, caption),
       new Intl.DateTimeFormat(undefined, precision === 'month' || precision === 'year' ? options : caption).format(dateValue))
   }

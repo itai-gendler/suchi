@@ -1,5 +1,7 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script>
+  import { t as translate } from '../lib/i18n.svelte.js'
+  import { compareLocalized } from '../lib/format.js'
   import { scopedHash as filingHref } from '../lib/systems.svelte.js'
   import { captureScope, scopeCurrent } from '../lib/systems.svelte.js'
   import { onDestroy, untrack } from 'svelte'
@@ -87,16 +89,16 @@
   onDestroy(() => { disposed = true; loadVersion++ })
 
   const ACCESS_LEVELS = [
-    ['1', 'View'],
-    ['3', 'Edit'],
-    ['7', 'Full control'],
+    ['1', translate("documentDetail.view")],
+    ['3', translate("documentDetail.edit")],
+    ['7', translate("documentDetail.fullControl")],
   ]
 
   const RELATED_TABS = [
-    { id: 'similar', label: 'Similar documents', shortLabel: 'Similar' },
-    { id: 'backlinks', label: 'Linked documents', shortLabel: 'Linked' },
-    { id: 'versions', label: 'Versions', shortLabel: 'Versions' },
-    { id: 'notes', label: 'Notes', shortLabel: 'Notes' },
+    { id: 'similar', label: translate("documentDetail.similarDocuments"), shortLabel: translate("documentDetail.similar") },
+    { id: 'backlinks', label: translate("documentDetail.linkedDocuments"), shortLabel: translate("documentDetail.linked") },
+    { id: 'versions', label: translate("documentDetail.versions"), shortLabel: translate("documentDetail.versions") },
+    { id: 'notes', label: translate("documentDetail.notes"), shortLabel: translate("documentDetail.notes") },
   ]
 
   function relatedTabCount(tab) {
@@ -152,7 +154,7 @@
         is_set: true,
       })
     }
-    return [...fields.values()].sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')))
+    return [...fields.values()].sort((a, b) => compareLocalized(String(a.name || ''), String(b.name || '')))
   })
   const displayedOrdinaryCustomFields = $derived(ordinaryCustomFields.filter(field =>
     field.is_set || customFieldEditors[field.field_id]?.open
@@ -169,7 +171,7 @@
       if (value.data_type !== 'documentlink') continue
       fields.set(Number(value.field_id), { ...(fields.get(Number(value.field_id)) || {}), id: value.field_id, name: value.name })
     }
-    return [...fields.values()].sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')))
+    return [...fields.values()].sort((a, b) => compareLocalized(String(a.name || ''), String(b.name || '')))
   })
   const outgoingDocumentLinkFields = $derived(documentLinkFields.filter(field => documentLinkValue(field.id)?.value))
   const availableDocumentLinkFields = $derived(documentLinkFields.filter(field => !documentLinkValue(field.id)?.value))
@@ -284,7 +286,7 @@
       void loadSimilarDocuments(documentID, version, scope)
       void loadAccess(documentID, version, scope)
     } catch (ex) {
-      if (version === loadVersion && scopeCurrent(scope)) err = ex.message || 'Could not load this document.'
+      if (version === loadVersion && scopeCurrent(scope)) err = ex.message || translate("documentDetail.couldNotLoadThisDocument")
     } finally {
       if (version === loadVersion && scopeCurrent(scope)) loading = false
     }
@@ -300,7 +302,7 @@
     } catch (ex) {
       if (!disposed && version === loadVersion && scopeCurrent(scope)) {
         similar = null
-        similarError = ex.message || 'Could not load similar documents.'
+        similarError = ex.message || translate("documentDetail.couldNotLoadSimilarDocuments")
       }
     } finally {
       if (!disposed && version === loadVersion && scopeCurrent(scope)) similarLoading = false
@@ -324,7 +326,7 @@
       versionsPage = page
     } catch (ex) {
       if (!disposed && version === loadVersion && scopeCurrent(scope)) {
-        versionsError = ex.message || 'Could not load version history.'
+        versionsError = ex.message || translate("documentDetail.couldNotLoadVersionHistory")
       }
     } finally {
       if (!disposed && version === loadVersion && scopeCurrent(scope)) versionsLoading = false
@@ -346,7 +348,7 @@
       backlinksPage = page
     } catch (ex) {
       if (!disposed && version === loadVersion && scopeCurrent(scope)) {
-        backlinksError = ex.message || 'Could not load backlinks.'
+        backlinksError = ex.message || translate("documentDetail.couldNotLoadBacklinks")
       }
     } finally {
       if (!disposed && version === loadVersion && scopeCurrent(scope)) backlinksLoading = false
@@ -362,7 +364,7 @@
       customFieldDefinitions = result?.results || result || []
     } catch (ex) {
       if (!disposed && version === loadVersion && scopeCurrent(scope)) {
-        customFieldsError = ex.message || 'Could not load reference fields.'
+        customFieldsError = ex.message || translate("documentDetail.couldNotLoadReferenceFields")
       }
     } finally {
       if (!disposed && version === loadVersion && scopeCurrent(scope)) customFieldsLoading = false
@@ -380,7 +382,7 @@
       if (version !== loadVersion || !scopeCurrent(scope)) return
       access = null
       canManageAccess = false
-      if (ex.status !== 403) notify?.(ex.message || 'Could not load document access')
+      if (ex.status !== 403) notify?.(ex.message || translate("documentDetail.couldNotLoadDocumentAccess"))
     }
   }
 
@@ -401,16 +403,16 @@
   }
 
   function accessLabel(bits) {
-    return ACCESS_LEVELS.find(([value]) => Number(value) === Number(bits))?.[1] || 'Custom'
+    return ACCESS_LEVELS.find(([value]) => Number(value) === Number(bits))?.[1] || translate("documentDetail.custom")
   }
 
   function sourceLabel(source) {
-    if (source.kind === 'upload') return source.label ? `Uploaded by ${source.label}` : 'Manual upload'
-    if (source.kind === 'api') return source.label ? `API upload by ${source.label}` : 'API upload'
-    if (source.kind === 'mailbox') return source.label || 'Mailbox'
-    if (source.kind === 'watched_folder') return source.label || 'Watched folder'
-    if (source.kind === 'import') return source.label || 'Import'
-    return source.label || 'Unknown origin'
+    if (source.kind === 'upload') return source.label ? translate("documentDetail.uploadedByValue", { "label": source.label }) : translate("documentDetail.manualUpload")
+    if (source.kind === 'api') return source.label ? translate("documentDetail.apiUploadByValue", { "label": source.label }) : translate("documentDetail.apiUpload")
+    if (source.kind === 'mailbox') return source.label || translate("documentDetail.mailbox")
+    if (source.kind === 'watched_folder') return source.label || translate("documentDetail.watchedFolder")
+    if (source.kind === 'import') return source.label || translate("documentDetail.import")
+    return source.label || translate("documentDetail.unknownOrigin")
   }
 
   function sourceDetail(source) {
@@ -438,7 +440,7 @@
 
   function customFieldDisplay(field) {
     if (field.display_value) return field.display_value
-    if (field.data_type === 'bool' && field.is_set) return field.value ? 'Yes' : 'No'
+    if (field.data_type === 'bool' && field.is_set) return field.value ? translate("documentDetail.yes") : translate("documentDetail.no")
     if (field.data_type === 'date' && field.value) return fmtDate(field.value)
     if (field.data_type === 'multi') return Array.isArray(field.value) ? field.value.join(', ') : ''
     return String(field.value ?? '')
@@ -502,10 +504,10 @@
       const next = { ...customFieldEditors }
       delete next[field.field_id]
       customFieldEditors = next
-      notify?.(`${field.name} saved`)
+      notify?.(translate("documentDetail.valueSaved", { "name": field.name }))
     } catch (ex) {
       if (!disposed && version === loadVersion && id === documentID && scopeCurrent(scope)) {
-        updateCustomFieldEditor(field.field_id, { busy: false, error: ex.message || `Could not save ${field.name}.` })
+        updateCustomFieldEditor(field.field_id, { busy: false, error: ex.message || translate("documentDetail.couldNotSaveValue", { "name": field.name }) })
       }
     }
   }
@@ -524,10 +526,10 @@
       const next = { ...customFieldEditors }
       delete next[field.field_id]
       customFieldEditors = next
-      notify?.(`${field.name} cleared`)
+      notify?.(translate("documentDetail.valueCleared", { "name": field.name }))
     } catch (ex) {
       if (!disposed && version === loadVersion && id === documentID && scopeCurrent(scope)) {
-        updateCustomFieldEditor(field.field_id, { busy: false, error: ex.message || `Could not clear ${field.name}.` })
+        updateCustomFieldEditor(field.field_id, { busy: false, error: ex.message || translate("documentDetail.couldNotClearValue", { "name": field.name }) })
       }
     }
   }
@@ -552,14 +554,14 @@
     if (error?.code === 'duplicate_version_blob') {
       const existing = error.data?.existing_id
       return existing
-        ? `These bytes already belong to live document #${existing}. Choose a different file.`
-        : 'These bytes already belong to a live document. Choose a different file.'
+        ? translate("documentDetail.theseBytesAlreadyBelongToLiveDocumentValue", { "existing": existing })
+        : translate("documentDetail.theseBytesAlreadyBelongToALiveDocument")
     }
-    if (error?.status === 413) return 'This file is larger than the configured upload limit.'
-    if (error?.status === 403) return 'You no longer have permission to upload a replacement.'
-    if (error?.status === 404) return 'This version is no longer available for replacement.'
-    if (error?.status === 409) return error.message || 'The document changed before the replacement was saved. Reload and try again.'
-    return error?.message || 'The replacement could not be uploaded. Trying again will not create a duplicate.'
+    if (error?.status === 413) return translate("documentDetail.thisFileIsLargerThanTheConfiguredUpload")
+    if (error?.status === 403) return translate("documentDetail.youNoLongerHavePermissionToUploadA")
+    if (error?.status === 404) return translate("documentDetail.thisVersionIsNoLongerAvailableForReplacement")
+    if (error?.status === 409) return error.message || translate("documentDetail.theDocumentChangedBeforeTheReplacementWasSaved")
+    return error?.message || translate("documentDetail.theReplacementCouldNotBeUploadedTryingAgain")
   }
 
   async function uploadReplacement() {
@@ -575,7 +577,7 @@
       const result = await uploadDocumentVersion(documentID, file, key)
       if (disposed || version !== loadVersion || id !== documentID || !scopeCurrent(scope)) return
       markUploaded(scope)
-      notify?.('Replacement uploaded. File processing continues in the background.')
+      notify?.(translate("documentDetail.replacementUploadedFileProcessingContinuesInTheBackground"))
       go(`#/doc/${result.id}`)
     } catch (ex) {
       if (!disposed && version === loadVersion && id === documentID && scopeCurrent(scope)) {
@@ -649,7 +651,7 @@
       let results
       if (exact?.id) {
         const target = await getDocumentIntrinsic(exact.id)
-        if (target.trashed_at != null) throw new Error('That document is in Trash.')
+        if (target.trashed_at != null) throw new Error(translate("documentDetail.thatDocumentIsInTrash"))
         results = [target]
       } else {
         const result = await listDocuments({ q: query, page_size: 8 })
@@ -660,7 +662,7 @@
         busy: false,
         results,
         selected: results.length === 1 ? results[0] : null,
-        error: results.length ? '' : 'No matching documents found.',
+        error: results.length ? '' : translate("documentDetail.noMatchingDocumentsFound"),
       })
     } catch (ex) {
       if (!disposed && version === loadVersion && id === documentID && scopeCurrent(scope)) {
@@ -668,7 +670,7 @@
           busy: false,
           results: [],
           selected: null,
-          error: ex.message || 'Could not find that document.',
+          error: ex.message || translate("documentDetail.couldNotFindThatDocument"),
         })
       }
     }
@@ -684,11 +686,11 @@
     try {
       await setDocumentCustomField(documentID, field.id, editor.selected.id)
       if (disposed || version !== loadVersion || id !== documentID || !scopeCurrent(scope)) return
-      notify?.(`${field.name} updated`)
+      notify?.(translate("documentDetail.valueUpdated", { "name": field.name }))
       await load(true)
     } catch (ex) {
       if (!disposed && version === loadVersion && id === documentID && scopeCurrent(scope)) {
-        updateReferenceEditor(field.id, { busy: false, error: ex.message || 'Could not update this reference.' })
+        updateReferenceEditor(field.id, { busy: false, error: ex.message || translate("documentDetail.couldNotUpdateThisReference") })
       }
     }
   }
@@ -701,11 +703,11 @@
     try {
       await clearDocumentCustomField(documentID, field.id)
       if (disposed || version !== loadVersion || id !== documentID || !scopeCurrent(scope)) return
-      notify?.(`${field.name} cleared`)
+      notify?.(translate("documentDetail.valueCleared", { "name": field.name }))
       await load(true)
     } catch (ex) {
       if (!disposed && version === loadVersion && id === documentID && scopeCurrent(scope)) {
-        updateReferenceEditor(field.id, { busy: false, error: ex.message || 'Could not clear this reference.' })
+        updateReferenceEditor(field.id, { busy: false, error: ex.message || translate("documentDetail.couldNotClearThisReference") })
       }
     }
   }
@@ -723,8 +725,8 @@
       })
       accessDraft = { principal: '', perm_bits: '1' }
       await loadAccess()
-      notify?.('Access granted')
-    } catch (ex) { notify?.(ex.message || 'Could not grant access') }
+      notify?.(translate("documentDetail.accessGranted"))
+    } catch (ex) { notify?.(ex.message || translate("documentDetail.couldNotGrantAccess")) }
   }
 
   async function changeAccess(grant, bits) {
@@ -735,16 +737,16 @@
         perm_bits: Number(bits),
       })
       grant.perm_bits = Number(bits)
-      notify?.('Access updated')
-    } catch (ex) { notify?.(ex.message || 'Could not update access') }
+      notify?.(translate("documentDetail.accessUpdated"))
+    } catch (ex) { notify?.(ex.message || translate("documentDetail.couldNotUpdateAccess")) }
   }
 
   async function revokeAccess(grant) {
     try {
       await deleteGrant('document', id, grant.principal_kind, grant.principal_id)
       access = { ...access, results: access.results.filter(g => g.id !== grant.id) }
-      notify?.('Access revoked')
-    } catch (ex) { notify?.(ex.message || 'Could not revoke access') }
+      notify?.(translate("documentDetail.accessRevoked"))
+    } catch (ex) { notify?.(ex.message || translate("documentDetail.couldNotRevokeAccess")) }
   }
 
   async function refreshReviewTags(version, documentID) {
@@ -757,7 +759,7 @@
       }
     } catch (ex) {
       if (!disposed && version === loadVersion && refresh === tagRefreshVersion) {
-        notify?.('Saved, but tags could not be refreshed. Reload to see their current state.')
+        notify?.(translate("documentDetail.savedButTagsCouldNotBeRefreshedReload"))
       }
     }
   }
@@ -772,9 +774,9 @@
       if ('languages' in patch) doc.languages_locked = patch.languages !== ''
       await refreshReviewTags(version, id)
       if (disposed || version !== loadVersion) return
-      notify?.(label || 'Saved')
+      notify?.(label || translate("documentDetail.saved"))
     } catch (ex) {
-      if (!disposed && version === loadVersion) notify?.(ex.message || 'Could not save')
+      if (!disposed && version === loadVersion) notify?.(ex.message || translate("documentDetail.couldNotSave"))
     }
   }
 
@@ -786,9 +788,9 @@
       await patchDocument(id, { title_owner: 'auto' })
       if (disposed || version !== loadVersion) return
       doc = { ...doc, title_owner: 'auto' }
-      notify?.('Suchi can rename this title')
+      notify?.(translate("documentDetail.suchiCanRenameThisTitle"))
     } catch (ex) {
-      if (!disposed && version === loadVersion) notify?.(ex.message || 'Could not release title')
+      if (!disposed && version === loadVersion) notify?.(ex.message || translate("documentDetail.couldNotReleaseTitle"))
     } finally {
       if (!disposed && version === loadVersion) titleOwnerBusy = false
     }
@@ -808,7 +810,7 @@
       if (disposed || version !== loadVersion || !scopeCurrent(scope)) return
       tagOptions = options
     } catch (ex) {
-      if (!disposed && version === loadVersion && scopeCurrent(scope)) tagLoadError = ex.message || 'Could not load tags'
+      if (!disposed && version === loadVersion && scopeCurrent(scope)) tagLoadError = ex.message || translate("documentDetail.couldNotLoadTags")
     } finally {
       if (!disposed && version === loadVersion && scopeCurrent(scope)) tagsBusy = false
     }
@@ -826,17 +828,17 @@
       if (disposed || version !== loadVersion || !scopeCurrent(scope)) return false
       const outcome = result?.results?.find(item => item.id === documentID)
       if (!outcome?.ok) {
-        throw new Error(outcome?.code === 'forbidden' ? 'You do not have permission to edit this document.' : 'Could not update tags')
+        throw new Error(outcome?.code === 'forbidden' ? translate("documentDetail.youDoNotHavePermissionToEditThis") : translate("documentDetail.couldNotUpdateTags"))
       }
       doc = { ...doc, tags: method === 'add_tag'
         ? [...new Set([...(doc.tags || []), tag.slug])].sort()
         : (doc.tags || []).filter(slug => slug !== tag.slug) }
       await refreshReviewTags(version, documentID)
       if (disposed || version !== loadVersion || !scopeCurrent(scope)) return false
-      notify?.(method === 'add_tag' ? 'Tag added' : 'Tag removed')
+      notify?.(method === 'add_tag' ? translate("documentDetail.tagAdded") : translate("documentDetail.tagRemoved"))
       return true
     } catch (ex) {
-      if (!disposed && version === loadVersion && scopeCurrent(scope)) tagsError = ex.message || 'Could not update tags'
+      if (!disposed && version === loadVersion && scopeCurrent(scope)) tagsError = ex.message || translate("documentDetail.couldNotUpdateTags")
       return false
     } finally {
       if (!disposed && version === loadVersion && scopeCurrent(scope)) tagsBusy = false
@@ -851,7 +853,7 @@
   function saveLanguages() {
     const trimmed = languagesDraft.trim()
     editingLanguages = false
-    return save({ languages: trimmed }, trimmed ? 'Languages updated' : 'Languages cleared')
+    return save({ languages: trimmed }, trimmed ? translate("documentDetail.languagesUpdated") : translate("documentDetail.languagesCleared"))
   }
 
   async function addNote(event) {
@@ -868,10 +870,10 @@
       if (disposed || version !== loadVersion || id !== documentID || !scopeCurrent(scope)) return
       doc = { ...doc, notes: [...(doc.notes || []), created] }
       noteDraft = ''
-      notify?.('Note added')
+      notify?.(translate("documentDetail.noteAdded"))
     } catch (ex) {
       if (!disposed && version === loadVersion && id === documentID && scopeCurrent(scope)) {
-        noteError = ex.message || 'Could not add this note.'
+        noteError = ex.message || translate("documentDetail.couldNotAddThisNote")
       }
     } finally {
       if (!disposed && version === loadVersion && id === documentID && scopeCurrent(scope)) noteBusy = false
@@ -904,10 +906,10 @@
       }
       noteEditID = null
       noteEditDraft = ''
-      notify?.('Note updated')
+      notify?.(translate("documentDetail.noteUpdated"))
     } catch (ex) {
       if (!disposed && version === loadVersion && id === documentID && scopeCurrent(scope)) {
-        noteError = ex.message || 'Could not update this note.'
+        noteError = ex.message || translate("documentDetail.couldNotUpdateThisNote")
       }
     } finally {
       if (!disposed && version === loadVersion && id === documentID && scopeCurrent(scope)) noteBusy = false
@@ -928,10 +930,10 @@
       doc = { ...doc, notes: (doc.notes || []).filter(item => item.id !== note.id) }
       notePendingDelete = null
       if (noteEditID === note.id) noteEditID = null
-      notify?.('Note deleted')
+      notify?.(translate("documentDetail.noteDeleted"))
     } catch (ex) {
       if (!disposed && version === loadVersion && id === documentID && scopeCurrent(scope)) {
-        noteError = ex.message || 'Could not delete this note.'
+        noteError = ex.message || translate("documentDetail.couldNotDeleteThisNote")
         notePendingDelete = null
       }
     } finally {
@@ -958,11 +960,11 @@
   const publicShareAvailable = $derived(!!session.user?.public_share_available)
   const shareIdentity = $derived.by(() => {
     const name = session.user?.display_name?.trim() || ''
-    if (sh.visibility === 'public') return name ? `Shared by ${name}` : 'Shared document'
+    if (sh.visibility === 'public') return name ? translate("documentDetail.sharedByValue", { "name": name }) : translate("documentDetail.sharedDocument")
     const host = session.user?.instance_host?.trim() || location.host
-    if (name && host) return `Shared by ${name} · ${host}`
-    if (name) return `Shared by ${name}`
-    return `Shared from ${host}`
+    if (name && host) return translate("documentDetail.sharedByValueValue", { "name": name, "host": host })
+    if (name) return translate("documentDetail.sharedByValue", { "name": name })
+    return translate("documentDetail.sharedFromValue", { "host": host })
   })
 
   function shareLinkURL(link) {
@@ -970,7 +972,7 @@
   }
 
   function shareExpiry(link) {
-    return link.expires_at ? `Expires ${fmtDate(link.expires_at)}` : 'No expiry'
+    return link.expires_at ? translate("documentDetail.expiresValue", { "expires_at": fmtDate(link.expires_at) }) : translate("documentDetail.noExpiry")
   }
 
   function closeShare() {
@@ -995,7 +997,7 @@
     } catch (ex) {
       if (!disposed && shareOpen && session.user === user && id === documentID && version === shareLoadVersion) {
         shareLinks = []
-        shareError = ex.message || 'Could not load active links.'
+        shareError = ex.message || translate("documentDetail.couldNotLoadActiveLinks")
       }
     } finally {
       if (!disposed && session.user === user && id === documentID && version === shareLoadVersion) shareLoading = false
@@ -1044,7 +1046,7 @@
     } catch (ex) {
       if (!disposed && shareOpen && session.user === user && id === documentID &&
           version === shareLoadVersion && request === shareHistoryRequest) {
-        shareError = ex.message || 'Could not load link history.'
+        shareError = ex.message || translate("documentDetail.couldNotLoadLinkHistory")
       }
     } finally {
       if (!disposed && version === shareLoadVersion && request === shareHistoryRequest) shareHistoryLoading = false
@@ -1074,7 +1076,7 @@
       await copyShareLink()
     } catch (ex) {
       if (!disposed && shareOpen && session.user === user && id === documentID && version === shareLoadVersion) {
-        notify?.(ex.message || 'Could not create the link')
+        notify?.(ex.message || translate("documentDetail.couldNotCreateTheLink"))
       }
     } finally {
       if (!disposed && session.user === user && id === documentID && version === shareLoadVersion) shareBusy = false
@@ -1087,7 +1089,7 @@
     const url = shareURL
     const copied = await copyText(url)
     if (disposed || session.user !== user || id !== documentID || shareURL !== url) return
-    notify?.(copied ? 'Share link copied' : 'Share link ready. Select the link and copy it manually.')
+    notify?.(copied ? translate("documentDetail.shareLinkCopied") : translate("documentDetail.shareLinkReadySelectTheLinkAndCopy"))
   }
 
   async function copyExistingShare(link) {
@@ -1096,7 +1098,7 @@
     const url = shareLinkURL(link)
     const copied = await copyText(url)
     if (disposed || session.user !== user || id !== documentID) return
-    notify?.(copied ? 'Share link copied' : 'Share link ready. Select the link and copy it manually.')
+    notify?.(copied ? translate("documentDetail.shareLinkCopied") : translate("documentDetail.shareLinkReadySelectTheLinkAndCopy"))
   }
 
   async function copyExtractedText() {
@@ -1106,7 +1108,7 @@
     const copied = await copyText(doc.content)
     if (disposed || !scopeCurrent(scope) || id !== documentID || blurred) return
     textCopyFallback = !copied
-    textCopyStatus = copied ? 'Text copied' : 'Select the text below and copy it manually.'
+    textCopyStatus = copied ? translate("documentDetail.textCopied") : translate("documentDetail.selectTheTextBelowAndCopyItManually")
   }
 
   async function revokeShare() {
@@ -1125,10 +1127,10 @@
       shareHistoryOpen = false
       shareHistoryLoaded = false
       await loadActiveShares(user, documentID, version)
-      notify?.('Link revoked')
+      notify?.(translate("documentDetail.linkRevoked"))
     } catch (ex) {
       if (!disposed && shareOpen && session.user === user && id === documentID && version === shareLoadVersion) {
-        notify?.(ex.message || 'Could not revoke')
+        notify?.(ex.message || translate("documentDetail.couldNotRevoke"))
       }
     } finally {
       if (!disposed && version === shareLoadVersion) shareRevokeBusy = false
@@ -1142,10 +1144,10 @@
       await deleteDocument(id)
       if (disposed || version !== loadVersion) return
       trashOpen = false
-      notify?.('Moved to trash')
+      notify?.(translate("documentDetail.movedToTrash"))
       go('#/documents')
     } catch (ex) {
-      if (!disposed && version === loadVersion) notify?.(ex.message || 'Could not delete')
+      if (!disposed && version === loadVersion) notify?.(ex.message || translate("documentDetail.couldNotDelete"))
     } finally {
       if (!disposed && version === loadVersion) trashBusy = false
     }
@@ -1157,10 +1159,10 @@
     try {
       await restoreDocument(id)
       if (disposed || version !== loadVersion) return
-      notify?.('Restored')
+      notify?.(translate("documentDetail.restored"))
       await load()
     } catch (ex) {
-      if (!disposed && version === loadVersion) notify?.(ex.message || 'Could not restore')
+      if (!disposed && version === loadVersion) notify?.(ex.message || translate("documentDetail.couldNotRestore"))
     } finally {
       if (!disposed && version === loadVersion) recoveryBusy = false
     }
@@ -1173,10 +1175,10 @@
       await permanentlyDeleteDocument(id)
       if (disposed || version !== loadVersion) return
       deleteOpen = false
-      notify?.('Permanently deleted')
+      notify?.(translate("documentDetail.permanentlyDeleted"))
       go('#/trash')
     } catch (ex) {
-      if (!disposed && version === loadVersion) notify?.(ex.message || 'Could not permanently delete')
+      if (!disposed && version === loadVersion) notify?.(ex.message || translate("documentDetail.couldNotPermanentlyDelete"))
     } finally {
       if (!disposed && version === loadVersion) recoveryBusy = false
     }
@@ -1187,7 +1189,7 @@
     const address = doc?.jd_address
     if (!address) return
     const copied = await copyText(address)
-    if (!disposed && scopeCurrent(scope)) notify?.(copied ? 'Filing address copied' : 'Select the filing address and copy it manually.')
+    if (!disposed && scopeCurrent(scope)) notify?.(copied ? translate("documentDetail.filingAddressCopied") : translate("documentDetail.selectTheFilingAddressAndCopyItManually"))
   }
   $effect(() => {
     if (id === loadedID) return
@@ -1198,11 +1200,11 @@
 
 {#snippet referenceSearch(field, editor, adding = false)}
   <form class="reference-editor" onsubmit={(event) => { event.preventDefault(); findReferenceTargets(field) }}>
-    <input class="input" aria-label={`${field.name} document`}
-           placeholder="Search title, exact ID, or this archive's document URL"
+    <input class="input" aria-label={translate("documentDetail.valueDocument", { "name": field.name })}
+           placeholder={translate("documentDetail.searchTitleExactIdOrThisArchive")}
            value={editor.query}
            oninput={(event) => updateReferenceEditor(field.id, { query: event.currentTarget.value, results: [], selected: null, error: '' })} />
-    <button class="btn sm" disabled={editor.busy || !editor.query.trim()}>{editor.busy ? 'Searching…' : 'Search'}</button>
+    <button class="btn sm" disabled={editor.busy || !editor.query.trim()}>{editor.busy ? translate("documentDetail.searching") : translate("documentDetail.search")}</button>
   </form>
   {#if editor.error}<p class="err" role="alert">{editor.error}</p>{/if}
   {#if editor.results.length}
@@ -1210,57 +1212,57 @@
       {#each editor.results as target (target.id)}
         <button class="reference-choice" class:selected={Number(editor.selected?.id) === Number(target.id)}
                 type="button" onclick={() => updateReferenceEditor(field.id, { selected: target, error: '' })}>
-          <span>{target.title || `Document #${target.id}`}</span>
-          <small>{target.jd_address || `#${target.id}`}{target.system_code ? ` · ${target.system_code}` : ''}</small>
+          <span>{target.title || translate("documentDetail.documentValue", { "id": target.id })}</span>
+          <small>{target.jd_address || `#${target.id}`}{target.system_code ? translate("documentDetail.value", { "system_code": target.system_code }) : ''}</small>
         </button>
       {/each}
     </div>
   {/if}
   {#if editor.selected}
     <div class="reference-actions">
-      <button class="btn primary sm" disabled={editor.busy} onclick={() => saveReference(field)}>Use selected document</button>
+      <button class="btn primary sm" disabled={editor.busy} onclick={() => saveReference(field)}>{translate("documentDetail.useSelectedDocument")}</button>
       <button class="btn sm" disabled={editor.busy}
               onclick={() => adding ? cancelNewReference() : updateReferenceEditor(field.id, { open: false, selected: null, results: [], error: '' })}>
-        Cancel
+        {translate("common.cancel")}
       </button>
     </div>
   {/if}
 {/snippet}
 <div class="document-view">
 <div class="toolbar">
-  <a class="btn sm" href={filingHref(trashed ? '#/trash' : '#/documents')}><Icon name="left" size={13} /> {trashed ? 'Back to Trash' : 'All documents'}</a>
+  <a class="btn sm" href={filingHref(trashed ? '#/trash' : '#/documents')}><Icon name="left" size={13} /> {trashed ? translate("documentDetail.backToTrash") : translate("documentDetail.allDocuments")}</a>
   <span class="spacer" style="flex:1"></span>
   {#if doc}
     {#if doc.jd_address}
-      <input class="input mono" style="max-width:210px" aria-label="Filing address" readonly value={doc.jd_address}
+      <input class="input mono" style="max-width:210px" aria-label={translate("documentDetail.filingAddress")} readonly value={doc.jd_address}
         onclick={event => event.currentTarget.select()} />
-      <button class="btn sm" onclick={copyAddress}>Copy address</button>
+      <button class="btn sm" onclick={copyAddress}>{translate("documentDetail.copyAddress")}</button>
     {/if}
     {#if highSensitivity}
       <!-- Persistent Reveal/Hide toggle. The in-panel Reveal button
            (inside the preview) still works — this one gives a symmetric
            way to re-hide without navigating away and back. -->
       <button class="btn sm" onclick={() => (revealed = !revealed)}
-              title={revealed ? 'Hide preview + extracted text' : 'Reveal preview + extracted text'}>
-        <Icon name="eye" size={13} /> {revealed ? 'Hide' : 'Reveal'}
+              title={revealed ? translate("documentDetail.hidePreviewExtractedText") : translate("documentDetail.revealPreviewExtractedText")}>
+        <Icon name="eye" size={13} /> {revealed ? translate("documentDetail.hide") : translate("documentDetail.reveal")}
       </button>
     {/if}
-    {#if canReadFile}<a class="btn sm" href={downloadPath(id)} download><Icon name="download" size={13} /> Download</a>{/if}
+    {#if canReadFile}<a class="btn sm" href={downloadPath(id)} download><Icon name="download" size={13} /> {translate("documentDetail.download")}</a>{/if}
     {#if canManageAccess}
-      <button class="btn sm" onclick={() => (accessOpen = true)}><Icon name="shield" size={13} /> Access</button>
+      <button class="btn sm" onclick={() => (accessOpen = true)}><Icon name="shield" size={13} /> {translate("documentDetail.access")}</button>
     {/if}
     {#if canShareLinks}
-      <button class="btn sm" onclick={openShare}><Icon name="link" size={13} /> Share</button>
+      <button class="btn sm" onclick={openShare}><Icon name="link" size={13} /> {translate("documentDetail.share")}</button>
     {/if}
     {#if !trashed}
-      <button class="btn sm" onclick={() => (documentLinkOpen = true)}>Open on my phone</button>
-      <button class="btn sm danger" onclick={() => (trashOpen = true)}><Icon name="trash" size={13} /> Trash</button>
+      <button class="btn sm" onclick={() => (documentLinkOpen = true)}>{translate("documentDetail.openOnMyPhone")}</button>
+      <button class="btn sm danger" onclick={() => (trashOpen = true)}><Icon name="trash" size={13} /> {translate("documentDetail.trash")}</button>
     {/if}
   {/if}
 </div>
 
 {#if loading}
-  <div class="detail" aria-label="Loading document">
+  <div class="detail" aria-label={translate("documentDetail.loadingDocument")}>
     <div class="preview"><div class="skel" style="width:28%;height:14px"></div></div>
     <div class="card" style="align-self:start">
       <div class="skel" style="width:55%;height:18px;margin-bottom:18px"></div>
@@ -1272,17 +1274,17 @@
   <div class="err">{err}</div>
 {:else if doc}
   {#if trashed}
-    <section class="trash-notice" aria-label="Trashed document">
+    <section class="trash-notice" aria-label={translate("documentDetail.trashedDocument")}>
       <div>
-        <h2><Icon name="trash" size={17} /> Document in Trash</h2>
-        <p class="sub">Read-only. Deletes permanently {fmtDate(doc.deletes_at)}.{canRestore ? ' Restore to make changes.' : ''}</p>
+        <h2><Icon name="trash" size={17} /> {translate("documentDetail.documentInTrash")}</h2>
+        <p class="sub">{translate("documentDetail.readOnlyDeletesPermanentlyValueValue", { "deletes_at": fmtDate(doc.deletes_at), "changes": canRestore ? ' Restore to make changes.' : '' })}</p>
       </div>
       {#if canManageTrash}
         <div class="trash-actions">
           {#if canRestore}
-            <button class="btn sm primary" disabled={recoveryBusy} onclick={restore}><Icon name="refresh" size={13} /> {recoveryBusy && !deleteOpen ? 'Restoring…' : 'Restore'}</button>
+            <button class="btn sm primary" disabled={recoveryBusy} onclick={restore}><Icon name="refresh" size={13} /> {recoveryBusy && !deleteOpen ? translate("documentDetail.restoring") : translate("documentDetail.restore")}</button>
           {/if}
-          <button class="btn sm danger" disabled={recoveryBusy} onclick={() => (deleteOpen = true)}><Icon name="trash" size={13} /> Delete permanently</button>
+          <button class="btn sm danger" disabled={recoveryBusy} onclick={() => (deleteOpen = true)}><Icon name="trash" size={13} /> {translate("documentDetail.deletePermanently")}</button>
         </div>
       {/if}
     </section>
@@ -1290,22 +1292,22 @@
   <div class="detail document-detail-grid">
     <div class="preview" class:blurred>
       {#if !canReadFile}
-        <div class="reveal"><span class="sub">Only the owner or an administrator can preview files in Trash.</span></div>
+        <div class="reveal"><span class="sub">{translate("documentDetail.onlyTheOwnerOrAnAdministratorCan")}</span></div>
       {:else if blurred}
         <div class="reveal">
           <span class="pill danger">{sensitivityLabel(doc.sensitivity)}</span>
-          <button class="btn" onclick={() => (revealed = true)}><Icon name="eye" size={14} /> Reveal preview</button>
+          <button class="btn" onclick={() => (revealed = true)}><Icon name="eye" size={14} /> {translate("documentDetail.revealPreview")}</button>
         </div>
       {:else if previewable}
         <!-- direct URL: session cookie authenticates; server CSP sandboxes;
              streaming + immutable-ETag caching come back for free -->
-        <iframe src={previewPath(id, highSensitivity)} title="Document preview"></iframe>
+        <iframe src={previewPath(id, highSensitivity)} title={translate("documentDetail.documentPreview")}></iframe>
       {:else}
         <div class="reveal">
-          <span class="pill">{doc.mime_type || 'unknown format'}</span>
-          <b style="font-size:.95rem">No inline preview for this format</b>
-          <span class="sub" style="max-width:32ch;text-align:center">Browsers can't render this file inline. Download the original, or read the extracted text below.</span>
-          <a class="btn" href={downloadPath(id)} download><Icon name="download" size={13} /> Download original</a>
+          <span class="pill">{doc.mime_type || translate("documentDetail.unknownFormat")}</span>
+          <b style="font-size:.95rem">{translate("documentDetail.noInlinePreviewForThisFormat")}</b>
+          <span class="sub" style="max-width:32ch;text-align:center">{translate("documentDetail.browsersCanTRenderThisFileInline")}</span>
+          <a class="btn" href={downloadPath(id)} download><Icon name="download" size={13} /> {translate("documentDetail.downloadOriginal")}</a>
         </div>
       {/if}
     </div>
@@ -1313,25 +1315,25 @@
     <div class="detail-sidebar">
       <div class="card">
         {#if trashed}
-          <h2 style="font-size:1.15rem;overflow-wrap:anywhere">{doc.title || `Document #${doc.id}`}</h2>
+          <h2 style="font-size:1.15rem;overflow-wrap:anywhere">{doc.title || translate("documentDetail.documentValue", { "id": doc.id })}</h2>
         {:else if editingTitle}
-          <form class="title-form" onsubmit={(e) => { e.preventDefault(); editingTitle = false; save({ title: titleDraft }, 'Title saved') }}>
-            <input class="input" aria-label="Document title" bind:value={titleDraft} />
+          <form class="title-form" onsubmit={(e) => { e.preventDefault(); editingTitle = false; save({ title: titleDraft }, translate("documentDetail.titleSaved")) }}>
+            <input class="input" aria-label={translate("documentDetail.documentTitle")} bind:value={titleDraft} />
           </form>
         {:else}
           <div class="title-heading">
             <h2>
-              <button class="title-rename" title="Rename" onclick={() => (editingTitle = true)}>
-                <span class="dot {sensDot(doc.sensitivity)}"></span>{doc.title || `Document #${doc.id}`}
+              <button class="title-rename" title={translate("documentDetail.rename")} onclick={() => (editingTitle = true)}>
+                <span class="dot {sensDot(doc.sensitivity)}"></span>{doc.title || translate("documentDetail.documentValue", { "id": doc.id })}
               </button>
               {#if doc.title_owner === 'human'}
-                <span class="title-lock" role="img" aria-label="Suggestions and rules won't change this title."
-                      title="Suggestions and rules won't change this title."><Icon name="lock" size={14} /></span>
+                <span class="title-lock" role="img" aria-label={translate("documentDetail.suggestionsAndRulesWonTChangeThis")}
+                      title={translate("documentDetail.suggestionsAndRulesWonTChangeThis")}><Icon name="lock" size={14} /></span>
               {/if}
             </h2>
             {#if doc.title_owner === 'human'}
               <button class="title-release" disabled={titleOwnerBusy} onclick={releaseTitle}>
-                {titleOwnerBusy ? 'Releasing…' : 'Let Suchi rename this'}
+                {titleOwnerBusy ? translate("documentDetail.releasing") : translate("documentDetail.letSuchiRenameThis")}
               </button>
             {/if}
           </div>
@@ -1339,17 +1341,17 @@
 
         <dl class="kv" style="margin-top:12px">
           {#if doc.encryption_state === 'decrypted'}
-            <dt>Password</dt>
+            <dt>{translate("documentDetail.password")}</dt>
             <dd><DocumentUnlockStatus state={doc.encryption_state} expanded /></dd>
           {/if}
-          <dt>Filed under</dt>
+          <dt>{translate("documentDetail.filedUnder")}</dt>
           <dd>
             {#if !trashed && jdCategories.length}
               <select class="input" style="padding:4px 8px;font-size:.8rem"
                       value={doc.jd_category_id}
-                      onchange={(e) => save({ jd_category_id: Number(e.target.value) }, 'Refiled')}>
+                      onchange={(e) => save({ jd_category_id: Number(e.target.value) }, translate("documentDetail.refiled"))}>
                 {#each areaGroups as g}
-                  <optgroup label={`${g.lo}–${g.lo + 9} ${g.name}`}>
+                  <optgroup label={translate("documentDetail.valueValueValue", { "lo": g.lo, "lo2": g.lo + 9, "name": g.name })}>
                     {#each g.categories as c}<option value={c.id}>{c.code} {c.name}</option>{/each}
                   </optgroup>
                 {/each}
@@ -1357,92 +1359,92 @@
             {:else if doc.jd_category_code}
               <span class="chip">{doc.jd_category_code} {doc.jd_category_name}</span>
               <span class="sub" style="margin-left:6px">{doc.jd_area_name}</span>
-            {:else}<span class="chip">Category #{doc.jd_category_id}</span>{/if}
+            {:else}<span class="chip">{translate("documentDetail.categoryValue", { "jd_category_id": doc.jd_category_id })}</span>{/if}
           </dd>
-          <dt>Sensitivity</dt>
+          <dt>{translate("documentDetail.sensitivity")}</dt>
           <dd>
             {#if trashed}
               {sensitivityLabel(doc.sensitivity)}
             {:else}
             <select class="input" style="padding:4px 8px;font-size:.8rem"
-                    aria-label="Sensitivity"
+                    aria-label={translate("documentDetail.sensitivity")}
                     value={doc.sensitivity || ''}
-                    onchange={(e) => save({ sensitivity: e.target.value || null }, 'Sensitivity saved')}>
-              <option value="">Unset</option>
+                    onchange={(e) => save({ sensitivity: e.target.value || null }, translate("documentDetail.sensitivitySaved"))}>
+              <option value="">{translate("common.unset")}</option>
               {#each SENSITIVITY_OPTIONS as option (option.value)}
                 <option value={option.value}>{option.label}</option>
               {/each}
             </select>
             {/if}
           </dd>
-          <dt>Added</dt><dd>{fmtDate(doc.added_at || doc.created_at)}</dd>
+          <dt>{translate("documentDetail.added")}</dt><dd>{fmtDate(doc.added_at || doc.created_at)}</dd>
           {#if doc.sources?.length}
-            <dt>Added from</dt>
+            <dt>{translate("documentDetail.addedFrom")}</dt>
             <dd style="display:flex;flex-direction:column;gap:4px;min-width:0">
               {#each doc.sources as source, i}
                 <div style="min-width:0;overflow-wrap:anywhere">
                   <span>{sourceLabel(source)}</span>
                   {#if sourceDetail(source)}<span class="sub"> · {sourceDetail(source)}</span>{/if}
-                  {#if i === 0 && doc.sources.length > 1}<span class="pill" style="margin-left:6px;font-size:.68rem">first added</span>{/if}
+                  {#if i === 0 && doc.sources.length > 1}<span class="pill" style="margin-left:6px;font-size:.68rem">{translate("documentDetail.firstAdded")}</span>{/if}
                 </div>
               {/each}
             </dd>
           {/if}
           {#if doc.source_mtime || (doc.created_at && doc.created_at !== doc.added_at)}
-            <dt title="Date carried from the original file when it was added">Original file date</dt>
+            <dt title={translate("documentDetail.dateCarriedFromTheOriginalFileWhen")}>{translate("documentDetail.originalFileDate")}</dt>
             <dd>{fmtDate(doc.source_mtime || doc.created_at)}</dd>
           {/if}
           {#if doc.archive_serial_number != null}
-            <dt title="Read-only compatibility metadata retained from the previous archive">Previous archive number</dt>
-            <dd><span class="mono">#{doc.archive_serial_number}</span> <span class="sub" title="Kept for old references and imported layouts">· read-only</span></dd>
+            <dt title={translate("documentDetail.readOnlyCompatibilityMetadataRetainedFromThe")}>{translate("documentDetail.previousArchiveNumber")}</dt>
+            <dd><span class="mono">#{doc.archive_serial_number}</span> <span class="sub" title={translate("documentDetail.keptForOldReferencesAndImportedLayouts")}>{translate("documentDetail.readOnly")}</span></dd>
           {/if}
-          <dt>Original</dt><dd>{doc.mime_type} · {fmtBytes(doc.original_size)}</dd>
+          <dt>{translate("documentDetail.original")}</dt><dd>{doc.mime_type} · {fmtBytes(doc.original_size)}</dd>
           {#if doc.archive_blob}
-            <dt>Archive</dt>
-            <dd title={doc.content ? 'Full-text searchable — OCR / extraction populated documents.content' : 'PDF wrapper only — no OCR layer. Install tesseract or ocrmypdf and rescan to make this searchable.'}>
-              {doc.content ? 'searchable PDF' : 'PDF preview (no OCR)'} · {fmtBytes(doc.archive_size)}
+            <dt>{translate("documentDetail.archive")}</dt>
+            <dd title={doc.content ? translate("documentDetail.fullTextSearchableOcrExtractionPopulatedDocumentsContent") : translate("documentDetail.pdfWrapperOnlyNoOcrLayerInstallTesseract")}>
+              {doc.content ? translate("documentDetail.searchablePdf") : translate("documentDetail.pdfPreviewNoOcr")} · {fmtBytes(doc.archive_size)}
             </dd>
           {/if}
-          <dt>Tags</dt>
+          <dt>{translate("documentDetail.tags")}</dt>
           <dd class="document-tags">
             <div class="metadata-display">
               <div class="metadata-value tag-pills">
                 {#each doc.tags || [] as slug}
                   <span class="pill">{slug}
                     {#if editingTags}
-                      <button class="tag-remove" type="button" aria-label={`Remove tag ${slug}`}
+                      <button class="tag-remove" type="button" aria-label={translate("documentDetail.removeTagValue", { "slug": slug })}
                               disabled={tagsBusy || !tagOptions.some(tag => tag.slug === slug)}
                               onclick={() => changeTag(tagOptions.find(tag => tag.slug === slug), 'remove_tag')}><Icon name="x" size={12} /></button>
                     {/if}
                   </span>
-                {:else}<span class="sub">No tags</span>{/each}
+                {:else}<span class="sub">{translate("documentDetail.noTags")}</span>{/each}
               </div>
               {#if !trashed && !editingTags}
-                <div class="metadata-actions"><button class="btn sm" aria-label="Edit tags" type="button" onclick={startEditTags}>Edit</button></div>
+                <div class="metadata-actions"><button class="btn sm" aria-label={translate("documentDetail.editTags")} type="button" onclick={startEditTags}>{translate("documentDetail.edit")}</button></div>
               {:else if editingTags && session.user?.role === 'admin'}
-                <div class="metadata-actions"><a class="btn sm" href={filingHref(TAGS_SETTINGS_HASH)}>Manage tags</a></div>
+                <div class="metadata-actions"><a class="btn sm" href={filingHref(TAGS_SETTINGS_HASH)}>{translate("documentDetail.manageTags")}</a></div>
               {/if}
             </div>
             {#if editingTags}
               <div class="tag-actions">
                 {#if tagLoadError}
                   <p class="err" role="alert">{tagLoadError}</p>
-                  <button class="btn sm" type="button" disabled={tagsBusy} onclick={startEditTags}>Reload tags</button>
+                  <button class="btn sm" type="button" disabled={tagsBusy} onclick={startEditTags}>{translate("documentDetail.reloadTags")}</button>
                 {:else if tagsBusy && !tagOptions.length}
-                  <span class="sub">Loading tags…</span>
+                  <span class="sub">{translate("documentDetail.loadingTags")}</span>
                 {:else}
                   <TagPicker tags={tagOptions} excludedSlugs={doc.tags || []} disabled={tagsBusy}
-                             label="Tag to add" menuId="document-tag-options"
+                             label={translate("documentDetail.tagToAdd")} menuId="document-tag-options"
                              onChoose={(tag) => changeTag(tag, 'add_tag')} />
                 {/if}
-                <button class="btn sm" type="button" disabled={tagsBusy} onclick={() => { editingTags = false; tagsError = ''; tagLoadError = '' }}>Done</button>
+                <button class="btn sm" type="button" disabled={tagsBusy} onclick={() => { editingTags = false; tagsError = ''; tagLoadError = '' }}>{translate("documentDetail.done")}</button>
               </div>
-              <span class="sub">Changes save immediately.</span>
+              <span class="sub">{translate("documentDetail.changesSaveImmediately")}</span>
               {#if tagsError}<p class="err" role="alert">{tagsError}</p>{/if}
             {/if}
           </dd>
           {#if doc.correspondents?.length}
-            <dt>Correspondents</dt>
+            <dt>{translate("documentDetail.correspondents")}</dt>
             <dd>{#each doc.correspondents as c}<span class="pill" style="margin-right:5px">{c.name} · {c.role}</span>{/each}</dd>
           {/if}
           {#each displayedOrdinaryCustomFields as field (field.field_id)}
@@ -1454,13 +1456,13 @@
                   {#if field.data_type === 'bool'}
                     <select class="input" aria-label={field.name} value={editor.value}
                             onchange={(event) => updateCustomFieldEditor(field.field_id, { value: event.currentTarget.value })}>
-                      <option value="true">Yes</option>
-                      <option value="false">No</option>
+                      <option value="true">{translate("documentDetail.yes")}</option>
+                      <option value="false">{translate("documentDetail.no")}</option>
                     </select>
                   {:else if field.data_type === 'select'}
                     <select class="input" aria-label={field.name} value={editor.value}
                             onchange={(event) => updateCustomFieldEditor(field.field_id, { value: event.currentTarget.value })}>
-                      <option value="">Select a choice</option>
+                      <option value="">{translate("documentDetail.selectAChoice")}</option>
                       {#each field.extra_data?.choices || [] as choice}<option value={choice}>{choice}</option>{/each}
                     </select>
                   {:else if field.data_type === 'multi'}
@@ -1485,11 +1487,11 @@
                            oninput={(event) => updateCustomFieldEditor(field.field_id, { value: event.currentTarget.value })} />
                   {/if}
                   <div class="custom-field-actions">
-                    <button class="btn primary sm" disabled={editor.busy || !customFieldValueReady(field, editor)}>{editor.busy ? 'Saving…' : 'Save'}</button>
+                    <button class="btn primary sm" disabled={editor.busy || !customFieldValueReady(field, editor)}>{editor.busy ? translate("common.saving") : translate("common.save")}</button>
                     <button class="btn sm" type="button" disabled={editor.busy}
-                            onclick={() => { const next = { ...customFieldEditors }; delete next[field.field_id]; customFieldEditors = next }}>Cancel</button>
+                            onclick={() => { const next = { ...customFieldEditors }; delete next[field.field_id]; customFieldEditors = next }}>{translate("common.cancel")}</button>
                     {#if field.is_set}
-                      <button class="btn danger sm" type="button" disabled={editor.busy} onclick={() => clearOrdinaryCustomField(field)}>Clear</button>
+                      <button class="btn danger sm" type="button" disabled={editor.busy} onclick={() => clearOrdinaryCustomField(field)}>{translate("documentDetail.clear")}</button>
                     {/if}
                   </div>
                   {#if editor.error}<p class="err" role="alert">{editor.error}</p>{/if}
@@ -1500,34 +1502,34 @@
                     {#if field.data_type === 'url' && field.value}
                       <a href={field.value} target="_blank" rel="noreferrer">{customFieldDisplay(field)}</a>
                     {:else}
-                      {field.is_set ? customFieldDisplay(field) : 'Not set'}
+                      {field.is_set ? customFieldDisplay(field) : translate("documentDetail.notSet")}
                     {/if}
                   </span>
-                  {#if !trashed}<div class="metadata-actions"><button class="btn sm" type="button" onclick={() => startCustomFieldEdit(field)}>{field.is_set ? 'Edit' : 'Add'}</button></div>{/if}
+                  {#if !trashed}<div class="metadata-actions"><button class="btn sm" type="button" onclick={() => startCustomFieldEdit(field)}>{field.is_set ? translate("documentDetail.edit") : translate("documentDetail.add")}</button></div>{/if}
                 </div>
               {/if}
             </dd>
           {/each}
           {#if !trashed && availableOrdinaryCustomFields.length}
-            <dt>Custom fields</dt>
+            <dt>{translate("documentDetail.customFields")}</dt>
             <dd class="custom-field-add">
-              <select class="input" aria-label="Add custom field" value="" onchange={addCustomField}>
-                <option value="">Add custom field…</option>
+              <select class="input" aria-label={translate("documentDetail.addCustomField")} value="" onchange={addCustomField}>
+                <option value="">{translate("documentDetail.addCustomField2")}</option>
                 {#each availableOrdinaryCustomFields as field (field.field_id)}
                   <option value={field.field_id}>{field.name}</option>
                 {/each}
               </select>
             </dd>
           {/if}
-          <dt>Languages</dt>
+          <dt>{translate("documentDetail.languages")}</dt>
           <dd>
             {#if editingLanguages}
               <form onsubmit={(e) => { e.preventDefault(); saveLanguages() }} style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
                 <input class="input mono" style="max-width:200px" bind:value={languagesDraft}
-                       placeholder="e.g. de,en — empty clears" />
-                <button class="btn sm" type="submit">Save</button>
-                <button class="btn sm" type="button" onclick={() => (editingLanguages = false)}>Cancel</button>
-                <span class="sub" style="width:100%">Comma-separated ISO codes. Empty clears &amp; unlocks.</span>
+                       placeholder={translate("documentDetail.eGDeEnEmptyClears")} />
+                <button class="btn sm" type="submit">{translate("common.save")}</button>
+                <button class="btn sm" type="button" onclick={() => (editingLanguages = false)}>{translate("common.cancel")}</button>
+                <span class="sub" style="width:100%">{translate("documentDetail.commaSeparatedIsoCodesEmptyClearsUnlocks")}</span>
               </form>
             {:else}
               <div class="metadata-display">
@@ -1536,19 +1538,19 @@
                     {#each doc.languages.split(',') as code}
                       <span class="pill">{code.trim()}</span>
                     {/each}
-                    {#if doc.languages_locked}<span class="sub" title="Set by user; automatic detection won't overwrite">· locked</span>{/if}
+                    {#if doc.languages_locked}<span class="sub" title={translate("documentDetail.setByUserAutomaticDetectionWonT")}>{translate("documentDetail.locked")}</span>{/if}
                   {:else}
-                    <span class="sub">not detected</span>
+                    <span class="sub">{translate("documentDetail.notDetected")}</span>
                   {/if}
                 </div>
-                {#if !trashed}<div class="metadata-actions"><button class="btn sm" onclick={startEditLanguages} type="button">Edit</button></div>{/if}
+                {#if !trashed}<div class="metadata-actions"><button class="btn sm" onclick={startEditLanguages} type="button">{translate("documentDetail.edit")}</button></div>{/if}
               </div>
             {/if}
           </dd>
         </dl>
         {#if shareURL}
           <div class="field" style="margin-top:12px;margin-bottom:0">
-            <label for="share">Share link</label>
+            <label for="share">{translate("documentDetail.shareLink")}</label>
             <input id="share" class="input mono" style="font-size:.76rem" readonly value={shareURL}
                    onclick={(event) => event.currentTarget.select()} />
           </div>
@@ -1557,13 +1559,13 @@
 
 
 
-      <section class="card related-card" aria-label="Document context">
-        <div class="related-tabs" role="tablist" aria-label="Document context">
+      <section class="card related-card" aria-label={translate("documentDetail.documentContext")}>
+        <div class="related-tabs" role="tablist" aria-label={translate("documentDetail.documentContext")}>
             {#each visibleRelatedTabs as tab}
               {@const count = tab.id === 'similar' ? 0 : relatedTabCount(tab.id)}
               <button id={`related-tab-${tab.id}`} type="button" role="tab"
                       aria-selected={relatedTab === tab.id}
-                      aria-label={count > 0 ? `${tab.label} ${count}` : tab.label}
+                      aria-label={count > 0 ? translate("documentDetail.valueValue", { "label": tab.label, "count": count }) : tab.label}
                       aria-controls={`related-panel-${tab.id}`}
                       tabindex={relatedTab === tab.id ? 0 : -1}
                       class:on={relatedTab === tab.id}
@@ -1579,18 +1581,18 @@
             <div id="related-panel-similar" class="related-panel" role="tabpanel"
                  aria-labelledby="related-tab-similar" tabindex="0">
               {#if similarLoading}
-                <p class="sub">Finding similar documents…</p>
+                <p class="sub">{translate("documentDetail.findingSimilarDocuments")}</p>
               {:else if similarError}
                 <div class="inline-state err" role="alert">
                   <span>{similarError}</span>
-                  <button class="btn sm" onclick={() => loadSimilarDocuments()}>Retry</button>
+                  <button class="btn sm" onclick={() => loadSimilarDocuments()}>{translate("common.retry")}</button>
                 </div>
               {:else if similar?.results?.length}
                 {#if similar.matched_on_title_only}
                   <div class="related-meta">
                     <span class="pill warn"
-                          title="Only the title was available when finding similar documents.">
-                      Title only
+                          title={translate("documentDetail.onlyTheTitleWasAvailableWhenFinding")}>
+                      {translate("documentDetail.titleOnly")}
                     </span>
                   </div>
                 {/if}
@@ -1598,7 +1600,7 @@
                   {#each similar.results.slice(0, 6) as sd (sd.id)}
                     <a class="irow" href={filingHref(`#/doc/${sd.id}`)} style="padding:8px 4px">
                       <span class="dot"></span>
-                      <span class="title grow">{sd.title || `Document #${sd.id}`}</span>
+                      <span class="title grow">{sd.title || translate("documentDetail.documentValue", { "id": sd.id })}</span>
                       <span class="sub">{fmtDate(sd.created_at)}</span>
                     </a>
                   {/each}
@@ -1606,9 +1608,9 @@
               {:else}
                 <p class="sub related-empty">
                   {#if similar?.matched_on_title_only}
-                    No similar documents found from the title.
+                    {translate("documentDetail.noSimilarDocumentsFoundFromTheTitle")}
                   {:else}
-                    No similar documents found.
+                    {translate("documentDetail.noSimilarDocumentsFound")}
                   {/if}
                 </p>
               {/if}
@@ -1617,22 +1619,22 @@
             <div id="related-panel-backlinks" class="related-panel" role="tabpanel"
                  aria-labelledby="related-tab-backlinks" tabindex="0">
               <div class="linked-sections">
-                <section class="linked-section" aria-label="This document links to">
+                <section class="linked-section" aria-label={translate("documentDetail.thisDocumentLinksTo")}>
                   <div class="linked-section-head">
                     <div>
-                      <strong>This document links to</strong>
+                      <strong>{translate("documentDetail.thisDocumentLinksTo")}</strong>
                     </div>
                     {#if availableDocumentLinkFields.length && !addingReference}
-                      <button class="btn sm" onclick={startNewReference}>Add link</button>
+                      <button class="btn sm" onclick={startNewReference}>{translate("documentDetail.addLink")}</button>
                     {/if}
                   </div>
 
                   {#if customFieldsLoading && !documentLinkFields.length}
-                    <p class="sub">Loading link types…</p>
+                    <p class="sub">{translate("documentDetail.loadingLinkTypes")}</p>
                   {:else if customFieldsError && !documentLinkFields.length}
                     <div class="inline-state err" role="alert">
                       <span>{customFieldsError}</span>
-                      <button class="btn sm" onclick={() => loadCustomFieldDefinitions()}>Retry</button>
+                      <button class="btn sm" onclick={() => loadCustomFieldDefinitions()}>{translate("common.retry")}</button>
                     </div>
                   {:else}
                     {#if outgoingDocumentLinkFields.length}
@@ -1645,14 +1647,14 @@
                               <div class="grow">
                                 <strong>{field.name}</strong>
                                 <a class="reference-target" href={filingHref(`#/doc/${current.value.id}`, current.value.system_code)}>
-                                  {current.value.title || `Document #${current.value.id}`}
+                                  {current.value.title || translate("documentDetail.documentValue", { "id": current.value.id })}
                                 </a>
                                 {#if current.value.jd_address}<span class="sub">{current.value.jd_address}</span>{/if}
-                                {#if !current.value.is_latest}<span class="pill warn">Earlier version</span>{/if}
+                                {#if !current.value.is_latest}<span class="pill warn">{translate("documentDetail.earlierVersion")}</span>{/if}
                               </div>
                               <div class="reference-actions">
-                                <button class="btn sm" onclick={() => toggleReferenceEditor(field)}>Change link</button>
-                                <button class="btn sm" disabled={editor.busy} onclick={() => clearReference(field)}>Remove link</button>
+                                <button class="btn sm" onclick={() => toggleReferenceEditor(field)}>{translate("documentDetail.changeLink")}</button>
+                                <button class="btn sm" disabled={editor.busy} onclick={() => clearReference(field)}>{translate("documentDetail.removeLink")}</button>
                               </div>
                             </div>
                             {#if editor.open}
@@ -1663,50 +1665,50 @@
                       </div>
                     {:else if !documentLinkFields.length}
                       {#if session.user?.role === 'admin'}
-                        <a role="button" class="btn sm" href={filingHref(CUSTOM_FIELDS_SETTINGS_HASH)}>Create Document link field</a>
+                        <a role="button" class="btn sm" href={filingHref(CUSTOM_FIELDS_SETTINGS_HASH)}>{translate("documentDetail.createDocumentLinkField")}</a>
                       {:else}
-                        <p class="sub related-empty">No link types are configured. Ask an administrator to create one.</p>
+                        <p class="sub related-empty">{translate("documentDetail.noLinkTypesAreConfiguredAskAn")}</p>
                       {/if}
                     {:else}
-                      <p class="sub related-empty">This document does not link to another document yet.</p>
+                      <p class="sub related-empty">{translate("documentDetail.thisDocumentDoesNotLinkToAnother")}</p>
                     {/if}
 
                     {#if addingReference}
                       <div class="reference-add">
                         <div class="reference-add-head">
-                          <label for="new-document-link-field">Link type</label>
+                          <label for="new-document-link-field">{translate("documentDetail.linkType")}</label>
                           <select id="new-document-link-field" class="input" value={newReferenceFieldID}
                                   onchange={selectNewReferenceField}>
-                            <option value="">Choose a link type</option>
+                            <option value="">{translate("documentDetail.chooseALinkType")}</option>
                             {#each availableDocumentLinkFields as field (field.id)}
                               <option value={field.id}>{field.name}</option>
                             {/each}
                           </select>
-                          <button class="btn sm" onclick={cancelNewReference}>Cancel</button>
+                          <button class="btn sm" onclick={cancelNewReference}>{translate("common.cancel")}</button>
                         </div>
                         {#if selectedNewReferenceField}
                           {@render referenceSearch(selectedNewReferenceField, referenceEditor(selectedNewReferenceField.id), true)}
                         {:else}
-                          <p class="sub">Choose how this document is linked.</p>
+                          <p class="sub">{translate("documentDetail.chooseHowThisDocumentIsLinked")}</p>
                         {/if}
                       </div>
                     {/if}
                   {/if}
                 </section>
 
-                <section class="linked-section" aria-label="Documents linking to this version">
+                <section class="linked-section" aria-label={translate("documentDetail.documentsLinkingToThisVersion")}>
                   <div class="linked-section-head">
                     <div>
-                      <strong>Documents linking to this version</strong>
+                      <strong>{translate("documentDetail.documentsLinkingToThisVersion")}</strong>
                     </div>
                     <span class="pill">{backlinks.count}</span>
                   </div>
                   {#if backlinksLoading}
-                    <p class="sub">Loading documents linking here…</p>
+                    <p class="sub">{translate("documentDetail.loadingDocumentsLinkingHere")}</p>
                   {:else if backlinksError}
                     <div class="inline-state err" role="alert">
                       <span>{backlinksError}</span>
-                      <button class="btn sm" onclick={() => loadBacklinks(id, backlinksPage)}>Retry</button>
+                      <button class="btn sm" onclick={() => loadBacklinks(id, backlinksPage)}>{translate("common.retry")}</button>
                     </div>
                   {:else if backlinks.results.length}
                     <div class="index" style="border:0">
@@ -1714,23 +1716,23 @@
                         <a class="irow" href={filingHref(`#/doc/${source.id}`, source.system_code)} style="padding:8px 4px">
                           <span class="dot" class:warn={!source.is_latest}></span>
                           <span class="grow">
-                            <span class="title">{source.title || `Document #${source.id}`}</span>
-                            <span class="sub" style="display:block">Linked here as “{source.field_name}”</span>
+                            <span class="title">{source.title || translate("documentDetail.documentValue", { "id": source.id })}</span>
+                            <span class="sub" style="display:block">{translate("documentDetail.linkedHereAsValue", { "field_name": source.field_name })}</span>
                           </span>
-                          {#if !source.is_latest}<span class="pill warn">Earlier version</span>{/if}
+                          {#if !source.is_latest}<span class="pill warn">{translate("documentDetail.earlierVersion")}</span>{/if}
                           {#if source.jd_address}<span class="sub">{source.jd_address}</span>{/if}
                         </a>
                       {/each}
                     </div>
                     {#if backlinks.previous || backlinks.next}
                       <div class="pager">
-                        <button class="btn sm" disabled={!backlinks.previous || backlinksLoading} onclick={() => loadBacklinks(id, backlinksPage - 1)}>Previous</button>
-                        <span class="sub">Page {backlinksPage}</span>
-                        <button class="btn sm" disabled={!backlinks.next || backlinksLoading} onclick={() => loadBacklinks(id, backlinksPage + 1)}>Next</button>
+                        <button class="btn sm" disabled={!backlinks.previous || backlinksLoading} onclick={() => loadBacklinks(id, backlinksPage - 1)}>{translate("documentDetail.previous")}</button>
+                        <span class="sub">{translate("documentDetail.pageValue", { "backlinksPage": backlinksPage })}</span>
+                        <button class="btn sm" disabled={!backlinks.next || backlinksLoading} onclick={() => loadBacklinks(id, backlinksPage + 1)}>{translate("documentDetail.next")}</button>
                       </div>
                     {/if}
                   {:else}
-                    <p class="sub related-empty">No documents link to this version.</p>
+                    <p class="sub related-empty">{translate("documentDetail.noDocumentsLinkToThisVersion")}</p>
                   {/if}
                 </section>
               </div>
@@ -1740,8 +1742,8 @@
                  aria-labelledby="related-tab-versions" tabindex="0">
               {#if versionHistory.head_id && String(versionHistory.head_id) !== String(id)}
                 <div class="version-notice">
-                  You are viewing an earlier version.
-                  <a href={filingHref(`#/doc/${versionHistory.head_id}`)}>Open the latest visible version</a>
+                  {translate("documentDetail.youAreViewingAnEarlierVersion")}
+                  <a href={filingHref(`#/doc/${versionHistory.head_id}`)}>{translate("documentDetail.openTheLatestVisibleVersion")}</a>
                 </div>
               {/if}
               {#if versionHistory.can_upload}
@@ -1750,21 +1752,21 @@
                   {#if replacementFile}
                     <div class="replacement-file">
                       <span class="grow"><strong>{replacementFile.name}</strong><small>{fmtBytes(replacementFile.size)}</small></span>
-                      <button class="btn primary sm" disabled={replacementBusy} onclick={uploadReplacement}>{replacementBusy ? 'Uploading…' : replacementError ? 'Retry upload' : 'Upload replacement'}</button>
-                      <button class="btn sm" disabled={replacementBusy} onclick={cancelReplacement}>Cancel</button>
+                      <button class="btn primary sm" disabled={replacementBusy} onclick={uploadReplacement}>{replacementBusy ? translate("documentDetail.uploading") : replacementError ? translate("documentDetail.retryUpload") : translate("documentDetail.uploadReplacement")}</button>
+                      <button class="btn sm" disabled={replacementBusy} onclick={cancelReplacement}>{translate("common.cancel")}</button>
                     </div>
                   {:else}
-                    <button class="btn sm" onclick={() => replacementInput?.click()}>Upload replacement</button>
+                    <button class="btn sm" onclick={() => replacementInput?.click()}>{translate("documentDetail.uploadReplacement")}</button>
                   {/if}
                   {#if replacementError}<p class="err" role="alert">{replacementError}</p>{/if}
                 </div>
               {/if}
               {#if versionsLoading}
-                <p class="sub">Loading version history…</p>
+                <p class="sub">{translate("documentDetail.loadingVersionHistory")}</p>
               {:else if versionsError}
                 <div class="inline-state err" role="alert">
                   <span>{versionsError}</span>
-                  <button class="btn sm" onclick={() => loadVersions(id, versionsPage)}>Retry</button>
+                  <button class="btn sm" onclick={() => loadVersions(id, versionsPage)}>{translate("common.retry")}</button>
                 </div>
               {:else}
                 <div class="index" style="border:0">
@@ -1772,18 +1774,18 @@
                     <a class="irow" href={filingHref(`#/doc/${v.id}`)} style="padding:8px 4px">
                       <span class="dot" class:accent={String(v.id) === String(id)}></span>
                       <span class="title grow">#{v.id} {v.title || ''}</span>
-                      {#if v.is_head}<span class="pill accent">Latest</span>{/if}
-                      {#if String(v.id) === String(id)}<span class="pill">Viewing</span>{/if}
-                      {#if !v.is_head}<span class="pill warn">Earlier</span>{/if}
+                      {#if v.is_head}<span class="pill accent">{translate("documentDetail.latest")}</span>{/if}
+                      {#if String(v.id) === String(id)}<span class="pill">{translate("documentDetail.viewing")}</span>{/if}
+                      {#if !v.is_head}<span class="pill warn">{translate("documentDetail.earlier")}</span>{/if}
                       <span class="sub">{fmtDate(v.created_at)}</span>
                     </a>
                   {/each}
                 </div>
                 {#if versionHistory.previous || versionHistory.next}
                   <div class="pager">
-                    <button class="btn sm" disabled={!versionHistory.previous || versionsLoading} onclick={() => loadVersions(id, versionsPage - 1)}>Previous</button>
-                    <span class="sub">Page {versionsPage}</span>
-                    <button class="btn sm" disabled={!versionHistory.next || versionsLoading} onclick={() => loadVersions(id, versionsPage + 1)}>Next</button>
+                    <button class="btn sm" disabled={!versionHistory.previous || versionsLoading} onclick={() => loadVersions(id, versionsPage - 1)}>{translate("documentDetail.previous")}</button>
+                    <span class="sub">{translate("documentDetail.pageValue2", { "versionsPage": versionsPage })}</span>
+                    <button class="btn sm" disabled={!versionHistory.next || versionsLoading} onclick={() => loadVersions(id, versionsPage + 1)}>{translate("documentDetail.next")}</button>
                   </div>
                 {/if}
               {/if}
@@ -1791,24 +1793,24 @@
           {:else}
             <div id="related-panel-notes" class="related-panel" role="tabpanel"
                  aria-labelledby="related-tab-notes" tabindex="0">
-              <section class="notes-panel" aria-label="Document notes">
+              <section class="notes-panel" aria-label={translate("documentDetail.documentNotes")}>
                 <div class="notes-heading">
                   <div>
-                    <h3>Notes</h3>
-                    <p class="sub">Context kept with this exact document version.</p>
+                    <h3>{translate("documentDetail.notes")}</h3>
+                    <p class="sub">{translate("documentDetail.contextKeptWithThisExactDocumentVersion")}</p>
                   </div>
                 </div>
 
                 {#if !trashed}
                   <form class="note-composer" onsubmit={addNote}>
-                    <label for="new-document-note">Add a note</label>
+                    <label for="new-document-note">{translate("documentDetail.addANote")}</label>
                     <textarea id="new-document-note" class="input" rows="3" maxlength="16384"
-                              placeholder="Add context, a decision, or a follow-up…"
+                              placeholder={translate("documentDetail.addContextADecisionOrAFollow")}
                               bind:value={noteDraft} disabled={noteBusy}></textarea>
                     <div class="note-composer-actions">
-                      <span class="sub">Visible to people who can open this document.</span>
+                      <span class="sub">{translate("documentDetail.visibleToPeopleWhoCanOpenThis")}</span>
                       <button class="btn primary sm" disabled={noteBusy || !noteDraft.trim()}>
-                        {noteBusy && noteEditID == null && notePendingDelete == null ? 'Adding…' : 'Add note'}
+                        {noteBusy && noteEditID == null && notePendingDelete == null ? translate("documentDetail.adding") : translate("documentDetail.addNote")}
                       </button>
                     </div>
                   </form>
@@ -1822,33 +1824,33 @@
                         <strong>{note.author}</strong>
                         <span class="sub">
                           {fmtDate(note.updated_at || note.created_at)}
-                          {#if note.updated_at > note.created_at} · edited{/if}
+                          {#if note.updated_at > note.created_at} {translate("documentDetail.edited")}{/if}
                         </span>
                       </div>
                       {#if noteEditID === note.id}
                         <form class="note-edit" onsubmit={(event) => saveNoteEdit(event, note)}>
-                          <textarea class="input" rows="4" maxlength="16384" aria-label={`Edit note by ${note.author}`}
+                          <textarea class="input" rows="4" maxlength="16384" aria-label={translate("documentDetail.editNoteByValue", { "author": note.author })}
                                     bind:value={noteEditDraft} disabled={noteBusy}></textarea>
                           <div class="note-actions">
                             <button class="btn primary sm" disabled={noteBusy || !noteEditDraft.trim()}>
-                              {noteBusy ? 'Saving…' : 'Save'}
+                              {noteBusy ? translate("common.saving") : translate("common.save")}
                             </button>
                             <button class="btn sm" type="button" disabled={noteBusy}
-                                    onclick={() => { noteEditID = null; noteEditDraft = ''; noteError = '' }}>Cancel</button>
+                                    onclick={() => { noteEditID = null; noteEditDraft = ''; noteError = '' }}>{translate("common.cancel")}</button>
                           </div>
                         </form>
                       {:else}
                         <p class="note-body">{note.note}</p>
                         {#if note.can_edit && !trashed}
                           <div class="note-actions">
-                            <button class="btn sm" type="button" disabled={noteBusy} onclick={() => startNoteEdit(note)}>Edit</button>
-                            <button class="btn danger sm" type="button" disabled={noteBusy} onclick={() => (notePendingDelete = note)}>Delete</button>
+                            <button class="btn sm" type="button" disabled={noteBusy} onclick={() => startNoteEdit(note)}>{translate("documentDetail.edit")}</button>
+                            <button class="btn danger sm" type="button" disabled={noteBusy} onclick={() => (notePendingDelete = note)}>{translate("common.delete")}</button>
                           </div>
                         {/if}
                       {/if}
                     </article>
                   {:else}
-                    <p class="sub note-empty">{trashed ? 'No notes on this version.' : 'No notes yet. Add context without changing the original file.'}</p>
+                    <p class="sub note-empty">{trashed ? translate("documentDetail.noNotesOnThisVersion") : translate("documentDetail.noNotesYetAddContextWithoutChangingThe")}</p>
                   {/each}
                 </div>
               </section>
@@ -1857,26 +1859,26 @@
         </section>
 
       {#if doc.content}
-        <section class="card" aria-label="Extracted text">
+        <section class="card" aria-label={translate("documentDetail.extractedText")}>
           <h3 style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-            Extracted text
+            {translate("documentDetail.extractedText")}
             {#if blurred}
               <span class="pill danger" style="font-size:.7rem">{sensitivityLabel(doc.sensitivity)}</span>
-              <button class="btn sm" style="margin-left:auto" onclick={() => (revealed = true)}><Icon name="eye" size={12} /> Reveal</button>
+              <button class="btn sm" style="margin-left:auto" onclick={() => (revealed = true)}><Icon name="eye" size={12} /> {translate("documentDetail.reveal")}</button>
             {:else}
-              <button class="btn sm" style="margin-left:auto" onclick={copyExtractedText}>Copy text</button>
+              <button class="btn sm" style="margin-left:auto" onclick={copyExtractedText}>{translate("documentDetail.copyText")}</button>
             {/if}
           </h3>
           {#if !blurred && textCopyStatus}<p class="sub" role="status">{textCopyStatus}</p>{/if}
           {#if !blurred && textCopyFallback}
-            <textarea class="input extracted-copy" aria-label="Full extracted text for copying" readonly value={doc.content}
+            <textarea class="input extracted-copy" aria-label={translate("documentDetail.fullExtractedTextForCopying")} readonly value={doc.content}
                       onclick={(event) => event.currentTarget.select()} rows="12"></textarea>
           {:else}
             <p class="sub extracted" class:blurred class:expanded={fullText}
-               aria-hidden={blurred}>{blurred ? 'Reveal to read extracted text.' : fullText ? doc.content : doc.content.slice(0, 2000)}{!blurred && !fullText && doc.content.length > 2000 ? '…' : ''}</p>
+               aria-hidden={blurred}>{blurred ? translate("documentDetail.revealToReadExtractedText") : fullText ? doc.content : doc.content.slice(0, 2000)}{!blurred && !fullText && doc.content.length > 2000 ? '…' : ''}</p>
             {#if !blurred && doc.content.length > 2000}
               <button class="btn sm" style="margin-top:10px" aria-expanded={fullText}
-                      onclick={() => (fullText = !fullText)}>{fullText ? 'Show less' : 'Read all'}</button>
+                      onclick={() => (fullText = !fullText)}>{fullText ? translate("documentDetail.showLess") : translate("documentDetail.readAll")}</button>
             {/if}
           {/if}
         </section>
@@ -1888,33 +1890,33 @@
 
 {#if accessOpen && access}
   <div class="modal-veil" onclick={() => (accessOpen = false)} role="presentation">
-    <div class="modal" style="width:min(620px,94vw)" onclick={(e) => e.stopPropagation()} onkeydown={(e) => { if (e.key === 'Escape') accessOpen = false }} role="dialog" aria-label="Document access" tabindex="-1">
+    <div class="modal" style="width:min(620px,94vw)" onclick={(e) => e.stopPropagation()} onkeydown={(e) => { if (e.key === 'Escape') accessOpen = false }} role="dialog" aria-label={translate("documentDetail.documentAccess")} tabindex="-1">
       <div class="modal-head">
-        <h3>Access to “{doc?.title || `Document #${id}`}” <span class="pill">{access.results?.length || 0}</span></h3>
-        <button class="btn sm" onclick={() => (accessOpen = false)} title="Close" aria-label="Close access"><Icon name="x" size={13} /></button>
+        <h3>{translate("documentDetail.accessToValue", { "id": doc?.title || `Document #${id}` })} <span class="pill">{access.results?.length || 0}</span></h3>
+        <button class="btn sm" onclick={() => (accessOpen = false)} title={translate("common.close")} aria-label={translate("documentDetail.closeAccess")}><Icon name="x" size={13} /></button>
       </div>
       <form class="toolbar" style="margin-bottom:{access.results?.length ? '10px' : '0'}" onsubmit={grantAccess}>
-        <select class="input" style="flex:1;max-width:none;min-width:180px" bind:value={accessDraft.principal} aria-label="Person or group">
-          <option value="">Select a person or group</option>
+        <select class="input" style="flex:1;max-width:none;min-width:180px" bind:value={accessDraft.principal} aria-label={translate("documentDetail.personOrGroup")}>
+          <option value="">{translate("documentDetail.selectAPersonOrGroup")}</option>
           {#if availablePrincipals('user').length}
-            <optgroup label="People">
+            <optgroup label={translate("documentDetail.people")}>
               {#each availablePrincipals('user') as person (person.id)}
-                <option value={principalKey(person)}>{person.name}{person.email && person.email !== person.name ? ` · ${person.email}` : ''}</option>
+                <option value={principalKey(person)}>{person.name}{person.email && person.email !== person.name ? translate("documentDetail.value2", { "email": person.email }) : ''}</option>
               {/each}
             </optgroup>
           {/if}
           {#if availablePrincipals('group').length}
-            <optgroup label="Groups">
+            <optgroup label={translate("documentDetail.groups")}>
               {#each availablePrincipals('group') as group (group.id)}
                 <option value={principalKey(group)}>{group.name}</option>
               {/each}
             </optgroup>
           {/if}
         </select>
-        <select class="input" style="max-width:130px" bind:value={accessDraft.perm_bits} aria-label="Access level">
+        <select class="input" style="max-width:130px" bind:value={accessDraft.perm_bits} aria-label={translate("documentDetail.accessLevel")}>
           {#each ACCESS_LEVELS as [value, label]}<option {value}>{label}</option>{/each}
         </select>
-        <button class="btn primary sm" disabled={!accessDraft.principal}><Icon name="plus" size={12} /> Add</button>
+        <button class="btn primary sm" disabled={!accessDraft.principal}><Icon name="plus" size={12} /> {translate("documentDetail.add")}</button>
       </form>
       {#if access.results?.length}
         <div class="index" style="border:0">
@@ -1923,15 +1925,15 @@
             <div class="irow" style="padding:7px 2px;cursor:default">
               <span class="dot" class:accent={grant.principal_kind === 'group'}></span>
               <span class="grow" style="min-width:0">
-                <span class="title" style="display:block;font-size:.82rem">{principal?.name || `${grant.principal_kind} #${grant.principal_id}`}</span>
-                <span class="sub" style="display:block;overflow:hidden;text-overflow:ellipsis">{principal?.email || (grant.principal_kind === 'group' ? 'Group' : '')}</span>
+                <span class="title" style="display:block;font-size:.82rem">{principal?.name || translate("documentDetail.valueValue2", { "principal_kind": grant.principal_kind, "principal_id": grant.principal_id })}</span>
+                <span class="sub" style="display:block;overflow:hidden;text-overflow:ellipsis">{principal?.email || (grant.principal_kind === 'group' ? translate("documentDetail.group") : '')}</span>
               </span>
               <select class="input" style="width:118px;padding:4px 7px;font-size:.76rem" value={String(grant.perm_bits)}
-                      aria-label={`Access for ${principal?.name || grant.principal_kind}`}
+                      aria-label={translate("documentDetail.accessForValue", { "principal_kind": principal?.name || grant.principal_kind })}
                       title={accessLabel(grant.perm_bits)} onchange={(e) => changeAccess(grant, e.target.value)}>
                 {#each ACCESS_LEVELS as [value, label]}<option {value}>{label}</option>{/each}
               </select>
-              <button class="btn sm danger" title="Revoke access" aria-label="Revoke access" onclick={() => revokeAccess(grant)}><Icon name="trash" size={12} /></button>
+              <button class="btn sm danger" title={translate("documentDetail.revokeAccess")} aria-label={translate("documentDetail.revokeAccess")} onclick={() => revokeAccess(grant)}><Icon name="trash" size={12} /></button>
             </div>
           {/each}
         </div>
@@ -1942,10 +1944,10 @@
 
 {#if notePendingDelete}
   <ConfirmDialog
-    title="Delete note?"
-    message={`The note by ${notePendingDelete.author} will be permanently deleted.`}
-    confirmLabel="Delete note"
-    busyLabel="Deleting…"
+    title={translate("documentDetail.deleteNote")}
+    message={translate("documentDetail.theNoteByValueWillBePermanentlyDeleted", { "author": notePendingDelete.author })}
+    confirmLabel={translate("documentDetail.deleteNote2")}
+    busyLabel={translate("documentDetail.deleting")}
     busy={noteBusy}
     onConfirm={removeNote}
     onCancel={() => (notePendingDelete = null)} />
@@ -1953,9 +1955,9 @@
 
 {#if trashOpen}
   <ConfirmDialog
-    title="Move document to trash?"
-    message={`“${doc?.title || `Document #${id}`}” will move to Trash, where it can be restored.`}
-    confirmLabel="Move to trash"
+    title={translate("documentDetail.moveDocumentToTrash")}
+    message={translate("documentDetail.valueWillMoveToTrashWhereItCan", { "id": doc?.title || `Document #${id}` })}
+    confirmLabel={translate("documentDetail.moveToTrash")}
     busy={trashBusy}
     onConfirm={trash}
     onCancel={() => (trashOpen = false)} />
@@ -1963,10 +1965,10 @@
 
 {#if deleteOpen}
   <ConfirmDialog
-    title="Delete permanently?"
-    message={`“${doc?.title || `Document #${id}`}” will be permanently deleted, and any share link containing it will be revoked. This cannot be undone.`}
-    confirmLabel="Delete permanently"
-    busyLabel="Deleting…"
+    title={translate("documentDetail.deletePermanently2")}
+    message={translate("documentDetail.valueWillBePermanentlyDeletedAndAnyShare", { "id": doc?.title || `Document #${id}` })}
+    confirmLabel={translate("documentDetail.deletePermanently")}
+    busyLabel={translate("documentDetail.deleting")}
     busy={recoveryBusy}
     onConfirm={permanentlyDelete}
     onCancel={() => (deleteOpen = false)} />
@@ -1978,74 +1980,74 @@
 
 {#if shareOpen}
   <div class="modal-veil" onclick={closeShare} role="presentation">
-    <div class="modal share-modal" onclick={(e) => e.stopPropagation()} onkeydown={(e) => { if (e.key === 'Escape') closeShare() }} role="dialog" aria-label="Share document" tabindex="-1">
+    <div class="modal share-modal" onclick={(e) => e.stopPropagation()} onkeydown={(e) => { if (e.key === 'Escape') closeShare() }} role="dialog" aria-label={translate("documentDetail.shareDocument")} tabindex="-1">
       <div class="modal-head">
-        <h3>Share “{doc?.title || `Document #${id}`}”</h3>
-        <button class="btn sm" onclick={closeShare} title="Close" aria-label="Close sharing"><Icon name="x" size={13} /></button>
+        <h3>{translate("documentDetail.shareValue", { "id": doc?.title || `Document #${id}` })}</h3>
+        <button class="btn sm" onclick={closeShare} title={translate("common.close")} aria-label={translate("documentDetail.closeSharing")}><Icon name="x" size={13} /></button>
       </div>
-      <p class="sub share-intro">Choose where the link works. Recipients do not need a Suchi account.</p>
+      <p class="sub share-intro">{translate("documentDetail.chooseWhereTheLinkWorksRecipientsDo")}</p>
       <div class="share-preview">
-        <span>Recipients will see</span>
-        <strong>{doc?.title || `Document #${id}`}</strong>
+        <span>{translate("documentDetail.recipientsWillSee")}</span>
+        <strong>{doc?.title || translate("documentDetail.documentValue", { "id": id })}</strong>
         <small>{shareIdentity}</small>
-        <em>Powered by suchi</em>
+        <em>{translate("documentDetail.poweredBySuchi")}</em>
       </div>
       <ShareLinkForm bind:value={sh} publicAvailable={publicShareAvailable}
                      highSensitivity={highSensitivity} busy={shareBusy} onSubmit={makeLink} />
       {#if shareURL}
         <div class="toolbar share-created">
-          <input class="input mono" aria-label="Share link" readonly value={shareURL}
+          <input class="input mono" aria-label={translate("documentDetail.shareLink")} readonly value={shareURL}
                  onclick={(event) => event.currentTarget.select()} />
-          <button class="btn sm" onclick={copyShareLink}>Copy link</button>
+          <button class="btn sm" onclick={copyShareLink}>{translate("documentDetail.copyLink")}</button>
         </div>
         <LinkQR url={shareURL} />
       {/if}
 
       <section class="share-section" aria-labelledby="active-share-links">
-        <h3 id="active-share-links">Active links</h3>
+        <h3 id="active-share-links">{translate("documentDetail.activeLinks")}</h3>
         {#if shareLoading}
-          <p class="sub" role="status">Loading active links…</p>
+          <p class="sub" role="status">{translate("documentDetail.loadingActiveLinks")}</p>
         {:else if shareLinks.length}
           <div class="share-list">
             {#each shareLinks as link (link.id)}
               <div class="share-row">
                 <div class="grow">
                   <div class="share-badges">
-                    <span class="pill">{link.visibility === 'public' ? 'Public internet' : 'Private network'}</span>
-                    <span class="pill" class:warn={link.has_password}>{link.has_password ? 'Password' : 'No password'}</span>
+                    <span class="pill">{link.visibility === 'public' ? translate("documentDetail.publicInternet") : translate("documentDetail.privateNetwork")}</span>
+                    <span class="pill" class:warn={link.has_password}>{link.has_password ? translate("documentDetail.password") : translate("documentDetail.noPassword")}</span>
                   </div>
                   <span class="mono share-link-value">{shareLinkURL(link)}</span>
                   <small>{shareExpiry(link)}</small>
                 </div>
                 <div class="share-actions">
-                  <button class="btn sm" onclick={() => copyExistingShare(link)}>Copy</button>
-                  <button class="btn sm" onclick={() => (shareURL = shareLinkURL(link))}>Show</button>
-                  <button class="btn sm danger" onclick={() => (sharePendingRevoke = link)}>Revoke</button>
+                  <button class="btn sm" onclick={() => copyExistingShare(link)}>{translate("documentDetail.copy")}</button>
+                  <button class="btn sm" onclick={() => (shareURL = shareLinkURL(link))}>{translate("documentDetail.show")}</button>
+                  <button class="btn sm danger" onclick={() => (sharePendingRevoke = link)}>{translate("documentDetail.revoke")}</button>
                 </div>
               </div>
             {/each}
           </div>
         {:else}
-          <p class="sub">No active links.</p>
+          <p class="sub">{translate("documentDetail.noActiveLinks")}</p>
         {/if}
       </section>
 
       <section class="share-section">
         <button class="btn sm share-history-toggle" aria-expanded={shareHistoryOpen} onclick={toggleShareHistory}>
-          History{shareHistoryLoaded ? ` (${shareHistory.count})` : ''}
+          {translate("documentDetail.historyValue", { "count": shareHistoryLoaded ? ` (${shareHistory.count})` : '' })}
         </button>
         {#if shareHistoryOpen}
           {#if shareHistoryLoading}
-            <p class="sub" role="status">Loading history…</p>
+            <p class="sub" role="status">{translate("documentDetail.loadingHistory")}</p>
           {:else if shareHistory.results.length}
             <div class="share-list history">
               {#each shareHistory.results as link (link.id)}
                 <div class="share-row">
                   <div class="grow">
                     <div class="share-badges">
-                      <span class="pill">{link.visibility === 'public' ? 'Public internet' : 'Private network'}</span>
-                      <span class="pill">{link.revoked_at ? 'Revoked' : 'Expired'}</span>
-                      <span class="pill" class:warn={link.has_password}>{link.has_password ? 'Password' : 'No password'}</span>
+                      <span class="pill">{link.visibility === 'public' ? translate("documentDetail.publicInternet") : translate("documentDetail.privateNetwork")}</span>
+                      <span class="pill">{link.revoked_at ? translate("documentDetail.revoked") : translate("documentDetail.expired")}</span>
+                      <span class="pill" class:warn={link.has_password}>{link.has_password ? translate("documentDetail.password") : translate("documentDetail.noPassword")}</span>
                     </div>
                     <small>{shareExpiry(link)}</small>
                   </div>
@@ -2055,14 +2057,14 @@
             {#if shareHistory.count > SHARE_HISTORY_PAGE_SIZE}
               <div class="toolbar share-history-pages">
                 <button class="btn sm" disabled={shareHistoryPage <= 1 || shareHistoryLoading}
-                        onclick={() => loadShareHistory(shareHistoryPage - 1)}>Previous</button>
-                <span class="sub">Page {shareHistoryPage}</span>
+                        onclick={() => loadShareHistory(shareHistoryPage - 1)}>{translate("documentDetail.previous")}</button>
+                <span class="sub">{translate("documentDetail.pageValue3", { "shareHistoryPage": shareHistoryPage })}</span>
                 <button class="btn sm" disabled={shareHistoryPage * SHARE_HISTORY_PAGE_SIZE >= shareHistory.count || shareHistoryLoading}
-                        onclick={() => loadShareHistory(shareHistoryPage + 1)}>Next</button>
+                        onclick={() => loadShareHistory(shareHistoryPage + 1)}>{translate("documentDetail.next")}</button>
               </div>
             {/if}
           {:else}
-            <p class="sub">No expired or revoked links.</p>
+            <p class="sub">{translate("documentDetail.noExpiredOrRevokedLinks")}</p>
           {/if}
         {/if}
       </section>
@@ -2073,10 +2075,10 @@
 
 {#if sharePendingRevoke}
   <ConfirmDialog
-    title="Revoke share link?"
-    message="Future access will stop immediately, but revocation cannot retract files already downloaded."
-    confirmLabel="Revoke link"
-    busyLabel="Revoking…"
+    title={translate("documentDetail.revokeShareLink")}
+    message={translate("documentDetail.futureAccessWillStopImmediatelyButRevocation")}
+    confirmLabel={translate("documentDetail.revokeLink")}
+    busyLabel={translate("documentDetail.revoking")}
     busy={shareRevokeBusy}
     onConfirm={revokeShare}
     onCancel={() => (sharePendingRevoke = null)} />

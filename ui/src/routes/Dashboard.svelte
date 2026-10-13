@@ -1,5 +1,6 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script>
+  import { t as translate } from "../lib/i18n.svelte.js";
   import { scopedHash as filingHref } from '../lib/systems.svelte.js'
   import { onDestroy } from 'svelte'
   import { listSavedViews } from '../lib/api.js'
@@ -27,58 +28,58 @@
   const onboarding = $derived.by(() => {
     if (setupNeeded) {
       return {
-        step: 'Step 1 of 3',
+        step: translate("dashboard.step1Of3"),
         icon: 'settings',
-        title: setupError ? 'Check archive setup' : 'Choose your filing tree',
+        title: setupError ? translate("dashboard.checkArchiveSetup") : translate("dashboard.chooseYourFilingTree"),
         body: setupError
-          ? 'Suchi could not confirm whether setup is complete. Retry, or open the filing tree settings.'
-          : 'Choose how documents will be organized before adding your first one.',
-        action: 'Continue setup',
+          ? translate("dashboard.suchiCouldNotConfirmWhetherSetupIsComplete")
+          : translate("dashboard.chooseHowDocumentsWillBeOrganizedBeforeAdding"),
+        action: translate("dashboard.continueSetup"),
         href: '#/settings?tab=archive&section=filing-tree',
       }
     }
     if (!st) return null
     if (total === 0) {
       return {
-        step: 'Step 2 of 3',
+        step: translate("dashboard.step2Of3"),
         icon: 'upload',
-        title: 'Add your first document',
-        body: 'Start with one representative document. Suchi keeps the original and prepares it for filing.',
-        action: 'Upload a document',
+        title: translate("dashboard.addYourFirstDocument"),
+        body: translate("dashboard.startWithOneRepresentativeDocumentSuchiKeepsThe"),
+        action: translate("dashboard.uploadADocument"),
         href: '#/upload',
       }
     }
     if (total === 1 && (inboxCount > 0 || pending > 0 || dead > 0)) {
       if (pending > 0) {
         return {
-          step: 'Step 3 of 3',
+          step: translate("dashboard.step3Of3"),
           icon: 'tasks',
-          title: 'Finish your first document',
+          title: translate("dashboard.finishYourFirstDocument"),
           body: inboxCount > 0
-            ? 'Review the waiting suggestion or decision, then file the document from Inbox.'
-            : 'A suggestion or decision is waiting for your review.',
-          action: 'Review it',
+            ? translate("dashboard.reviewTheWaitingSuggestionOrDecisionThenFile")
+            : translate("dashboard.aSuggestionOrDecisionIsWaitingForYour"),
+          action: translate("dashboard.reviewIt"),
           href: '#/tasks',
-          secondaryAction: inboxCount > 0 ? 'Open Inbox' : '',
+          secondaryAction: inboxCount > 0 ? translate("dashboard.openInbox") : '',
           secondaryHref: '#/inbox',
         }
       }
       if (inboxCount > 0) {
         return {
-          step: 'Step 3 of 3',
+          step: translate("dashboard.step3Of3"),
           icon: 'inbox',
-          title: 'Finish filing your first document',
-          body: 'The document is ready for a filing decision in Inbox.',
-          action: 'Open Inbox',
+          title: translate("dashboard.finishFilingYourFirstDocument"),
+          body: translate("dashboard.theDocumentIsReadyForAFilingDecision"),
+          action: translate("dashboard.openInbox"),
           href: '#/inbox',
         }
       }
       return {
-        step: 'Step 3 of 3',
+        step: translate("dashboard.step3Of3"),
         icon: 'zap',
-        title: 'Finish processing your first document',
-        body: 'Processing stopped before the document was ready. Open the issue to retry or dismiss it.',
-        action: 'Open processing issues',
+        title: translate("dashboard.finishProcessingYourFirstDocument"),
+        body: translate("dashboard.processingStoppedBeforeTheDocumentWasReadyOpen"),
+        action: translate("dashboard.openProcessingIssues"),
         href: '#/tasks',
       }
     }
@@ -113,7 +114,7 @@
     } catch (ex) {
       if (version !== loadVersion) return
       views = []
-      viewsError = ex.message || 'Could not load views.'
+      viewsError = ex.message || translate("dashboard.couldNotLoadViews")
     } finally {
       if (activeController === controller) activeController = undefined
       if (version === loadVersion) viewsLoading = false
@@ -125,9 +126,9 @@
     if (f.q) parts.push(`“${f.q}”`)
     if (f.tags__id__in) parts.push('tag')
     if (f.correspondents__id__in) parts.push('correspondent')
-    if (f.jd_category_id) parts.push('filing category')
+    if (f.jd_category_id) parts.push(translate("dashboard.filingCategory"))
     if (f.sensitivity) parts.push(f.sensitivity)
-    return parts.join(' · ') || 'all documents'
+    return parts.join(' · ') || translate("dashboard.allDocuments2")
   }
 
   load()
@@ -141,7 +142,7 @@
     <section class="onboarding-card card" aria-labelledby="onboarding-heading">
       <span class="onboarding-icon"><Icon name={onboarding.icon} size={20} /></span>
       <div class="onboarding-copy">
-        <span class="onboarding-step">Getting started · {onboarding.step}</span>
+        <span class="onboarding-step">{translate("dashboard.gettingStartedValue", { "step": onboarding.step })}</span>
         <h2 id="onboarding-heading">{onboarding.title}</h2>
         <p>{onboarding.body}</p>
         <div class="onboarding-actions">
@@ -150,7 +151,7 @@
             <a class="btn" href={filingHref(onboarding.secondaryHref)}>{onboarding.secondaryAction}</a>
           {/if}
           {#if setupError}
-            <button class="btn" type="button" onclick={() => onRetrySetup?.()}>Retry setup status</button>
+            <button class="btn" type="button" onclick={() => onRetrySetup?.()}>{translate("dashboard.retrySetupStatus")}</button>
           {/if}
         </div>
       </div>
@@ -159,42 +160,42 @@
 
 <div class="metrics">
   <a class="metric card" href={filingHref("#/documents")}>
-    <span class="m-label"><Icon name="docs" size={14} /> Total documents</span>
+    <span class="m-label"><Icon name="docs" size={14} /> {translate("dashboard.totalDocuments")}</span>
     <span class="m-value">{total ?? '—'}</span>
-    <span class="m-sub">{st?.ingested_7d ? `${st.ingested_7d} added in the last 7 days` : 'across the whole archive'}</span>
+    <span class="m-sub">{st?.ingested_7d ? translate("dashboard.valueAddedInTheLast7Days", { "ingested_7d": st.ingested_7d }) : translate("dashboard.acrossTheWholeArchive")}</span>
   </a>
   <a class="metric card" href={filingHref("#/inbox")} class:attn={inboxCount > 0}>
-    <span class="m-label"><Icon name="inbox" size={14} /> Inbox</span>
+    <span class="m-label"><Icon name="inbox" size={14} /> {translate("dashboard.inbox")}</span>
     <span class="m-value">{inboxCategory ? inboxCount : '—'}</span>
     <span class="m-sub">{inboxCategory
-      ? (inboxCount > 0 ? 'waiting to be filed' : 'everything is filed')
-      : (taxonomyLoaded ? (taxonomyError || 'inbox unavailable') : 'loading archive structure')}</span>
+      ? (inboxCount > 0 ? translate("dashboard.waitingToBeFiled") : translate("dashboard.everythingIsFiled"))
+      : (taxonomyLoaded ? (taxonomyError || translate("dashboard.inboxUnavailable")) : translate("dashboard.loadingArchiveStructure"))}</span>
   </a>
   <a class="metric card" href={filingHref("#/tasks")} class:attn={pending > 0}>
-    <span class="m-label"><Icon name="tasks" size={14} /> Approvals</span>
+    <span class="m-label"><Icon name="tasks" size={14} /> {translate("dashboard.approvals")}</span>
     <span class="m-value">{st ? pending : '—'}</span>
-    <span class="m-sub">{st ? (pending > 0 ? 'waiting on you' : 'none pending') : (statsError || 'loading archive status')}</span>
+    <span class="m-sub">{st ? (pending > 0 ? translate("dashboard.waitingOnYou") : translate("dashboard.nonePending")) : (statsError || translate("dashboard.loadingArchiveStatus"))}</span>
   </a>
   <a class="metric card" href={filingHref("#/tasks")} class:bad={dead > 0}>
-    <span class="m-label"><Icon name="zap" size={14} /> Failed jobs</span>
+    <span class="m-label"><Icon name="zap" size={14} /> {translate("dashboard.failedJobs")}</span>
     <span class="m-value">{st ? dead : '—'}</span>
-    <span class="m-sub">{st ? (dead > 0 ? 'dead-lettered — needs attention' : 'pipeline healthy') : (statsError || 'loading archive status')}</span>
+    <span class="m-sub">{st ? (dead > 0 ? translate("dashboard.deadLetteredNeedsAttention") : translate("dashboard.pipelineHealthy")) : (statsError || translate("dashboard.loadingArchiveStatus"))}</span>
   </a>
 </div>
 
 <div class="dash-grid">
   <div>
     <div class="dash-head">
-      <h3>Recently added</h3>
-      <a class="btn sm" href={filingHref("#/documents")}>All documents</a>
+      <h3>{translate("dashboard.recentlyAdded")}</h3>
+      <a class="btn sm" href={filingHref("#/documents")}>{translate("dashboard.allDocuments")}</a>
     </div>
     {#if recent === undefined}
-      <div class="index" aria-label="Loading recent documents">
+      <div class="index" aria-label={translate("dashboard.loadingRecentDocuments")}>
         {#each Array(3) as _}<div class="irow"><div class="skel" style="width:68%"></div></div>{/each}
       </div>
     {:else if recentError}
       <div class="card" style="display:flex;align-items:center;justify-content:space-between;gap:12px;color:var(--muted);font-size:.86rem">
-        <span>{recentError}</span><button class="btn sm" onclick={() => onRetryRecent?.({ background: false })}>Retry</button>
+        <span>{recentError}</span><button class="btn sm" onclick={() => onRetryRecent?.({ background: false })}>{translate("common.retry")}</button>
       </div>
     {:else if recent.length}
       <div class="index">
@@ -202,7 +203,7 @@
           <a class="irow" href={filingHref(`#/doc/${d.id}`)}>
             <span class="dot {sensDot(d.sensitivity)}" class:accent={!d.sensitivity}></span>
             {#if d.jd_address || d.jd_category_code}<span class="chip" title={d.jd_category_name}>{d.jd_address || d.jd_category_code}</span>{/if}
-            <span class="title grow">{d.title || `Document #${d.id}`}</span>
+            <span class="title grow">{d.title || translate("dashboard.documentValue", { "id": d.id })}</span>
             <span class="sub">{fmtDate(d.created_at)}</span>
           </a>
         {/each}
@@ -210,22 +211,22 @@
     {:else}
       <div class="empty" style="padding:36px 20px">
         <Icon name="docs" size={44} />
-        <b>Nothing here yet.</b>
-        <span><a href={filingHref("#/upload")}>Upload the first document</a>, point a watched folder at it, or forward an email.</span>
+        <b>{translate("dashboard.nothingHereYet")}</b>
+        <span><a href={filingHref("#/upload")}>{translate("dashboard.uploadTheFirstDocument")}</a>{translate("dashboard.pointAWatchedFolderAtItOr")}</span>
       </div>
     {/if}
   </div>
 
   <div>
     <div class="dash-head">
-      <h3>Views</h3>
-      <a class="btn sm" href={filingHref("#/views?new=1")}><Icon name="plus" size={13} /> New view</a>
+      <h3>{translate("dashboard.views")}</h3>
+      <a class="btn sm" href={filingHref("#/views?new=1")}><Icon name="plus" size={13} /> {translate("dashboard.newView")}</a>
     </div>
     {#if viewsLoading}
-      <div class="card" style="color:var(--muted);font-size:.86rem">Loading views…</div>
+      <div class="card" style="color:var(--muted);font-size:.86rem">{translate("dashboard.loadingViews")}</div>
     {:else if viewsError}
       <div class="card" style="display:flex;align-items:center;justify-content:space-between;gap:12px;color:var(--muted);font-size:.86rem">
-        <span>{viewsError}</span><button class="btn sm" onclick={load}>Retry</button>
+        <span>{viewsError}</span><button class="btn sm" onclick={load}>{translate("common.retry")}</button>
       </div>
     {:else if views.length}
       <div class="views">
@@ -236,10 +237,10 @@
           </a>
         {/each}
       </div>
-      {#if viewTotal > views.length}<a class="sub" href={filingHref("#/views")}>View all {viewTotal} saved views</a>{/if}
+      {#if viewTotal > views.length}<a class="sub" href={filingHref("#/views")}>{translate("dashboard.viewAllValueSavedViews", { "viewTotal": viewTotal })}</a>{/if}
     {:else}
       <div class="card" style="color:var(--muted);font-size:.86rem">
-        No saved views yet.
+        {translate("dashboard.noSavedViewsYet")}
       </div>
     {/if}
   </div>

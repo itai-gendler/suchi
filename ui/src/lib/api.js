@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 import { systems, captureScope, scopeCurrent, scopedURL, isScopedAPI, unavailableSystem } from './systems.svelte.js'
+import { t } from './i18n.svelte.js'
 
 // All browser credentials are HttpOnly cookies, including demo sessions.
 let sessionRevision = 0
@@ -14,7 +15,21 @@ function resetSessionRequests() {
 }
 
 class ApiError extends Error {
-  constructor(status, code, message, data) { super(message || code || `HTTP ${status}`); this.status = status; this.code = code; this.data = data }
+  constructor(status, code, data) {
+    const key = status === 401 ? 'apiError.unauthorized'
+      : status === 403 ? 'apiError.forbidden'
+        : status === 404 ? 'apiError.notFound'
+          : status === 409 ? 'apiError.conflict'
+            : status === 429 ? 'apiError.rateLimited'
+              : status >= 500 ? 'apiError.server'
+                : 'apiError.requestFailed'
+    // 4xx server text is actionable (validation paths, conflicts); 5xx text
+    // is already generic, so the localized status text replaces it.
+    super(status < 500 && data?.error || t(key, { status }))
+    this.status = status
+    this.code = code
+    this.data = data
+  }
 }
 
 async function req(method, path, body, opts = {}) {
@@ -33,7 +48,7 @@ async function req(method, path, body, opts = {}) {
     ? await r.text()
     : await r.json().catch(() => null)
   if (revision !== sessionRevision || (!opts.keepScope && !scopeCurrent(scope))) {
-    throw new DOMException('The account or filing system changed', 'AbortError')
+    throw new DOMException(t('apiError.contextChanged'), 'AbortError')
   }
   if (data?.code === 'system_unavailable' && scoped && scopeCurrent(scope)) {
     // Continuing uploads and pairing cleanup may still target the previous system.
@@ -49,8 +64,7 @@ async function req(method, path, body, opts = {}) {
     }
   }
   if (r.status === 204) return null
-  if (!r.ok) throw new ApiError(r.status, data?.code,
-    data?.message || data?.detail || data?.error, data)
+  if (!r.ok) throw new ApiError(r.status, data?.code, data)
   return data
 }
 

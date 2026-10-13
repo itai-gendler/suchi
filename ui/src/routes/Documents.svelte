@@ -1,11 +1,12 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script>
+  import { t as translate } from "../lib/i18n.svelte.js";
   import { scopedHash as filingHref, systems, captureScope, scopeCurrent } from '../lib/systems.svelte.js'
   import { onDestroy } from 'svelte'
   import { listDocuments, listTags, listAllTags, listCorrespondents, patchDocument, deleteDocument, bulkEdit, createShareLink, thumbPath, decryptDocument, decryptBatch, extractIntelligence } from '../lib/api.js'
   import { route, go } from '../lib/router.svelte.js'
   import { uploadBus } from '../lib/upload_bus.svelte.js'
-  import { SENSITIVITY_OPTIONS, fmtDate, isHighSensitivity, sensDot } from '../lib/format.js'
+  import { SENSITIVITY_OPTIONS, fmtDate, formatNumber, isHighSensitivity, plural, sensDot } from '../lib/format.js'
   import { session } from '../lib/session.svelte.js'
   import { hasCapability } from '../lib/capabilities.js'
   import Icon from '../lib/Icon.svelte'
@@ -44,23 +45,23 @@
   let dateFilterTrigger = $state()
   const hasDateFilter = $derived(!!(dateFrom || dateTo))
   const dateRangeLabel = $derived(
-    dateFrom && dateTo ? `${dateFrom} – ${dateTo}` :
-    dateFrom ? `From ${dateFrom}` :
-    dateTo ? `Through ${dateTo}` : 'Any date'
+    dateFrom && dateTo ? translate("documents.valueValue", { "dateFrom": dateFrom, "dateTo": dateTo }) :
+    dateFrom ? translate("documents.fromValue", { "dateFrom": dateFrom }) :
+    dateTo ? translate("documents.throughValue", { "dateTo": dateTo }) : translate("documents.anyDate")
   )
   const activeFilters = $derived.by(() => {
     const filters = []
     if (fTag) {
-      filters.push({ key: 'tags__id__in', label: `Tag: ${tags.find(tag => String(tag.id) === fTag)?.name || fTag}` })
+      filters.push({ key: 'tags__id__in', label: translate("documents.tagValue", { "fTag": tags.find(tag => String(tag.id) === fTag)?.name || fTag }) })
     }
     if (fCorr) {
-      filters.push({ key: 'correspondents__id__in', label: `Correspondent: ${correspondents.find(correspondent => String(correspondent.id) === fCorr)?.name || fCorr}` })
+      filters.push({ key: 'correspondents__id__in', label: translate("documents.correspondentValue", { "fCorr": correspondents.find(correspondent => String(correspondent.id) === fCorr)?.name || fCorr }) })
     }
-    if (fShareLink === 'active') filters.push({ key: 'share_link', label: 'Shared by me' })
+    if (fShareLink === 'active') filters.push({ key: 'share_link', label: translate("documents.sharedByMe") })
     if (fSens) {
       filters.push({ key: 'sensitivity', label: SENSITIVITY_OPTIONS.find(option => option.value === fSens)?.label || fSens })
     }
-    if (hasDateFilter) filters.push({ key: 'date', label: `Added: ${dateRangeLabel}` })
+    if (hasDateFilter) filters.push({ key: 'date', label: translate("documents.addedValue", { "dateRangeLabel": dateRangeLabel }) })
     return filters
   })
   let view = $state((() => { try { return localStorage.getItem('suchi.docs.view') || 'list' } catch { return 'list' } })())
@@ -172,7 +173,7 @@
     try {
       const [t, c] = await Promise.all([listTags(), listCorrespondents()])
       tags = t?.results || []; correspondents = c?.results || []
-    } catch (ex) { facetError = ex.message || 'Some document filters could not be loaded.' }
+    } catch (ex) { facetError = ex.message || translate("documents.someDocumentFiltersCouldNotBeLoaded") }
   }
 
   async function load({ background = false } = {}) {
@@ -185,7 +186,7 @@
       docs = []
       count = 0
       loading = !taxonomyLoaded
-      if (taxonomyLoaded) err = 'The inbox is unavailable.'
+      if (taxonomyLoaded) err = translate("documents.theInboxIsUnavailable")
       return
     }
     const controller = new AbortController()
@@ -203,7 +204,7 @@
       const csvIDs = (value) => [...new Set(String(value || '').split(',')
         .map(item => Number(item.trim())).filter(item => Number.isInteger(item) && item > 0))]
       onScopeChange?.({
-        label: isInbox ? 'Inbox documents' : 'Documents shown here',
+        label: isInbox ? translate("documents.inboxDocuments") : translate("documents.documentsShownHere"),
         query: params.q || '',
         document_ids: csvIDs(params.document_ids),
         jd_category_id: Number(params.jd_category_id) || 0,
@@ -229,7 +230,7 @@
       if (sel.size && !visibleSelection.size) clearSel()
       else sel = visibleSelection
     } catch (ex) {
-      if (version === loadVersion) err = ex.message || 'Could not load documents.'
+      if (version === loadVersion) err = ex.message || translate("documents.couldNotLoadDocuments")
     } finally {
       if (activeController === controller) activeController = undefined
       if (version === loadVersion) loading = false
@@ -240,8 +241,8 @@
     try {
       await patchDocument(doc.id, { jd_category_id: Number(jdId) })
       await load()
-      notify?.('Filed')
-    } catch (ex) { notify?.(ex.message || 'Could not file it') }
+      notify?.(translate("documents.filed"))
+    } catch (ex) { notify?.(ex.message || translate("documents.couldNotFileIt")) }
   }
   let trashRequest = $state(null)
   let trashBusy = $state(false)
@@ -251,15 +252,15 @@
     if (!request) return
     trashBusy = true
     if (request.kind === 'bulk') {
-      await bulk('Trashed', 'delete', {})
+      await bulk(translate("documents.trashed"), 'delete', {})
       trashRequest = null
     } else {
       try {
         await deleteDocument(request.doc.id)
         await load()
         trashRequest = null
-        notify?.('Trashed')
-      } catch (ex) { notify?.(ex.message || 'Could not trash it') }
+        notify?.(translate("documents.trashed"))
+      } catch (ex) { notify?.(ex.message || translate("documents.couldNotTrashIt")) }
     }
     trashBusy = false
   }
@@ -311,7 +312,7 @@
       if (bulkTagCurrent(version, scope, path, query, user)) bulkTags = available
     } catch (ex) {
       if (bulkTagCurrent(version, scope, path, query, user))
-        bulkTagLoadError = ex.message || 'Could not load tags.'
+        bulkTagLoadError = ex.message || translate("documents.couldNotLoadTags")
     } finally {
       if (bulkTagCurrent(version, scope, path, query, user)) bulkTagLoading = false
     }
@@ -332,17 +333,17 @@
       const applied = ids.filter(id => successful.has(id)).length
       const failed = ids.length - applied
       if (failed) {
-        bulkTagError = `Added "${tag.name}" to ${applied} document${applied === 1 ? '' : 's'}; ${failed} failed. Retry to add it to the selection.`
+        bulkTagError = plural("documents.addedTagCountFailed", applied, { name: tag.name, failed })
         await load({ background: true })
         return false
       }
       clearSel()
-      notify?.(`Added "${tag.name}" to ${applied} document${applied === 1 ? '' : 's'}`)
+      notify?.(plural("documents.addedTagCount", applied, { name: tag.name }))
       await load({ background: true })
       return true
     } catch (ex) {
       if (bulkTagCurrent(version, scope, path, query, user))
-        bulkTagError = ex.message || 'Could not add the tag. Retry the selection.'
+        bulkTagError = ex.message || translate("documents.couldNotAddTheTagRetryTheSelection")
       return false
     } finally {
       if (version === bulkTagVersion && bulkTagSaving) {
@@ -378,15 +379,15 @@
     try {
       const res = await bulkEdit([...sel], method, parameters)
       const failed = (res?.results || []).filter(r => !r.ok).length
-      notify?.(failed ? `${label}: ${res.applied} done, ${failed} failed` : `${label}: ${res?.applied ?? sel.size} document${sel.size === 1 ? '' : 's'}`)
-    } catch (ex) { notify?.(ex.message || `${label} failed`) }
+      notify?.(failed ? translate("documents.valueValueDoneValueFailed", { "label": label, "applied": res.applied, "failed": failed }) : plural("documents.bulkResultCount", res?.applied ?? sel.size, { label }))
+    } catch (ex) { notify?.(ex.message || translate("documents.valueFailed", { "label": label })) }
     bulkBusy = false
     clearSel()
     load()
   }
-  const bulkRefile = (jdId) => bulk('Refiled', 'set_jd_category', { jd_category_id: Number(jdId) })
-  const bulkSens = (s) => bulk('Sensitivity set', 'set_sensitivity', { sensitivity: s })
-  const bulkRescan = () => bulk('Rescan started', 'rescan_enqueue', {})
+  const bulkRefile = (jdId) => bulk(translate("documents.refiled"), 'set_jd_category', { jd_category_id: Number(jdId) })
+  const bulkSens = (s) => bulk(translate("documents.sensitivitySet"), 'set_sensitivity', { sensitivity: s })
+  const bulkRescan = () => bulk(translate("documents.rescanStarted"), 'rescan_enqueue', {})
   const bulkTrash = () => (trashRequest = { kind: 'bulk', count: sel.size })
   function openBulkShare() {
     if (bulkBusy || !sel.size) return
@@ -410,7 +411,7 @@
     try {
       const res = await createShareLink({
         doc_ids: ids,
-        label: `Selection of ${ids.length}`,
+        label: translate("documents.selectionOfValue", { "length": ids.length }),
         visibility: bulkShareInput.visibility,
         expires_in_sec: Number(bulkShareInput.expiry),
         password: bulkShareInput.password,
@@ -422,7 +423,7 @@
       await copyShareLink()
     } catch (ex) {
       if (!disposed && bulkShareOpen && session.user === user && version === bulkShareVersion) {
-        notify?.(ex.message || 'Could not create the bundle')
+        notify?.(ex.message || translate("documents.couldNotCreateTheBundle"))
       }
     } finally {
       if (!disposed && session.user === user && version === bulkShareVersion) bulkBusy = false
@@ -431,7 +432,7 @@
 
   async function copyShareLink() {
     const copied = await copyText(shareURL)
-    notify?.(copied ? 'Share link copied' : 'Share link ready. Select the link and copy it manually.')
+    notify?.(copied ? translate("documents.shareLinkCopied") : translate("documents.shareLinkReadySelectTheLinkAndCopy"))
   }
 
   async function bulkExtractDates() {
@@ -441,11 +442,11 @@
       const result = await extractIntelligence({ document_ids: ids, types: ['date'] })
       const failed = (result?.results || []).filter(item => !item.ok).length
       notify?.(failed
-        ? `Date reading started for ${result?.applied || 0}; ${failed} could not be accessed`
-        : `Date reading started for ${result?.applied || ids.length} document${ids.length === 1 ? '' : 's'}`)
+        ? translate("documents.dateReadingPartial", { applied: result?.applied || 0, failed })
+        : plural("documents.dateReadingStartedCount", result?.applied || ids.length))
       clearSel()
     } catch (ex) {
-      notify?.(ex.message || 'Could not start date reading')
+      notify?.(ex.message || translate("documents.couldNotStartDateReading"))
     } finally {
       bulkBusy = false
     }
@@ -464,10 +465,10 @@
       await decryptDocument(d.id, { password, remember: true })
       d.encryption_state = 'decrypted'
       unlockPw = { ...unlockPw, [d.id]: '' }
-      notify?.(`Unlocked "${d.title || 'document #' + d.id}"`)
+      notify?.(translate("documents.unlockedValue", { "id": d.title || 'document #' + d.id }))
     } catch (ex) {
       const code = ex?.code || ''
-      unlockErr = { ...unlockErr, [d.id]: code === 'bad_password' ? 'wrong password' : (ex.message || 'unlock failed') }
+      unlockErr = { ...unlockErr, [d.id]: code === 'bad_password' ? translate("documents.wrongPassword") : (ex.message || translate("documents.unlockFailed")) }
     } finally {
       const next = new Set(unlockBusy); next.delete(d.id); unlockBusy = next
     }
@@ -490,13 +491,13 @@
       const results = res?.results || []
       const opened = results.filter(r => r.ok).length
       const tried = results.length || sel.size
-      notify?.(opened ? `Unlocked ${opened} of ${tried}` : 'That password opened nothing')
+      notify?.(opened ? translate("documents.unlockedValueOfValue", { "opened": opened, "tried": tried }) : translate("documents.thatPasswordOpenedNothing"))
       bulkDecPw = ''
       bulkDecOpen = false
       clearSel()
       load()
     } catch (ex) {
-      notify?.(ex.message || 'Batch unlock failed')
+      notify?.(ex.message || translate("documents.batchUnlockFailed"))
     } finally { bulkDecBusy = false }
   }
 
@@ -545,58 +546,58 @@
 
 {#if sel.size > 0}
   <div class="bulkbar">
-    <b>{sel.size} selected</b>
+    <b>{translate("documents.valueSelected", { "size": sel.size })}</b>
     <select class="input" style="max-width:190px" disabled={bulkBusy}
             onchange={(e) => e.target.value && bulkRefile(e.target.value)}>
-      <option value="">File under…</option>
+      <option value="">{translate("documents.fileUnder")}</option>
       {#each jdCategories as c}<option value={c.id}>{c.code} {c.name}</option>{/each}
     </select>
     <select class="input" style="max-width:160px" disabled={bulkBusy}
             onchange={(e) => bulkSens(e.target.value)}>
-      <option value="" selected disabled>Sensitivity…</option>
+      <option value="" selected disabled>{translate("documents.sensitivity")}</option>
       {#each SENSITIVITY_OPTIONS as option (option.value)}
         <option value={option.value}>{option.label}</option>
       {/each}
     </select>
     {#if !isInbox}
       <button class="btn sm" disabled={bulkBusy} aria-expanded={bulkTagOpen}
-              onclick={openBulkTags}>Add tags</button>
+              onclick={openBulkTags}>{translate("documents.addTags")}</button>
     {/if}
     {#if canAskArchive}
       <button class="btn sm" disabled={bulkBusy} onclick={() => onAskDocuments?.([...sel])}>
-        <Icon name="ask" size={12} /> Ask selection
+        <Icon name="ask" size={12} /> {translate("documents.askSelection")}
       </button>
     {/if}
     {#if canReviewIntelligence}
-      <button class="btn sm" disabled={bulkBusy} onclick={bulkExtractDates} title="Extract dates for review using the configured model">
-        <Icon name="calendar" size={12} /> Extract dates
+      <button class="btn sm" disabled={bulkBusy} onclick={bulkExtractDates} title={translate("documents.extractDatesForReviewUsingTheConfigured")}>
+        <Icon name="calendar" size={12} /> {translate("documents.extractDates")}
       </button>
     {/if}
     {#if canShareLinks}
-      <button class="btn sm" disabled={bulkBusy} onclick={openBulkShare}><Icon name="link" size={12} /> Share</button>
+      <button class="btn sm" disabled={bulkBusy} onclick={openBulkShare}><Icon name="link" size={12} /> {translate("documents.share")}</button>
     {/if}
     {#if anyLockedSelected}
       <button class="btn sm" disabled={bulkBusy} onclick={() => (bulkDecOpen = true)}
-              title="Try one password against every encrypted doc in the selection">
-        <Icon name="lock" size={12} /> Decrypt…
+              title={translate("documents.tryOnePasswordAgainstEveryEncryptedDoc")}>
+        <Icon name="lock" size={12} /> {translate("documents.decrypt")}
       </button>
     {/if}
-    <button class="btn sm danger" disabled={bulkBusy} onclick={bulkTrash}>Trash</button>
+    <button class="btn sm danger" disabled={bulkBusy} onclick={bulkTrash}>{translate("documents.trash")}</button>
     <span class="spacer"></span>
-    {#if bulkBusy}<span class="sub">working…</span>{/if}
-    <button class="btn sm" disabled={bulkBusy} onclick={bulkRescan} title="Read and process the selected documents again">
-      <Icon name="zap" size={12} /> Rescan
+    {#if bulkBusy}<span class="sub">{translate("documents.working")}</span>{/if}
+    <button class="btn sm" disabled={bulkBusy} onclick={bulkRescan} title={translate("documents.readAndProcessTheSelectedDocumentsAgain")}>
+      <Icon name="zap" size={12} /> {translate("documents.rescan")}
     </button>
-    <button class="btn sm" disabled={bulkBusy} onclick={clearSel}>Clear</button>
+    <button class="btn sm" disabled={bulkBusy} onclick={clearSel}>{translate("documents.clear")}</button>
     {#if bulkTagOpen && !isInbox}
-      <div class="bulk-tag-editor" role="group" aria-label="Add tags to selected documents">
+      <div class="bulk-tag-editor" role="group" aria-label={translate("documents.addTagsToSelectedDocuments")}>
         {#if bulkTagLoading}
-          <span class="sub">Loading tags…</span>
+          <span class="sub">{translate("documents.loadingTags")}</span>
         {:else if bulkTagLoadError}
           <span class="err" role="alert">{bulkTagLoadError}</span>
-          <button class="btn sm" disabled={bulkBusy} onclick={openBulkTags}>Retry tags</button>
+          <button class="btn sm" disabled={bulkBusy} onclick={openBulkTags}>{translate("documents.retryTags")}</button>
         {:else}
-          <TagPicker tags={bulkTags} disabled={bulkBusy} label="Tag for selection"
+          <TagPicker tags={bulkTags} disabled={bulkBusy} label={translate("documents.tagForSelection")}
                      menuId="bulk-tag-options" onChoose={chooseBulkTag} />
         {/if}
         {#if bulkTagError}<span class="err" role="alert">{bulkTagError}</span>{/if}
@@ -609,14 +610,14 @@
   <div class="modal-veil" onclick={closeBulkShare} role="presentation">
     <div class="modal" style="width:min(560px,94vw)" onclick={(event) => event.stopPropagation()}
          onkeydown={(event) => { if (event.key === 'Escape') closeBulkShare() }}
-         role="dialog" aria-label="Share selected documents" tabindex="-1">
+         role="dialog" aria-label={translate("documents.shareSelectedDocuments")} tabindex="-1">
       <div class="modal-head">
-        <h3>Share {sel.size} document{sel.size === 1 ? '' : 's'}</h3>
-        <button class="btn sm" onclick={closeBulkShare} title="Close" aria-label="Close sharing">
+        <h3>{plural("documents.shareDocumentCount", sel.size)}</h3>
+        <button class="btn sm" onclick={closeBulkShare} title={translate("common.close")} aria-label={translate("documents.closeSharing")}>
           <Icon name="x" size={13} />
         </button>
       </div>
-      <p class="sub" style="margin:0 0 12px">One link will contain every selected document. Recipients do not need a Suchi account.</p>
+      <p class="sub" style="margin:0 0 12px">{translate("documents.oneLinkWillContainEverySelectedDocument")}</p>
       <ShareLinkForm bind:value={bulkShareInput} publicAvailable={publicShareAvailable}
                      highSensitivity={selectedHighSensitivity} busy={bulkBusy} onSubmit={bulkShare} />
     </div>
@@ -624,12 +625,12 @@
 {/if}
 
 {#if shareURL}
-  <div class="card" role="group" aria-label="Created share link">
+  <div class="card" role="group" aria-label={translate("documents.createdShareLink")}>
     <div class="toolbar">
-    <input class="input mono" style="flex:1;min-width:0" aria-label="Share link" readonly value={shareURL}
+    <input class="input mono" style="flex:1;min-width:0" aria-label={translate("documents.shareLink")} readonly value={shareURL}
            onclick={(event) => event.currentTarget.select()} />
-    <button class="btn sm" onclick={copyShareLink}>Copy link</button>
-    <button class="btn sm" aria-label="Dismiss share link" onclick={() => (shareURL = '')}><Icon name="x" size={13} /></button>
+    <button class="btn sm" onclick={copyShareLink}>{translate("documents.copyLink")}</button>
+    <button class="btn sm" aria-label={translate("documents.dismissShareLink")} onclick={() => (shareURL = '')}><Icon name="x" size={13} /></button>
     </div>
     <LinkQR url={shareURL} />
   </div>
@@ -639,8 +640,8 @@
 
 {#if !isInbox}
   <div class="document-controls" onchangecapture={(e) => { if (e.target.matches('select')) e.target.blur() }}>
-    <div class="toolbar document-search-toolbar" role="group" aria-label="Document search">
-      <input class="input" type="search" value={fQuery} placeholder="Search or use jd:, tag:, from:…"
+    <div class="toolbar document-search-toolbar" role="group" aria-label={translate("documents.documentSearch")}>
+      <input class="input" type="search" value={fQuery} placeholder={translate("documents.searchOrUseJdTagFrom")}
              list="documents-query-suggestions"
              oninput={(event) => queryAssistant.update(event.currentTarget.value)}
              onchange={(e) => setRouteFilter('q', e.target.value)}
@@ -656,28 +657,28 @@
       <button type="button" class="btn sm" aria-expanded={mobileFiltersOpen}
               aria-controls="document-filter-panel" onclick={toggleMobileFilters}>
         <Icon name="settings" size={14} />
-        {activeFilters.length ? `Filters (${activeFilters.length})` : 'Filters'}
+        {activeFilters.length ? translate("documents.filtersValue", { "length": activeFilters.length }) : translate("documents.filters")}
       </button>
     </div>
-    <div class="toolbar document-toolbar document-options-toolbar" role="group" aria-label="Document options">
+    <div class="toolbar document-toolbar document-options-toolbar" role="group" aria-label={translate("documents.documentOptions")}>
       <div id="document-filter-panel" class="document-filter-controls" class:mobile-open={mobileFiltersOpen}>
-        <select class="input" aria-label="Filter by tag"
+        <select class="input" aria-label={translate("documents.filterByTag")}
                 onchange={(e) => setRouteFilter('tags__id__in', e.target.value)}>
-          <option value="" selected={!fTag}>All tags</option>
+          <option value="" selected={!fTag}>{translate("documents.allTags")}</option>
           {#each tags as t}<option value={t.id} selected={String(t.id) === fTag}>{t.name}</option>{/each}
         </select>
-        <select class="input" aria-label="Filter by correspondent"
+        <select class="input" aria-label={translate("documents.filterByCorrespondent")}
                 onchange={(e) => setRouteFilter('correspondents__id__in', e.target.value)}>
-          <option value="" selected={!fCorr}>All correspondents</option>
+          <option value="" selected={!fCorr}>{translate("documents.allCorrespondents")}</option>
           {#each correspondents as c}<option value={c.id} selected={String(c.id) === fCorr}>{c.name}</option>{/each}
         </select>
         <button type="button" class="btn sm document-share-filter" class:primary={fShareLink === 'active'}
                 aria-pressed={fShareLink === 'active'} onclick={toggleSharedByMe}>
-          <Icon name="link" size={14} /> Shared by me
+          <Icon name="link" size={14} /> {translate("documents.sharedByMe")}
         </button>
-        <select class="input" aria-label="Filter by sensitivity" value={fSens}
+        <select class="input" aria-label={translate("documents.filterBySensitivity")} value={fSens}
                 onchange={(e) => setRouteFilter('sensitivity', e.target.value)}>
-          <option value="">Any sensitivity</option>
+          <option value="">{translate("documents.anySensitivity")}</option>
           {#each SENSITIVITY_OPTIONS as option (option.value)}
             <option value={option.value}>{option.label}</option>
           {/each}
@@ -689,54 +690,54 @@
             <span>{dateRangeLabel}</span><Icon name="calendar" size={15} />
           </button>
           {#if dateFilterOpen}
-            <div id="document-date-range" class="date-range-menu" role="group" aria-label="Added date range">
+            <div id="document-date-range" class="date-range-menu" role="group" aria-label={translate("documents.addedDateRange")}>
               <div class="date-range-fields">
-                <label class="date-range-field"><span>From</span>
-                  <ISODateInput value={dateFrom} label="Added on or after"
+                <label class="date-range-field"><span>{translate("documents.from")}</span>
+                  <ISODateInput value={dateFrom} label={translate("documents.addedOnOrAfter")}
                                 onchange={(value) => setDateFilter('created_at__gte', value)} />
                 </label>
-                <label class="date-range-field"><span>To</span>
-                  <ISODateInput value={dateTo} label="Added on or before"
+                <label class="date-range-field"><span>{translate("documents.to")}</span>
+                  <ISODateInput value={dateTo} label={translate("documents.addedOnOrBefore")}
                                 onchange={(value) => setDateFilter('created_at__lte', value)} />
                 </label>
               </div>
               <div class="date-range-actions">
-                <button class="btn sm" type="button" disabled={!hasDateFilter} onclick={clearDateFilters}>Clear dates</button>
-                <button class="btn primary sm" type="button" onclick={closeDateFilter}>Done</button>
+                <button class="btn sm" type="button" disabled={!hasDateFilter} onclick={clearDateFilters}>{translate("documents.clearDates")}</button>
+                <button class="btn primary sm" type="button" onclick={closeDateFilter}>{translate("documents.done")}</button>
               </div>
             </div>
           {/if}
         </div>
       </div>
-      <span class="document-display-actions" role="group" aria-label="Document display">
+      <span class="document-display-actions" role="group" aria-label={translate("documents.documentDisplay")}>
         <span class="seg">
-          <button class:on={view === 'list'} onclick={() => setView('list')}>List</button>
-          <button class:on={view === 'grid'} onclick={() => setView('grid')}>Grid</button>
+          <button class:on={view === 'list'} onclick={() => setView('list')}>{translate("documents.list")}</button>
+          <button class:on={view === 'grid'} onclick={() => setView('grid')}>{translate("documents.grid")}</button>
         </span>
-        <button class="btn sm document-refresh" onclick={load} title="Refresh" aria-label="Refresh documents"><Icon name="refresh" size={13} /></button>
-        <select class="input" aria-label="Sort documents" value={ordering} onchange={(e) => setRouteFilter('ordering', e.target.value === '-created_at' ? '' : e.target.value)}>
-          <option value="-created_at">Newest first</option>
-          <option value="created_at">Oldest first</option>
-          <option value="title">Title A–Z</option>
-          <option value="-title">Title Z–A</option>
+        <button class="btn sm document-refresh" onclick={load} title={translate("documents.refresh")} aria-label={translate("documents.refreshDocuments")}><Icon name="refresh" size={13} /></button>
+        <select class="input" aria-label={translate("documents.sortDocuments")} value={ordering} onchange={(e) => setRouteFilter('ordering', e.target.value === '-created_at' ? '' : e.target.value)}>
+          <option value="-created_at">{translate("documents.newestFirst")}</option>
+          <option value="created_at">{translate("documents.oldestFirst")}</option>
+          <option value="title">{translate("documents.titleAZ")}</option>
+          <option value="-title">{translate("documents.titleZA")}</option>
         </select>
       </span>
     </div>
   </div>
   {#if facetError}
     <div class="err" style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px">
-      <span>{facetError}</span><button class="btn sm" onclick={loadFacets}>Retry filters</button>
+      <span>{facetError}</span><button class="btn sm" onclick={loadFacets}>{translate("documents.retryFilters")}</button>
     </div>
   {/if}
   {#if activeFilters.length}
-    <div class="mobile-filter-chips" role="group" aria-label="Active document filters">
+    <div class="mobile-filter-chips" role="group" aria-label={translate("documents.activeDocumentFilters")}>
       {#each activeFilters as filter (filter.key)}
-        <button type="button" class="filter-chip" aria-label={`Remove ${filter.label} filter`}
+        <button type="button" class="filter-chip" aria-label={translate("documents.removeValueFilter", { "label": filter.label })}
                 onclick={() => clearDocumentFilter(filter.key)}>
           <span>{filter.label}</span><Icon name="x" size={11} />
         </button>
       {/each}
-      <button type="button" class="btn sm clear-filter-chips" onclick={clearDocumentFilters}>Clear all</button>
+      <button type="button" class="btn sm clear-filter-chips" onclick={clearDocumentFilters}>{translate("documents.clearAll")}</button>
     </div>
   {/if}
 {/if}
@@ -747,11 +748,11 @@
   <div class="empty">
     <Icon name={isInbox ? 'inbox' : 'docs'} size={56} />
     {#if isInbox}
-      <b>Inbox zero.</b><span>Everything is filed. New documents that need a filing decision will wait here.</span>
+      <b>{translate("documents.inboxZero")}</b><span>{translate("documents.everythingIsFiledNewDocumentsThatNeed")}</span>
     {:else if fShareLink === 'active'}
-      <b>No actively shared documents.</b><span>Documents appear here while one of your share links is active.</span>
+      <b>{translate("documents.noActivelySharedDocuments")}</b><span>{translate("documents.documentsAppearHereWhileOneOfYour")}</span>
     {:else}
-      <b>No documents match.</b><span>Clear a filter, or <a href={filingHref("#/upload")}>upload the first one</a>.</span>
+      <b>{translate("documents.noDocumentsMatch")}</b><span>{translate("documents.clearAFilterOr")} <a href={filingHref("#/upload")}>{translate("documents.uploadTheFirstOne")}</a>.</span>
     {/if}
   </div>
 {:else}
@@ -763,12 +764,12 @@
           <span class="gmeta">
             <input type="checkbox" class="rowcheck" checked={sel.has(d.id)} disabled={bulkBusy}
                    onchange={(e) => toggleSel(i, e)}
-                   aria-label={`Select ${d.title || 'document ' + d.id}`} />
+                   aria-label={translate("documents.selectValue", { "id": d.title || 'document ' + d.id })} />
             <a class="grid-document-link" href={filingHref(`#/doc/${d.id}`)}
-               aria-label={d.title || `Document ${d.id}`}>
+               aria-label={d.title || translate("documents.documentValue", { "id": d.id })}>
               <span class="grid-document-title">
                 {#if d.jd_address || d.jd_category_code}<span class="chip">{d.jd_address || d.jd_category_code}</span>{/if}
-                <span class="title">{d.title || `Document #${d.id}`}</span>
+                <span class="title">{d.title || translate("documents.documentValue2", { "id": d.id })}</span>
                 <DocumentUnlockStatus state={d.encryption_state} />
               </span>
               <span class="sub">{fmtDate(d.created_at)}</span>
@@ -783,13 +784,13 @@
       <div class="irow hoverable document-row" data-row={i} class:cursor={i === lastIdx} class:selected={sel.has(d.id)}>
         <input type="checkbox" class="rowcheck" checked={sel.has(d.id)} disabled={bulkBusy}
                onchange={(e) => toggleSel(i, e)}
-               aria-label={`Select ${d.title || 'document ' + d.id}`} />
+               aria-label={translate("documents.selectValue", { "id": d.title || 'document ' + d.id })} />
         <a class="document-row-link" href={filingHref(`#/doc/${d.id}`)}
-           aria-label={d.title || `Document ${d.id}`}>
+           aria-label={d.title || translate("documents.documentValue", { "id": d.id })}>
           <span class="rthumb" class:blurred={isHighSensitivity(d.sensitivity)}><img src={thumbPath(d.id, isHighSensitivity(d.sensitivity))} alt="" loading="lazy" onerror={(e) => e.target.closest('.rthumb').classList.add('none')} /></span>
           <span class="dot {sensDot(d.sensitivity)}" class:accent={!d.sensitivity}></span>
-          {#if d.jd_address || d.jd_category_code}<span class="chip" title={`${d.jd_category_name} · ${d.jd_area_name}`}>{d.jd_address || d.jd_category_code}</span>{/if}
-          <span class="title grow">{d.title || `Document #${d.id}`}</span>
+          {#if d.jd_address || d.jd_category_code}<span class="chip" title={translate("documents.valueValue2", { "jd_category_name": d.jd_category_name, "jd_area_name": d.jd_area_name })}>{d.jd_address || d.jd_category_code}</span>{/if}
+          <span class="title grow">{d.title || translate("documents.documentValue2", { "id": d.id })}</span>
           <DocumentUnlockStatus state={d.encryption_state} />
           {#if d.tags?.length}
             {#each d.tags.slice(0, 3) as t}<span class="pill">{t}</span>{/each}
@@ -797,38 +798,38 @@
         </a>
         <span class="end">
           {#if d.encryption_state === 'encrypted'}
-            <span class="unlock-inline" role="group" aria-label={`Unlock ${d.title || 'document ' + d.id}`}>
-              <span class="pill warn" title="This doc is encrypted; unlock to make it searchable and previewable">
-                <Icon name="lock" size={11} /> Locked
+            <span class="unlock-inline" role="group" aria-label={translate("documents.unlockValue", { "id": d.title || 'document ' + d.id })}>
+              <span class="pill warn" title={translate("documents.thisDocIsEncryptedUnlockToMake")}>
+                <Icon name="lock" size={11} /> {translate("documents.locked")}
               </span>
               <input type="password" class="input" style="padding:3px 8px;font-size:.76rem;max-width:160px"
-                     placeholder="password"
+                     placeholder={translate("documents.password")}
                      bind:value={unlockPw[d.id]}
                      disabled={unlockBusy.has(d.id)}
                      onkeydown={(e) => { if (e.key === 'Enter') { e.preventDefault(); unlockOne(d) } }}
-                     aria-label={`Password for ${d.title || 'document ' + d.id}`} />
+                     aria-label={translate("documents.passwordForValue", { "id": d.title || 'document ' + d.id })} />
               <button class="btn sm primary" disabled={unlockBusy.has(d.id) || !unlockPw[d.id]}
                       onclick={() => unlockOne(d)}>
-                {unlockBusy.has(d.id) ? '…' : 'Unlock'}
+                {unlockBusy.has(d.id) ? '…' : translate("documents.unlock")}
               </button>
               {#if unlockErr[d.id]}<span class="sub" style="color:var(--danger)">{unlockErr[d.id]}</span>{/if}
             </span>
           {:else if isInbox && jdCategories.length}
             <select class="input" style="padding:3px 8px;font-size:.76rem;max-width:150px"
-                    aria-label={`File ${d.title || 'document ' + d.id} under`}
+                    aria-label={translate("documents.fileValueUnder", { "id": d.title || 'document ' + d.id })}
                     onchange={(e) => { if (e.target.value) fileTo(d, e.target.value) }}>
-              <option value="">File under…</option>
+              <option value="">{translate("documents.fileUnder")}</option>
               {#each jdCategories as c}<option value={c.id}>{c.code} {c.name}</option>{/each}
             </select>
           {:else}
-            <span class="hoveracts" role="group" aria-label={`Quick actions for ${d.title || 'document ' + d.id}`}>
+            <span class="hoveracts" role="group" aria-label={translate("documents.quickActionsForValue", { "id": d.title || 'document ' + d.id })}>
               <select class="input" style="padding:2px 6px;font-size:.72rem;max-width:130px"
-                      aria-label={`Refile ${d.title || 'document ' + d.id}`}
+                      aria-label={translate("documents.refileValue", { "id": d.title || 'document ' + d.id })}
                       onchange={(e) => { if (e.target.value) fileTo(d, e.target.value) }}>
-                <option value="">Refile…</option>
+                <option value="">{translate("documents.refile")}</option>
                 {#each jdCategories as c}<option value={c.id}>{c.code} {c.name}</option>{/each}
               </select>
-              <button class="btn sm danger" title="Trash" aria-label={`Trash ${d.title || `document ${d.id}`}`}
+              <button class="btn sm danger" title={translate("documents.trash")} aria-label={translate("documents.trashValue", { "id": d.title || `document ${d.id}` })}
                       onclick={() => (trashRequest = { kind: 'one', doc: d })}>
                 <Icon name="trash" size={12} /></button>
             </span>
@@ -840,19 +841,19 @@
   </div>
   {/if}
   {#if pages > 1}
-    <nav class="pager document-pagination" aria-label="Document pages">
-      <span>Page {page} of {pages} · {count} documents</span>
+    <nav class="pager document-pagination" aria-label={translate("documents.documentPages")}>
+      <span>{translate("documents.pageSummary", { page, pages, documents: plural("documents.documentCount", count) })}</span>
       <div class="page-links">
-        <button class="btn sm page-direction" disabled={page <= 1} onclick={() => go(pageHash(page - 1))} aria-label="Previous page">
-          <span aria-hidden="true">‹</span><span class="direction-label">Prev</span>
+        <button class="btn sm page-direction" disabled={page <= 1} onclick={() => go(pageHash(page - 1))} aria-label={translate("documents.previousPage")}>
+          <span aria-hidden="true">‹</span><span class="direction-label">{translate("documents.prev")}</span>
         </button>
         {#each pageNumbers as number, index (number)}
           {#if index > 0 && number > pageNumbers[index - 1] + 1}<span class="page-gap" aria-hidden="true">…</span>{/if}
           <a class="btn sm page-number" class:primary={number === page} href={filingHref(pageHash(number))}
-             aria-label={`Page ${number}`} aria-current={number === page ? 'page' : undefined}>{number}</a>
+             aria-label={translate("documents.pageValue", { "number": number })} aria-current={number === page ? 'page' : undefined}>{formatNumber(number)}</a>
         {/each}
-        <button class="btn sm page-direction" disabled={page >= pages} onclick={() => go(pageHash(page + 1))} aria-label="Next page">
-          <span class="direction-label">Next</span><span aria-hidden="true">›</span>
+        <button class="btn sm page-direction" disabled={page >= pages} onclick={() => go(pageHash(page + 1))} aria-label={translate("documents.nextPage")}>
+          <span class="direction-label">{translate("documents.next")}</span><span aria-hidden="true">›</span>
         </button>
       </div>
     </nav>
@@ -862,12 +863,12 @@
 {#if trashRequest}
   <ConfirmDialog
     title={trashRequest.kind === 'bulk'
-      ? `Move ${trashRequest.count} document${trashRequest.count === 1 ? '' : 's'} to trash?`
-      : 'Move document to trash?'}
+      ? plural("documents.moveCountToTrash", trashRequest.count)
+      : translate("documents.moveDocumentToTrash")}
     message={trashRequest.kind === 'bulk'
-      ? `The selected document${trashRequest.count === 1 ? '' : 's'} will move to Trash, where ${trashRequest.count === 1 ? 'it can' : 'they can'} be restored.`
-      : `“${trashRequest.doc.title || `Document #${trashRequest.doc.id}`}” will move to Trash, where it can be restored.`}
-    confirmLabel="Move to trash"
+      ? plural("documents.selectedCountWillMoveToTrash", trashRequest.count)
+      : translate("documents.valueWillMoveToTrashWhereItCan", { "id": trashRequest.doc.title || translate("documents.documentNumber", { id: trashRequest.doc.id }) })}
+    confirmLabel={translate("documents.moveToTrash")}
     busy={trashBusy}
     onConfirm={confirmTrash}
     onCancel={() => (trashRequest = null)} />
@@ -877,31 +878,29 @@
   <div class="modal-veil"
        onclick={() => (bulkDecOpen = false)}
        onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); bulkDecOpen = false } }}
-       role="button" tabindex="-1" aria-label="Close bulk-decrypt dialog">
+       role="button" tabindex="-1" aria-label={translate("documents.closeBulkDecryptDialog")}>
     <div class="modal" style="width:min(420px,94vw)"
          onclick={(e) => e.stopPropagation()}
          onkeydown={(e) => e.stopPropagation()}
-         role="dialog" aria-modal="true" aria-label="Bulk unlock" tabindex="-1">
+         role="dialog" aria-modal="true" aria-label={translate("documents.bulkUnlock")} tabindex="-1">
       <div class="modal-head">
-        <h3>Try one password against {sel.size} document{sel.size === 1 ? '' : 's'}</h3>
-        <button class="btn sm" onclick={() => (bulkDecOpen = false)} title="Close" aria-label="Close bulk unlock"><Icon name="x" size={13} /></button>
+        <h3>{plural("documents.tryPasswordDocumentCount", sel.size)}</h3>
+        <button class="btn sm" onclick={() => (bulkDecOpen = false)} title={translate("common.close")} aria-label={translate("documents.closeBulkUnlock")}><Icon name="x" size={13} /></button>
       </div>
       <p class="sub" style="margin:0 0 10px">
-        The server tries this password against every selected document that's still encrypted.
-        Matches unlock in place and land in the vault so the next upload with the same password
-        auto-decrypts.
+        {translate("documents.theServerTriesThisPasswordAgainstEvery")}
       </p>
       <div class="field">
-        <label for="bulkdec-pw">Password</label>
+        <label for="bulkdec-pw">{translate("documents.password2")}</label>
         <input id="bulkdec-pw" type="password" class="input" bind:value={bulkDecPw}
                bind:this={bulkDecInput} disabled={bulkDecBusy}
                onkeydown={(e) => { if (e.key === 'Enter') runBulkDecrypt() }} />
       </div>
       <div class="toolbar" style="margin-top:8px">
         <button class="btn primary sm" disabled={bulkDecBusy || !bulkDecPw.trim()} onclick={runBulkDecrypt}>
-          {bulkDecBusy ? 'Trying…' : 'Try password'}
+          {bulkDecBusy ? translate("documents.trying") : translate("documents.tryPassword")}
         </button>
-        <button class="btn sm" disabled={bulkDecBusy} onclick={() => (bulkDecOpen = false)}>Cancel</button>
+        <button class="btn sm" disabled={bulkDecBusy} onclick={() => (bulkDecOpen = false)}>{translate("common.cancel")}</button>
       </div>
     </div>
   </div>

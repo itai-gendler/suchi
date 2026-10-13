@@ -1,5 +1,6 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script>
+  import { t as translate } from "./i18n.svelte.js";
   import Icon from './Icon.svelte'
   import LinkQR from './LinkQR.svelte'
   import { copyText } from './clipboard.js'
@@ -18,24 +19,24 @@
   })
 
   async function copy() {
-    copied = await copyText(url) ? 'Link copied' : 'Select the link and copy it manually.'
+    copied = await copyText(url) ? translate("documentLinkDialog.linkCopied") : translate("documentLinkDialog.selectTheLinkAndCopyItManually")
   }
 </script>
 
 <dialog bind:this={dialog} class="modal" aria-labelledby="document-link-title" onclose={onClose}>
   <div class="modal-head">
-    <h3 id="document-link-title">Open on my phone</h3>
-    <button class="btn sm" onclick={() => dialog.close()} aria-label="Close document link"><Icon name="x" size={13} /></button>
+    <h3 id="document-link-title">{translate("documentLinkDialog.openOnMyPhone")}</h3>
+    <button class="btn sm" onclick={() => dialog.close()} aria-label={translate("documentLinkDialog.closeDocumentLink")}><Icon name="x" size={13} /></button>
   </div>
-  <p class="sub">Scan with your phone's camera. Sign in with an account that can read this document. This does not create a public share link.</p>
+  <p class="sub">{translate("documentLinkDialog.scanWithYourPhoneSCameraSign")}</p>
   {#if loopback}
-    <p class="sub">This address only works on this computer. Open Suchi using its network address before scanning on your phone.</p>
+    <p class="sub">{translate("documentLinkDialog.thisAddressOnlyWorksOnThisComputer")}</p>
   {:else}
-    <p class="sub">Your phone needs access to this server's network address.</p>
+    <p class="sub">{translate("documentLinkDialog.yourPhoneNeedsAccessToThisServer")}</p>
   {/if}
   <div class="toolbar">
-    <input class="input mono" style="flex:1;min-width:0" aria-label="Document link" readonly value={url} onclick={(event) => event.currentTarget.select()} />
-    <button class="btn sm" onclick={copy}>Copy link</button>
+    <input class="input mono" style="flex:1;min-width:0" aria-label={translate("documentLinkDialog.documentLink")} readonly value={url} onclick={(event) => event.currentTarget.select()} />
+    <button class="btn sm" onclick={copy}>{translate("documentLinkDialog.copyLink")}</button>
   </div>
   <p class="sub" role="status">{copied}</p>
   <LinkQR {url} open />

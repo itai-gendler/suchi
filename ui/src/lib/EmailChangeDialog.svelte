@@ -1,5 +1,6 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script>
+  import { t as translate } from "./i18n.svelte.js";
   import { onDestroy, onMount, tick, untrack } from 'svelte'
   import { changeMyEmail } from './api.js'
   import { session } from './session.svelte.js'
@@ -63,14 +64,14 @@
     if (!newEmailInput?.validity.valid || !confirmEmailInput?.validity.valid) {
       const invalidInput = !newEmailInput?.validity.valid ? newEmailInput : confirmEmailInput
       clearPassword()
-      error = 'Enter a valid email address in both fields.'
+      error = translate("emailChangeDialog.enterAValidEmailAddressInBothFields")
       await tick()
       invalidInput?.focus()
       return
     }
     if (newEmail !== confirmEmail) {
       clearPassword()
-      error = 'The email addresses must match exactly.'
+      error = translate("emailChangeDialog.theEmailAddressesMustMatchExactly")
       await tick()
       newEmailInput?.focus()
       return
@@ -82,7 +83,7 @@
       await changeMyEmail(targetEmail, currentPassword)
     } catch (exception) {
       clearPassword()
-      error = exception?.message || 'Could not change the sign-in email.'
+      error = exception?.message || translate("emailChangeDialog.couldNotChangeTheSignInEmail")
       busy = false
       await tick()
       passwordInput?.focus()
@@ -118,31 +119,31 @@
        onkeydown={onKey} role="dialog" aria-modal="true" aria-labelledby="email-change-title"
        aria-describedby="email-change-impact" tabindex="-1">
     <div class="modal-head">
-      <h3 id="email-change-title">Change sign-in email</h3>
+      <h3 id="email-change-title">{translate("emailChangeDialog.changeSignInEmail")}</h3>
       <button class="btn sm" type="button" disabled={busy} onclick={close}
-              title="Close" aria-label="Close email change"><Icon name="x" size={13} /></button>
+              title={translate("common.close")} aria-label={translate("emailChangeDialog.closeEmailChange")}><Icon name="x" size={13} /></button>
     </div>
 
-    <p class="sub current-email">Current sign-in email <strong>{currentEmail}</strong></p>
+    <p class="sub current-email">{translate("emailChangeDialog.currentSignInEmail")} <strong>{currentEmail}</strong></p>
     <div id="email-change-impact" class="email-change-impact">
-      <p>Changing this updates your sign-in identifier immediately. Suchi does not send a confirmation or recovery email.</p>
+      <p>{translate("emailChangeDialog.changingThisUpdatesYourSignInIdentifier")}</p>
       <ul>
-        <li>Your account, documents, and permissions stay the same.</li>
-        <li>Every other browser session will be signed out. This browser stays signed in with a rotated session.</li>
+        <li>{translate("emailChangeDialog.yourAccountDocumentsAndPermissionsStayThe")}</li>
+        <li>{translate("emailChangeDialog.everyOtherBrowserSessionWillBeSigned")}</li>
       </ul>
     </div>
 
     <form onsubmit={submit} novalidate>
       <div class="email-fields">
-        <label class="field" for="new-sign-in-email">New email
+        <label class="field" for="new-sign-in-email">{translate("emailChangeDialog.newEmail")}
           <input id="new-sign-in-email" class="input" bind:this={newEmailInput} bind:value={newEmail}
                  type="email" autocomplete="username" required disabled={busy} />
         </label>
-        <label class="field" for="confirm-sign-in-email">Confirm new email
+        <label class="field" for="confirm-sign-in-email">{translate("emailChangeDialog.confirmNewEmail")}
           <input id="confirm-sign-in-email" class="input" bind:this={confirmEmailInput}
                  bind:value={confirmEmail} type="email" autocomplete="off" required disabled={busy} />
         </label>
-        <label class="field full" for="current-account-password">Current password
+        <label class="field full" for="current-account-password">{translate("emailChangeDialog.currentPassword")}
           <input id="current-account-password" class="input" bind:this={passwordInput}
                  bind:value={currentPassword} type="password" autocomplete="current-password"
                  required disabled={busy} />
@@ -150,9 +151,9 @@
       </div>
       {#if error}<div class="err email-change-error" role="alert">{error}</div>{/if}
       <div class="form-actions">
-        <button class="btn" type="button" disabled={busy} onclick={close}>Cancel</button>
+        <button class="btn" type="button" disabled={busy} onclick={close}>{translate("common.cancel")}</button>
         <button class="btn primary" disabled={busy || !newEmail || !confirmEmail || !currentPassword}>
-          {busy ? 'Changing…' : 'Change sign-in email'}
+          {busy ? translate("emailChangeDialog.changing") : translate("emailChangeDialog.changeSignInEmail")}
         </button>
       </div>
     </form>

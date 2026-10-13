@@ -1,5 +1,6 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script>
+  import { t as translate } from "./i18n.svelte.js";
   let {
     id = undefined,
     title,
@@ -22,7 +23,7 @@
 </script>
 
 <div {id}
-     class={`rule-row ${className}`}
+     class={translate("ruleRow.ruleRowValue", { "className": className })}
      class:has-leading={!!leading}
      class:disabled
      role="listitem"

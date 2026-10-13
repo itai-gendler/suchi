@@ -1,5 +1,7 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script>
+  import { t as translate } from "../lib/i18n.svelte.js";
+  import { formatNumber, plural } from '../lib/format.js'
   import { scopedHash as filingHref, systems } from '../lib/systems.svelte.js'
   import { setupState, adminListUsers, getIngestSettings, getLLMSettings,
            getPreferences, listEmailAccounts, listAutomations, listRenderedLayouts } from '../lib/api.js'
@@ -36,43 +38,45 @@
       getPreferences(), listEmailAccounts(), listAutomations(), listRenderedLayouts(),
     ])
     const next = Object.fromEntries(ARCHIVE_SETTINGS_ITEMS.map((item) => [
-      item.name, status('Unavailable', 'Could not load status', 'warn'),
+      item.name, status(translate("archiveSettings.unavailable"), translate("archiveSettings.couldNotLoadStatus"), 'warn'),
     ]))
 
     if (setup.status === 'fulfilled') {
       const preset = setup.value?.current_preset
-      next['filing-tree'] = status(setup.value?.filing_tree_chosen ? 'Configured' : 'Not set', preset ? `${titleCase(preset)} filing tree` : 'Custom filing tree', setup.value?.filing_tree_chosen ? 'ok' : 'warn')
+      next['filing-tree'] = status(setup.value?.filing_tree_chosen ? translate("archiveSettings.configured") : translate("archiveSettings.notSet"), preset ? translate("archiveSettings.valueFilingTree", { "preset": titleCase(preset) }) : translate("archiveSettings.customFilingTree"), setup.value?.filing_tree_chosen ? 'ok' : 'warn')
     }
     if (users.status === 'fulfilled') {
       const count = rows(users.value).length
-      next.users = status(`${count} ${count === 1 ? 'user' : 'users'}`, 'Roles and archive capabilities')
+      next.users = status(plural("archiveSettings.userCount", count), translate("archiveSettings.rolesAndArchiveCapabilities"))
     }
-    next.metadata = status('3 catalogs', 'Tags, correspondents, and custom fields')
+    next.metadata = status(translate("archiveSettings.3Catalogs"), translate("archiveSettings.tagsCorrespondentsAndCustomFields"))
     if (layouts.status === 'fulfilled') {
       const count = rows(layouts.value).length
-      next['folder-layouts'] = status(`${count} saved`, 'Local rendered filesystem paths')
+      next['folder-layouts'] = status(translate("archiveSettings.valueSaved", { count: formatNumber(count) }), translate("archiveSettings.localRenderedFilesystemPaths"))
     }
     if (ingest.status === 'fulfilled') {
       const directory = ingest.value?.fs_watch_dir || ''
-      next.sources = status(directory ? 'Active' : 'Not set', directory || 'Browser uploads and connected apps remain available', directory ? 'ok' : 'warn')
+      next.sources = status(directory ? translate("archiveSettings.active") : translate("archiveSettings.notSet"), directory || translate("archiveSettings.browserUploadsAndConnectedAppsRemainAvailable"), directory ? 'ok' : 'warn')
     }
     if (mail.status === 'fulfilled') {
       const accounts = rows(mail.value, 'accounts')
       const enabled = accounts.filter((account) => account.enabled).length
-      next.mail = status(enabled ? `${enabled} active` : 'Not set', enabled ? `${accounts.length} connected ${accounts.length === 1 ? 'mailbox' : 'mailboxes'}` : 'No mailboxes connected', enabled ? 'ok' : 'warn')
+      next.mail = status(enabled ? translate("archiveSettings.valueActive", { enabled: formatNumber(enabled) }) : translate("archiveSettings.notSet"), enabled ? plural("archiveSettings.connectedMailboxCount", accounts.length) : translate("archiveSettings.noMailboxesConnected"), enabled ? 'ok' : 'warn')
     }
     if (llm.status === 'fulfilled') {
       const value = llm.value
-      next.llm = status(value?.active ? 'Model active' : value?.archive_enabled ? 'Local matching' : 'Manual', value?.active ? value.model || 'Configured model' : 'No external model', value?.active || value?.archive_enabled ? 'ok' : '')
+      next.llm = status(value?.active ? translate("archiveSettings.modelActive") : value?.archive_enabled ? translate("archiveSettings.localMatching") : translate("archiveSettings.manual"), value?.active ? value.model || translate("archiveSettings.configuredModel") : translate("archiveSettings.noExternalModel"), value?.active || value?.archive_enabled ? 'ok' : '')
     }
     if (automations.status === 'fulfilled') {
       const active = rows(automations.value).filter((automation) => automation.enabled).length
-      next.automations = status(`${active} active`, 'Filing and metadata rules')
+      next.automations = status(translate("archiveSettings.valueActive2", { active: formatNumber(active) }), translate("archiveSettings.filingAndMetadataRules"))
     }
     if (preferences.status === 'fulfilled') {
       const languages = preferences.value?.ocr_languages || []
       const interval = Number(preferences.value?.backup_interval_hours || 0)
-      next.preferences = status(interval ? 'Scheduled' : 'Backups off', `${languages.join(', ') || 'No OCR languages'} · ${interval ? `every ${interval}h` : 'no scheduled backups'}`, interval ? 'ok' : 'warn')
+      const languageSummary = languages.join(', ') || translate("archiveSettings.noOCRLanguages")
+      const backupSummary = interval ? plural("archiveSettings.backupEveryHours", interval) : translate("archiveSettings.noScheduledBackups")
+      next.preferences = status(interval ? translate("archiveSettings.scheduled") : translate("archiveSettings.backupsOff"), translate("archiveSettings.valueValue2", { languages: languageSummary, backups: backupSummary }), interval ? 'ok' : 'warn')
     }
     statuses = next
   }
@@ -80,11 +84,11 @@
   $effect(() => { if (current === 'overview') loadOverview() })
 </script>
 
-<section class="archive-settings" aria-label="Archive configuration">
+<section class="archive-settings" aria-label={translate("archiveSettings.archiveConfiguration")}>
   <aside class="archive-sidebar">
-    <nav class="archive-rail" aria-label="Archive settings sections">
+    <nav class="archive-rail" aria-label={translate("archiveSettings.archiveSettingsSections")}>
       <a class:on={current === 'overview'} aria-current={current === 'overview' ? 'page' : undefined}
-         href={filingHref("#/settings?tab=archive")}><Icon name="settings" size={15} /><span>Overview</span></a>
+         href={filingHref("#/settings?tab=archive")}><Icon name="settings" size={15} /><span>{translate("archiveSettings.overview")}</span></a>
       <a class:on={current === FILING_TREE_SETTINGS_ITEM.name} aria-current={current === FILING_TREE_SETTINGS_ITEM.name ? 'page' : undefined}
          href={filingHref(FILING_TREE_SETTINGS_ITEM.href)}><Icon name={FILING_TREE_SETTINGS_ITEM.icon} size={15} /><span>{FILING_TREE_SETTINGS_ITEM.label}</span></a>
       {#each ARCHIVE_SETTINGS_GROUPS as group (group.name)}
@@ -99,16 +103,16 @@
     </nav>
   </aside>
 
-  <div class="archive-content" role="region" aria-label="Configuration content">
+  <div class="archive-content" role="region" aria-label={translate("archiveSettings.configurationContent")}>
     {#if systems.introduced && (current === 'overview' || current === 'users' || current === 'metadata' || current === 'filing-tree' || current === 'folder-layouts')}
       <SystemSettings {notify} />
     {/if}
     {#if current === 'overview'}
       <header class="archive-intro">
         <div>
-          <span class="eyebrow">Archive</span>
-          <h2>Configure how your archive works</h2>
-          <p>Filing trees, metadata, mailboxes and automations live in {systems.code || 'this archive'}; users, server intake, OCR, models and backups are instance-wide. Administrators only.</p>
+          <span class="eyebrow">{translate("archiveSettings.archive")}</span>
+          <h2>{translate("archiveSettings.configureHowYourArchiveWorks")}</h2>
+          <p>{translate("archiveSettings.filingTreesMetadataMailboxesAndAutomationsLive", { "archive": systems.code || 'this archive' })}</p>
         </div>
       </header>
 
@@ -117,10 +121,10 @@
         <div class="filing-hero">
           <span class="configuration-icon"><Icon name={FILING_TREE_SETTINGS_ITEM.icon} size={18} /></span>
           <span class="configuration-copy">
-            <b>Choose your filing tree</b>
-            <small>Required before Suchi can file anything. Everything else below is optional.</small>
+            <b>{translate("archiveSettings.chooseYourFilingTree")}</b>
+            <small>{translate("archiveSettings.requiredBeforeSuchiCanFileAnythingEverything")}</small>
           </span>
-          <a class="btn primary sm" href={filingHref(FILING_TREE_SETTINGS_ITEM.href)}>Choose filing tree</a>
+          <a class="btn primary sm" href={filingHref(FILING_TREE_SETTINGS_ITEM.href)}>{translate("archiveSettings.chooseFilingTree")}</a>
         </div>
       {:else}
         <a class="configuration-row filing-row" href={filingHref(FILING_TREE_SETTINGS_ITEM.href)}>
@@ -156,7 +160,7 @@
       </div>
     {:else if currentItem}
       <header class="section-intro">
-        <a href={filingHref("#/settings?tab=archive")}><Icon name="left" size={13} /> Overview</a>
+        <a href={filingHref("#/settings?tab=archive")}><Icon name="left" size={13} /> {translate("archiveSettings.overview")}</a>
         <span>{currentItem.description}</span>
       </header>
       {#if current === 'filing-tree'}
@@ -171,10 +175,10 @@
         <div class="card handoff-card">
           <span class="handoff-icon"><Icon name="zap" size={20} /></span>
           <span class="handoff-copy">
-            <h3>Build and manage filing rules</h3>
-            <p>Automations have a dedicated workspace for ordering rules, editing triggers, and reviewing built-in preset behavior.</p>
+            <h3>{translate("archiveSettings.buildAndManageFilingRules")}</h3>
+            <p>{translate("archiveSettings.automationsHaveADedicatedWorkspaceForOrdering")}</p>
           </span>
-          <a role="button" class="btn primary handoff-action" href={filingHref("#/automations")}>Open automations <Icon name="chev" size={13} /></a>
+          <a role="button" class="btn primary handoff-action" href={filingHref("#/automations")}>{translate("archiveSettings.openAutomations")} <Icon name="chev" size={13} /></a>
         </div>
       {:else}
         <div class="card section-card">

@@ -2,6 +2,7 @@
 
 import { getDocumentIntrinsic, listSystems } from './api.js'
 import { systems, captureScope, scopeCurrent, unavailableSystem } from './systems.svelte.js'
+import { t } from './i18n.svelte.js'
 
 export async function refreshSystems() {
   const scope = captureScope()
@@ -49,7 +50,7 @@ export async function enterRoute(path, query) {
     systems.ready = true
   } catch (ex) {
     if (scopeCurrent(scope)) {
-      systems.error = ex.message || 'This filing system is unavailable.'
+      systems.error = ex.message || t('systems.unavailable')
     }
   }
 }

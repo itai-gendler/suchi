@@ -1,5 +1,6 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script>
+  import { t as translate } from "../lib/i18n.svelte.js";
   import { session } from '../lib/session.svelte.js'
   import { scopedHash as filingHref } from '../lib/systems.svelte.js'
   import SetupReminder from '../lib/SetupReminder.svelte'
@@ -21,9 +22,9 @@
 
 <div class="content-narrow settings-page">
   {#if isAdmin}
-    <nav class="settings-tabs" aria-label="Settings areas">
-      <a class:on={!archiveSelected} href={filingHref("#/settings")}>My account</a>
-      <a class:on={archiveSelected} href={filingHref("#/settings?tab=archive")}>Archive configuration</a>
+    <nav class="settings-tabs" aria-label={translate("settings.settingsAreas")}>
+      <a class:on={!archiveSelected} href={filingHref("#/settings")}>{translate("settings.myAccount")}</a>
+      <a class:on={archiveSelected} href={filingHref("#/settings?tab=archive")}>{translate("settings.archiveConfiguration")}</a>
     </nav>
   {/if}
 
@@ -42,10 +43,10 @@
   </div>
 
   {#if session.user?.build_version}
-    <footer class="build-info" aria-label="Suchi build">
-      Suchi {session.user.build_version}
+    <footer class="build-info" aria-label={translate("settings.suchiBuild")}>
+      {translate("settings.suchiValue", { "build_version": session.user.build_version })}
       {#if session.user.build_version === 'dev' || session.user.build_version.endsWith('-dev') || session.user.build_version.startsWith('snapshot-')}
-        · {session.user.build_revision || 'build details unavailable'}
+        · {session.user.build_revision || translate("settings.buildDetailsUnavailable")}
       {/if}
     </footer>
   {/if}

@@ -1,10 +1,11 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script>
+  import { t as translate } from "../lib/i18n.svelte.js";
   import { scopedHash as filingHref } from '../lib/systems.svelte.js'
   import { onDestroy, untrack } from 'svelte'
   import { search, listLanguages, resolveAddress } from '../lib/api.js'
   import { route, go } from '../lib/router.svelte.js'
-  import { fmtDate } from '../lib/format.js'
+  import { fmtDate, plural } from '../lib/format.js'
   import Icon from '../lib/Icon.svelte'
   import { createQueryAssistant } from '../lib/queryAssist.js'
 
@@ -33,7 +34,7 @@
 
   function publishEmptyScope() {
     onScopeChange?.({
-      label: lang ? 'Current search results' : 'All documents', query: '', document_ids: [], jd_category_id: 0,
+      label: lang ? translate("search.currentSearchResults") : translate("search.allDocuments"), query: '', document_ids: [], jd_category_id: 0,
       sensitivity: '', tag_ids: [], correspondent_ids: [],
       created_at_gte: null, created_at_lte: null, language: lang,
     })
@@ -74,7 +75,7 @@
       const params = { page: requestPage, page_size: 25 }
       if (requestLang) params.lang = requestLang
       onScopeChange?.({
-        label: 'Current search results',
+        label: translate("search.currentSearchResults"),
         query,
         document_ids: [], jd_category_id: 0, sensitivity: '',
         tag_ids: [], correspondent_ids: [], created_at_gte: null, created_at_lte: null,
@@ -86,7 +87,7 @@
       count = res?.count ?? hits.length
     } catch (ex) {
       if (version === runVersion) {
-        err = ex.message || 'Search failed.'
+        err = ex.message || translate("search.searchFailed")
         hits = []
         count = 0
         searched = false
@@ -139,9 +140,9 @@
 
 <div class="content-narrow">
   <form class="toolbar" onsubmit={submit}>
-    <input class="input" style="flex:1" placeholder="Search text or use jd:, tag:, from:…"
+    <input class="input" style="flex:1" placeholder={translate("search.searchTextOrUseJdTagFrom")}
            bind:value={q} list="search-query-suggestions" oninput={(event) => queryAssistant.update(event.currentTarget.value)} />
-    <button class="btn primary">Search</button>
+    <button class="btn primary">{translate("search.search")}</button>
   </form>
   <datalist id="search-query-suggestions">
     {#each suggestions as suggestion (suggestion.query)}
@@ -151,8 +152,8 @@
 
   {#if languages.length}
     <div style="display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 12px;align-items:center">
-      <span class="sub">Language:</span>
-      <button class="pill" class:accent={!lang} type="button" onclick={() => setLang('')}>all</button>
+      <span class="sub">{translate("search.language")}</span>
+      <button class="pill" class:accent={!lang} type="button" onclick={() => setLang('')}>{translate("search.all")}</button>
       {#each languages as l}
         <button class="pill" class:accent={lang === l.code} type="button" onclick={() => setLang(l.code)}>
           {l.code} <span class="sub">({l.count})</span>
@@ -166,15 +167,15 @@
   {#if loading}
     <div class="index">{#each Array(4) as _}<div class="irow"><div class="skel" style="width:70%"></div></div>{/each}</div>
   {:else if searched && hits.length === 0}
-    <div class="empty"><Icon name="search" size={56} /><b>Nothing matched.</b><span>Try fewer words.</span></div>
+    <div class="empty"><Icon name="search" size={56} /><b>{translate("search.nothingMatched")}</b><span>{translate("search.tryFewerWords")}</span></div>
   {:else if hits.length}
-    <p class="sub" style="color:var(--muted);margin:0 0 10px">{count} result{count === 1 ? '' : 's'}</p>
+    <p class="sub" style="color:var(--muted);margin:0 0 10px">{plural("search.resultCount", count)}</p>
     <div class="index">
       {#each hits as h (h.id)}
         <a class="irow" href={filingHref(`#/doc/${h.id}`)} style="align-items:flex-start">
           <span class="dot accent" style="margin-top:7px"></span>
           <span class="grow">
-            <span class="title" style="display:block">{h.title || `Document #${h.id}`}</span>
+            <span class="title" style="display:block">{h.title || translate("search.documentValue", { "id": h.id })}</span>
             {#if h.jd_address}<span class="chip">{h.jd_address}</span>{/if}
             {#if h.snippet}<span class="sub" style="white-space:normal">{@html safeSnippet(h.snippet)}</span>{/if}
           </span>
@@ -184,9 +185,9 @@
     </div>
     {#if pages > 1}
       <div class="pager">
-        <button class="btn sm" disabled={page <= 1} onclick={() => { page--; run() }}>‹ Prev</button>
-        <span>page {page} of {pages}</span>
-        <button class="btn sm" disabled={page >= pages} onclick={() => { page++; run() }}>Next ›</button>
+        <button class="btn sm" disabled={page <= 1} onclick={() => { page--; run() }}>{translate("search.prev")}</button>
+        <span>{translate("search.pageValueOfValue", { "page": page, "pages": pages })}</span>
+        <button class="btn sm" disabled={page >= pages} onclick={() => { page++; run() }}>{translate("search.next")}</button>
       </div>
     {/if}
   {/if}
