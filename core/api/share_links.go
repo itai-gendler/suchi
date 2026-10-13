@@ -34,6 +34,7 @@ import (
 	"github.com/johnnybravo-xyz/suchi/core/audit"
 	"github.com/johnnybravo-xyz/suchi/core/auth"
 	"github.com/johnnybravo-xyz/suchi/core/authz"
+	"github.com/johnnybravo-xyz/suchi/core/i18n"
 	"github.com/johnnybravo-xyz/suchi/core/jd/systems"
 
 	pluginapi "github.com/johnnybravo-xyz/suchi/plugin-api"
@@ -450,11 +451,10 @@ func (s *Server) getSharePublic(surface ShareSurface, w http.ResponseWriter, r *
 	host := shareHost(surface.Origin)
 	if err != nil {
 		if wantsHTML(r) {
-			renderShareHTML(w, http.StatusNotFound, shareHTMLData{
-				Title:        "Link expired",
+			s.renderShareHTML(w, r, http.StatusNotFound, shareHTMLData{
+				TitleKey:     "share.link_expired",
 				InstanceHost: host,
-				Notice: "This share link is invalid, expired, or was revoked. " +
-					"Ask the sender for a fresh link.",
+				NoticeKey:    "share.invalid_full",
 			})
 			return
 		}
@@ -465,7 +465,7 @@ func (s *Server) getSharePublic(surface ShareSurface, w http.ResponseWriter, r *
 	if err := s.verifyShareAccess(link, token, r); err != nil {
 		if errors.Is(err, errShareNeedsPassword) {
 			if wantsHTML(r) {
-				renderShareHTML(w, http.StatusOK, shareHTMLData{
+				s.renderShareHTML(w, r, http.StatusOK, shareHTMLData{
 					Title:            link.label,
 					SharedBy:         link.sharedBy,
 					InstanceHost:     host,
@@ -485,7 +485,7 @@ func (s *Server) getSharePublic(surface ShareSurface, w http.ResponseWriter, r *
 			return
 		}
 		if wantsHTML(r) {
-			renderShareHTML(w, http.StatusForbidden, shareHTMLData{
+			s.renderShareHTML(w, r, http.StatusForbidden, shareHTMLData{
 				Title:            link.label,
 				SharedBy:         link.sharedBy,
 				InstanceHost:     host,
@@ -507,7 +507,7 @@ func (s *Server) getSharePublic(surface ShareSurface, w http.ResponseWriter, r *
 	// Successful recipient reads are intentionally read-only. The retained
 	// view_count column is inert until a real analytics requirement exists.
 	if wantsHTML(r) {
-		renderShareHTML(w, http.StatusOK, shareHTMLData{
+		s.renderShareHTML(w, r, http.StatusOK, shareHTMLData{
 			Title: link.label, SharedBy: link.sharedBy, InstanceHost: host,
 			ExpiresAt: expiresAt, Token: token, Docs: docs,
 		})
@@ -536,9 +536,9 @@ func (s *Server) postSharePublic(surface ShareSurface, w http.ResponseWriter, r 
 	link, err := s.loadShareByToken(r, token, surface.PublicOnly)
 	host := shareHost(surface.Origin)
 	if err != nil {
-		renderShareHTML(w, http.StatusNotFound, shareHTMLData{
-			Title: "Link expired", InstanceHost: host,
-			Notice: "This share link is invalid, expired, or was revoked.",
+		s.renderShareHTML(w, r, http.StatusNotFound, shareHTMLData{
+			TitleKey: "share.link_expired", InstanceHost: host,
+			NoticeKey: "share.invalid_short",
 		})
 		return
 	}
@@ -549,7 +549,7 @@ func (s *Server) postSharePublic(surface ShareSurface, w http.ResponseWriter, r 
 	}
 	pw := r.PostFormValue("password")
 	if err := s.verifySharePassword(link, pw); err != nil {
-		renderShareHTML(w, http.StatusForbidden, shareHTMLData{
+		s.renderShareHTML(w, r, http.StatusForbidden, shareHTMLData{
 			Title:            link.label,
 			SharedBy:         link.sharedBy,
 			InstanceHost:     host,
@@ -610,20 +610,37 @@ func wantsHTML(r *http.Request) bool {
 // (set by PostSharePublic), so download hrefs stay clean.
 type shareHTMLData struct {
 	Title            string
+	TitleKey         string
 	SharedBy         string
 	InstanceHost     string
 	ExpiresAt        int64
 	Token            string
 	RequiresPassword bool
 	BadPassword      bool
-	Notice           string
+	NoticeKey        string
 	Docs             []shareDocMeta
 }
 
 // renderShareHTML writes the recipient landing page. No JS, no external
 // assets, tokens from the design system used by the SPA.
-func renderShareHTML(w http.ResponseWriter, status int, d shareHTMLData) {
+func (s *Server) renderShareHTML(w http.ResponseWriter, r *http.Request, status int, d shareHTMLData) {
+	catalogs := s.Catalogs
+	if catalogs == nil {
+		var err error
+		catalogs, err = i18n.NewRegistry(s.Log)
+		if err != nil {
+			s.serverErr(w, "share_links.catalog", err)
+			return
+		}
+	}
+	catalog := catalogs.ForRequest(r)
+	title := d.Title
+	if d.TitleKey != "" {
+		title = catalog.Msg(d.TitleKey)
+	}
+
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Content-Language", catalog.Locale)
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Referrer-Policy", "no-referrer")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
@@ -635,20 +652,23 @@ func renderShareHTML(w http.ResponseWriter, status int, d shareHTMLData) {
 			"img-src 'self' data:; form-action 'self'; base-uri 'none'; frame-ancestors 'none'")
 	w.WriteHeader(status)
 	_, _ = w.Write([]byte(shareHTMLDoctype))
-	_, _ = fmt.Fprintf(w, shareHTMLShell, html.EscapeString(d.Title))
-	writeShareByline(w, d)
-	writeShareExpiry(w, d.ExpiresAt)
-	if d.Notice != "" {
-		_, _ = fmt.Fprintf(w, `<div class="notice">%s</div>`, html.EscapeString(d.Notice))
+	_, _ = fmt.Fprintf(w, shareHTMLShell,
+		html.EscapeString(catalog.Locale), html.EscapeString(catalog.Direction),
+		html.EscapeString(title), html.EscapeString(catalog.Msg("share.page_suffix")))
+	writeShareByline(w, d, catalog)
+	writeShareExpiry(w, d.ExpiresAt, catalog)
+	if d.NoticeKey != "" {
+		_, _ = fmt.Fprintf(w, `<div class="notice">%s</div>`, html.EscapeString(catalog.Msg(d.NoticeKey)))
 	} else if d.RequiresPassword {
 		bad := ""
 		if d.BadPassword {
-			bad = `<div class="err">Wrong password. Try again.</div>`
+			bad = `<div class="err">` + html.EscapeString(catalog.Msg("share.wrong_password")) + `</div>`
 		}
 		_, _ = fmt.Fprintf(w, `%s<form method="post" action="/s/%s">`+
-			`<label>Password<input type="password" name="password" required autofocus autocomplete="off" /></label>`+
-			`<button type="submit">Unlock</button></form>`,
-			bad, html.EscapeString(d.Token))
+			`<label>%s<input type="password" name="password" required autofocus autocomplete="off" /></label>`+
+			`<button type="submit">%s</button></form>`,
+			bad, html.EscapeString(d.Token), html.EscapeString(catalog.Msg("share.password")),
+			html.EscapeString(catalog.Msg("share.unlock")))
 	} else {
 		_, _ = w.Write([]byte(`<ul class="docs">`))
 		for _, doc := range d.Docs {
@@ -658,39 +678,42 @@ func renderShareHTML(w http.ResponseWriter, status int, d shareHTMLData) {
 				`<li><a href="%s" download><span class="ic">↓</span>`+
 					`<span class="meta"><b>%s</b><em>%s · %s</em></span></a></li>`,
 				href,
-				html.EscapeString(defaultString(doc.Title, "Document #"+strconv.FormatInt(doc.ID, 10))),
-				html.EscapeString(defaultString(doc.MIME, "unknown type")),
-				html.EscapeString(fmtSize(doc.Size)))
+				html.EscapeString(defaultString(doc.Title, catalog.Msgf("share.document_number", doc.ID))),
+				html.EscapeString(defaultString(doc.MIME, catalog.Msg("share.unknown_type"))),
+				html.EscapeString(fmtSize(catalog, doc.Size)))
 		}
 		_, _ = w.Write([]byte(`</ul>`))
 	}
-	_, _ = w.Write([]byte(shareHTMLFoot))
+	_, _ = fmt.Fprintf(w, shareHTMLFoot, html.EscapeString(catalog.Msg("share.powered_by")))
 }
 
-func writeShareByline(w io.Writer, d shareHTMLData) {
-	name := strings.TrimSpace(d.SharedBy)
-	host := strings.TrimSpace(d.InstanceHost)
+func writeShareByline(w io.Writer, d shareHTMLData, catalog *i18n.Catalog) {
+	name := html.EscapeString(strings.TrimSpace(d.SharedBy))
+	host := html.EscapeString(strings.TrimSpace(d.InstanceHost))
 	var byline string
 	switch {
 	case name != "" && host != "":
-		byline = `Shared by <strong>` + html.EscapeString(name) + `</strong>` +
-			` <span aria-hidden="true">·</span> ` + html.EscapeString(host)
+		byline = catalog.Msgf("share.by_name_host_html", name, host)
 	case name != "":
-		byline = `Shared by <strong>` + html.EscapeString(name) + `</strong>`
+		byline = catalog.Msgf("share.by_name_html", name)
 	case host != "":
-		byline = `Shared from <strong>` + html.EscapeString(host) + `</strong>`
+		byline = catalog.Msgf("share.from_host_html", host)
 	default:
-		byline = "Shared document"
+		byline = html.EscapeString(catalog.Msg("share.shared_document"))
 	}
+	// The localized HTML format is trusted bundled content; all request and
+	// database values interpolated into it are escaped above.
 	_, _ = fmt.Fprintf(w, `<p class="sub">%s</p>`, byline)
 }
-func writeShareExpiry(w io.Writer, expiresAt int64) {
+
+func writeShareExpiry(w io.Writer, expiresAt int64, catalog *i18n.Catalog) {
 	if expiresAt <= 0 {
 		return
 	}
 	expiry := time.Unix(expiresAt, 0).UTC()
-	_, _ = fmt.Fprintf(w, `<p class="sub">Available until <time datetime="%s">%s UTC</time></p>`,
-		expiry.Format(time.RFC3339), expiry.Format("2 Jan 2006, 15:04"))
+	display := catalog.Msgf("share.available_until", expiry.Format("2006-01-02 15:04"))
+	_, _ = fmt.Fprintf(w, `<p class="sub"><time datetime="%s">%s</time></p>`,
+		expiry.Format(time.RFC3339), html.EscapeString(display))
 }
 
 func defaultString(s, fallback string) string {
@@ -700,30 +723,28 @@ func defaultString(s, fallback string) string {
 	return s
 }
 
-// fmtSize is a byte-count formatter that keeps the page dep-free. Rounds
-// to one decimal in the KB/MB/GB range; recipients only need the ballpark.
-func fmtSize(n int64) string {
+func fmtSize(catalog *i18n.Catalog, n int64) string {
 	const K, M, G = 1024, 1024 * 1024, 1024 * 1024 * 1024
 	switch {
 	case n >= G:
-		return fmt.Sprintf("%.1f GB", float64(n)/float64(G))
+		return catalog.Msgf("share.size_gb", float64(n)/float64(G))
 	case n >= M:
-		return fmt.Sprintf("%.1f MB", float64(n)/float64(M))
+		return catalog.Msgf("share.size_mb", float64(n)/float64(M))
 	case n >= K:
-		return fmt.Sprintf("%.1f KB", float64(n)/float64(K))
+		return catalog.Msgf("share.size_kb", float64(n)/float64(K))
 	default:
-		return fmt.Sprintf("%d B", n)
+		return catalog.Msgf("share.size_b", n)
 	}
 }
 
 const shareHTMLDoctype = `<!doctype html>`
 
-// shareHTMLShell has one %s for the page title. Keep the design tokens
-// aligned with ui/src/app.css.
-const shareHTMLShell = `<html lang="en"><head><meta charset="utf-8">
+// shareHTMLShell accepts locale, direction, page title, and localized suffix.
+// Keep the design tokens aligned with ui/src/app.css.
+const shareHTMLShell = `<html lang="%[1]s" dir="%[2]s"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex,nofollow">
-<title>%[1]s · suchi share</title>
+<title>%[3]s · suchi %[4]s</title>
 <style>
 :root { --bg:#FAFAF8; --surface:#FFF; --ink:#17181A; --muted:#6A7079;
   --line:rgba(23,24,26,.1); --accent:#0575B6; --tint:#EDF5FA;
@@ -770,9 +791,9 @@ footer a:hover { color: var(--accent); }
     --line:rgba(236,234,226,.1); --accent:#4FA8DC; --tint:rgba(79,168,220,.12); }
 }
 </style></head><body><div class="wrap">
-<h1>%[1]s</h1>`
+<h1>%[3]s</h1>`
 
-const shareHTMLFoot = `<footer>Powered by <a href="https://suchi.page" target="_blank" rel="noopener noreferrer">suchi</a></footer></div></body></html>`
+const shareHTMLFoot = `<footer>%s <a href="https://suchi.page" target="_blank" rel="noopener noreferrer">suchi</a></footer></div></body></html>`
 
 // getSharePublicDownload serves GET /s/{token}/{doc_id}/download. It streams
 // the original blob only when the share covers the document and any password

@@ -189,20 +189,23 @@ visible, bulk-reassignable, never lost. Three flags override:
     ```toml title="mapping.toml"
     [[rules]]
     if = "tag:tax"
-    category = 22
-
-    [[rules]]
-    if = "storage_path:Insurance"
     category = 23
 
     [[rules]]
+    if = "storage_path:Insurance"
+    category = 12
+
+    [[rules]]
     if = "document_type:Utility"
-    category = 31
+    category = 51
 
     [[rules]]
     if = "correspondent:Landlord"
-    category = 32
+    category = 52
     ```
+
+    These codes are from the built-in Household and Solo trees (23 Income tax,
+    12 Insurance, 51 Utilities, 52 Housing); use the codes of your own tree.
 
     `if` is `<kind>:<name>` where kind is `tag`, `correspondent`,
     `document_type`, or `storage_path`. `document_type` reads the Paperless

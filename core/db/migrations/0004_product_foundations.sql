@@ -5,6 +5,7 @@ ALTER TABLE documents ADD COLUMN title_owner TEXT NOT NULL DEFAULT 'auto'
 
 ALTER TABLE share_links ADD COLUMN visibility TEXT NOT NULL DEFAULT 'network'
     CHECK (visibility IN ('network', 'public'));
+ALTER TABLE users ADD COLUMN locale TEXT NOT NULL DEFAULT '';
 
 ALTER TABLE custom_fields ADD COLUMN managed_by TEXT NOT NULL DEFAULT ''
     CHECK (managed_by IN ('', 'zugferd'));

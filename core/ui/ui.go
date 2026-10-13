@@ -51,13 +51,13 @@ var assetFS embed.FS
 // Server bundles the state UI handlers need. Constructed once at
 // boot; safe for concurrent use.
 type Server struct {
-	DB     *db.DB
-	CAS    *blob.CAS
-	Cat    *i18n.Catalog
-	Log    *slog.Logger
-	Authz  authz.Authorizer
-	Assets http.Handler
-	tmpls  map[string]*template.Template
+	DB       *db.DB
+	CAS      *blob.CAS
+	Catalogs *i18n.Registry
+	Log      *slog.Logger
+	Authz    authz.Authorizer
+	Assets   http.Handler
+	tmpls    map[string]map[string]*template.Template
 
 	// LoginPath is where the RequireUI middleware sends
 	// unauthenticated browsers. Baked into the server so tests can
@@ -82,42 +82,42 @@ type Server struct {
 	DemoMode bool
 }
 
-// New parses the login + bootstrap templates and returns a ready
-// Server. Parse errors are hard boot failures, not runtime 500s.
-func New(d *db.DB, cas *blob.CAS, cat *i18n.Catalog, log *slog.Logger) (*Server, error) {
+// New parses the login + bootstrap templates for every embedded locale and
+// returns a ready Server. Parse errors are hard boot failures.
+func New(d *db.DB, cas *blob.CAS, catalogs *i18n.Registry, log *slog.Logger) (*Server, error) {
 	s := &Server{
 		DB:        d,
 		CAS:       cas,
-		Cat:       cat,
+		Catalogs:  catalogs,
 		Log:       log.With("component", "ui"),
 		Authz:     authz.ACLAuthorizer{DB: d},
 		LoginPath: "/login",
 	}
 
-	// Blob-only servers still parse the embedded templates even though they do
-	// not register auth pages. Identity fallbacks keep parsing independent of a
-	// catalog while normal UI servers replace them below.
-	funcs := template.FuncMap{
-		"msg": func(key string) string { return key },
-		"msgf": func(key string, args ...any) string {
-			return fmt.Sprintf(key, args...)
-		},
+	locales := []string{i18n.DefaultLocale}
+	if catalogs != nil {
+		locales = catalogs.Available()
 	}
-	if cat != nil {
-		maps.Copy(funcs, cat.FuncMap())
-	}
-
-	// Only login + bootstrap templates remain. Both are standalone
-	// pages (no shared base.html); everything else that used to
-	// need base.html moved to the SPA.
 	pages := []string{"login", "bootstrap"}
-	s.tmpls = map[string]*template.Template{}
-	for _, name := range pages {
-		t, err := template.New(name).Funcs(funcs).ParseFS(tmplFS, "templates/"+name+".html")
-		if err != nil {
-			return nil, fmt.Errorf("parse %s: %w", name, err)
+	s.tmpls = make(map[string]map[string]*template.Template, len(locales))
+	for _, locale := range locales {
+		funcs := template.FuncMap{
+			"msg": func(key string) string { return key },
+			"msgf": func(key string, args ...any) string {
+				return fmt.Sprintf(key, args...)
+			},
 		}
-		s.tmpls[name] = t
+		if catalogs != nil {
+			maps.Copy(funcs, catalogs.Resolve(locale).FuncMap())
+		}
+		s.tmpls[locale] = make(map[string]*template.Template, len(pages))
+		for _, name := range pages {
+			t, err := template.New(name).Funcs(funcs).ParseFS(tmplFS, "templates/"+name+".html")
+			if err != nil {
+				return nil, fmt.Errorf("parse %s for %s: %w", name, locale, err)
+			}
+			s.tmpls[locale][name] = t
+		}
 	}
 
 	sub, err := fs.Sub(assetFS, "assets")
@@ -619,14 +619,28 @@ func (s *Server) serveBlob(w http.ResponseWriter, r *http.Request, preferArchive
 // ---------- render + helpers ----------
 
 func (s *Server) render(w http.ResponseWriter, r *http.Request, name string, data any) {
-	t, ok := s.tmpls[name]
+	locale, direction := i18n.DefaultLocale, "ltr"
+	if s.Catalogs != nil {
+		catalog := s.Catalogs.ForRequest(r)
+		locale, direction = catalog.Locale, catalog.Direction
+	}
+	t, ok := s.tmpls[locale][name]
 	if !ok {
-		s.serverError(w, r, fmt.Errorf("unknown template %q", name))
+		s.serverError(w, r, fmt.Errorf("unknown template %q for locale %q", name, locale))
 		return
 	}
+	values, ok := data.(map[string]any)
+	if !ok {
+		values = map[string]any{"Data": data}
+	} else {
+		values = maps.Clone(values)
+	}
+	values["Locale"] = locale
+	values["Direction"] = direction
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := t.ExecuteTemplate(w, name, data); err != nil {
-		s.Log.Error("ui.render", "template", name, "err", err.Error())
+	w.Header().Set("Content-Language", locale)
+	if err := t.ExecuteTemplate(w, name, values); err != nil {
+		s.Log.Error("ui.render", "template", name, "locale", locale, "err", err.Error())
 	}
 }
 

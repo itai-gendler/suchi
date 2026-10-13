@@ -19,7 +19,7 @@ import (
 	oidcauth "github.com/johnnybravo-xyz/suchi/plugins/oidc"
 )
 
-func registerBaseRoutes(mux *http.ServeMux, cfg *config.Config, d *db.DB, cas *blob.CAS, metrics *httpx.Metrics, la *localauth.Plugin, oa *oidcauth.Plugin, targetSchemaVersion int, log *slog.Logger) error {
+func registerBaseRoutes(mux *http.ServeMux, cfg *config.Config, d *db.DB, cas *blob.CAS, metrics *httpx.Metrics, la *localauth.Plugin, oa *oidcauth.Plugin, catalogs *i18n.Registry, targetSchemaVersion int, log *slog.Logger) error {
 	registerOperationalRoutes(mux, d, metrics, cfg.PprofEnabled, targetSchemaVersion, log)
 	oidcEnabled := cfg.OIDCIssuerURL != ""
 
@@ -37,11 +37,7 @@ func registerBaseRoutes(mux *http.ServeMux, cfg *config.Config, d *db.DB, cas *b
 	}
 
 	if !cfg.UIDisabled {
-		cat, err := i18n.Load("en", log)
-		if err != nil {
-			return fmt.Errorf("load i18n: %w", err)
-		}
-		uiServer, err := ui.New(d, cas, cat, log)
+		uiServer, err := ui.New(d, cas, catalogs, log)
 		if err != nil {
 			return fmt.Errorf("create UI server: %w", err)
 		}
