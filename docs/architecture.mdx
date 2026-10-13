@@ -19,6 +19,7 @@ browser composition; linked feature guides own detailed user and wire behavior.
 | Lifecycle and wiring | `distro/cmd/suchi/main.go` parses configuration/signals; `distro/app/app.go: Run` and `serve_*.go` assemble services and HTTP policy |
 | JSON contracts | `core/api/api.go: Server.Register`; feature handlers in `core/api/` |
 | Browser/blob delivery | `core/ui/ui.go`, `core/ui/spa.go`; `core/uiassets` verifies generated browser builds; `distro/app` wires API preview/download mirrors |
+| Localization | `core/i18n` validates server catalogs and negotiates request locales; account preference is stored on `users`, exposed by `core/api/users.go`, and shared with `core/ui` server-rendered pages |
 | Identity/access | `core/auth/`, `core/authz/`, `core/httpx/`; credentials in `plugins/local-auth/`, `plugins/oidc/` |
 | Durable state/work | `core/db/db.go`, `core/db/migrations/`, `core/blob/cas.go`, `core/jobs/jobs.go` |
 | Capture/processing | `core/api/documents.go: UploadDocument`, `core/ingest/`, `core/importer/bundle/`, `core/pipeline/postingest/` |

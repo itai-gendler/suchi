@@ -6,6 +6,9 @@ Notable user-visible changes to Suchi are recorded here.
 
 ### Changed
 
+- Add account-level language preference, locale negotiation, validated deferred
+  browser catalogs, localized server-rendered pages, locale-aware formatting and
+  plural rules, with English fallback and automatic text direction.
 - Upload is now one full-page queue. All selected files appear immediately in
   order with aggregate progress, plain processing states, safe retries and
   persistent completion actions; global drops navigate to the same surface
