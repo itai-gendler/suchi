@@ -118,9 +118,9 @@ func TestTaxonomyApplyRequiresCurrentPreview(t *testing.T) {
 	if response.Code != 200 || json.Unmarshal(response.Body.Bytes(), &diff) != nil {
 		t.Fatalf("preview: %s", response.Body.String())
 	}
-	input.Apply, input.ExpectedStateHash, input.SkipSeeds = true, diff.StateHash, true
+	input.Apply, input.ExpectedStateHash, input.Content = true, diff.StateHash, replacementTaxonomy+"\n# changed after preview\n"
 	if response := taxonomyRequest(t, s, input); response.Code != 409 {
-		t.Fatalf("changed options status=%d body=%s", response.Code, response.Body.String())
+		t.Fatalf("changed file status=%d body=%s", response.Code, response.Body.String())
 	}
 	var rows int
 	if err := d.Read.QueryRow(`SELECT COUNT(*) FROM jd_areas`).Scan(&rows); err != nil {

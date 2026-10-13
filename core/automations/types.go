@@ -65,18 +65,12 @@ func TriggerToCode(t TriggerType) int {
 }
 
 // Automation is one row in `automations`.
-//
-// PresetSlug marks an automation seeded by a taxonomy preset. Empty =
-// user-owned; non-empty = preset singleton. PATCH or
-// DELETE via the API forks a user-owned copy (see store.Update /
-// store.Delete).
 type Automation struct {
 	ID         int64     `json:"id"`
 	Name       string    `json:"name"`
 	OrderIndex int       `json:"order"`
 	Enabled    bool      `json:"enabled"`
 	Suspended  bool      `json:"suspended,omitempty"`
-	PresetSlug string    `json:"preset_slug,omitempty"`
 	Triggers   []Trigger `json:"triggers"`
 	Ask        *Ask      `json:"ask,omitempty"`
 	Actions    []Action  `json:"actions"`

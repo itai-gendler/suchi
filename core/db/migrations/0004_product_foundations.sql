@@ -147,3 +147,15 @@ CREATE TABLE fs_watch_observations (
     updated_at        INTEGER NOT NULL,
     PRIMARY KEY (root_path, owner_id, system_id, relative_path)
 ) STRICT;
+
+-- Presets no longer seed automations. Editing a built-in rule already forked a
+-- user-owned copy, so the remaining preset rows carry no user edits.
+DELETE FROM automation_asks WHERE automation_id IN
+    (SELECT id FROM automations WHERE COALESCE(preset_slug, '') <> '');
+DELETE FROM automation_actions WHERE automation_id IN
+    (SELECT id FROM automations WHERE COALESCE(preset_slug, '') <> '');
+DELETE FROM automation_triggers WHERE automation_id IN
+    (SELECT id FROM automations WHERE COALESCE(preset_slug, '') <> '');
+DELETE FROM automations WHERE COALESCE(preset_slug, '') <> '';
+DROP INDEX idx_automations_preset_slug;
+ALTER TABLE automations DROP COLUMN preset_slug;

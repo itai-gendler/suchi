@@ -176,7 +176,6 @@ type presetChangeBody struct {
 	Remaps            map[int]int  `json:"remaps"`
 	ConfirmBlank      bool         `json:"confirm_blank"`
 	Refile            bool         `json:"refile"`
-	IncludeSeeds      *bool        `json:"include_seeds,omitempty"`
 	ExpectedStateHash string       `json:"expected_state_hash"`
 }
 
@@ -260,7 +259,7 @@ func (s *Server) ApplyPresetChange(w http.ResponseWriter, r *http.Request) {
 func (body presetChangeBody) request(systemID, actorID int64) jd.PresetChangeRequest {
 	return jd.PresetChangeRequest{
 		PresetID: body.PresetID, SetIDs: body.SetIDs, Replacements: body.Replacements, Remaps: body.Remaps,
-		SkipSeeds: body.IncludeSeeds != nil && !*body.IncludeSeeds, ConfirmBlank: body.ConfirmBlank,
+		ConfirmBlank:      body.ConfirmBlank,
 		ExpectedStateHash: body.ExpectedStateHash, SystemID: systemID, ActorID: actorID,
 	}
 }

@@ -73,7 +73,7 @@ func TestDemoManifestReseedingPreservesDocumentTagsAndJobs(t *testing.T) {
 	ctx := t.Context()
 	d := newDemoTestDB(t)
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
-	if err := jd.ApplyPreset(ctx, d, log, "household", jd.ApplyPresetOpts{SystemID: 1, SkipSeeds: true}); err != nil {
+	if err := jd.ApplyPreset(ctx, d, log, "household", jd.ApplyPresetOpts{SystemID: 1}); err != nil {
 		t.Fatal(err)
 	}
 	dir := t.TempDir()

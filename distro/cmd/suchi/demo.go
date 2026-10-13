@@ -33,7 +33,6 @@ import (
 	ingestmeta "github.com/johnnybravo-xyz/suchi/core/ingest"
 	"github.com/johnnybravo-xyz/suchi/core/intelligence"
 	"github.com/johnnybravo-xyz/suchi/core/jd"
-	"github.com/johnnybravo-xyz/suchi/core/jd/presetfile"
 	"github.com/johnnybravo-xyz/suchi/core/jd/systems"
 	"github.com/johnnybravo-xyz/suchi/core/jobs"
 	"github.com/johnnybravo-xyz/suchi/core/logx"
@@ -494,8 +493,7 @@ func makeLinkIngest(d *db.DB, now int64) func(context.Context, demo.ManifestFixt
 // manifest uses for fixtures and automations.
 const demoPresetID = "household"
 
-// applyDemoTree applies the demo's filing tree once. Starter rules stay off
-// because the manifest already files every fixture.
+// applyDemoTree applies the demo's filing tree once.
 func applyDemoTree(ctx context.Context, d *db.DB, log *slog.Logger) error {
 	system, err := systems.Get(ctx, d.Read, systems.DefaultID)
 	if err != nil {
@@ -504,11 +502,11 @@ func applyDemoTree(ctx context.Context, d *db.DB, log *slog.Logger) error {
 	if system.PresetID != "" {
 		return nil
 	}
-	return jd.ApplyPreset(ctx, d, log, demoPresetID, jd.ApplyPresetOpts{SystemID: systems.DefaultID, SkipSeeds: true})
+	return jd.ApplyPreset(ctx, d, log, demoPresetID, jd.ApplyPresetOpts{SystemID: systems.DefaultID})
 }
 
-func makeAutomationIngest(d *db.DB, now int64) func(context.Context, int, presetfile.SeedAutomation) (bool, error) {
-	return func(ctx context.Context, order int, seed presetfile.SeedAutomation) (bool, error) {
+func makeAutomationIngest(d *db.DB, now int64) func(context.Context, int, demo.ManifestAutomation) (bool, error) {
+	return func(ctx context.Context, order int, seed demo.ManifestAutomation) (bool, error) {
 		created := false
 		err := d.WriteTx(ctx, func(tx *sql.Tx) error {
 			var existing int64

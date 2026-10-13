@@ -41,7 +41,7 @@ func (s *Store) List(ctx context.Context, systemID int64) ([]Automation, error) 
 // ListTx reads rules and their children from the caller's consistent snapshot.
 func ListTx(ctx context.Context, tx *sql.Tx, systemID int64) ([]Automation, error) {
 	rows, err := tx.QueryContext(ctx, `
-		SELECT id, name, order_index, enabled, suspended, COALESCE(preset_slug, ''),
+		SELECT id, name, order_index, enabled, suspended,
 		       created_at, updated_at
 		FROM automations WHERE system_id = ?
 		ORDER BY order_index, id
@@ -56,7 +56,6 @@ func ListTx(ctx context.Context, tx *sql.Tx, systemID int64) ([]Automation, erro
 		var a Automation
 		var enabled, suspended int
 		if err := rows.Scan(&a.ID, &a.Name, &a.OrderIndex, &enabled, &suspended,
-			&a.PresetSlug,
 			&a.CreatedAt, &a.UpdatedAt); err != nil {
 			return nil, err
 		}
@@ -97,11 +96,10 @@ func (s *Store) Get(ctx context.Context, systemID, id int64) (*Automation, error
 	var a Automation
 	var enabled, suspended int
 	err := s.DB.Read.QueryRowContext(ctx, `
-		SELECT id, name, order_index, enabled, suspended, COALESCE(preset_slug, ''),
+		SELECT id, name, order_index, enabled, suspended,
 		       created_at, updated_at
 		FROM automations WHERE system_id = ? AND id = ?
 	`, systemID, id).Scan(&a.ID, &a.Name, &a.OrderIndex, &enabled, &suspended,
-		&a.PresetSlug,
 		&a.CreatedAt, &a.UpdatedAt)
 	if err != nil {
 		return nil, err
@@ -285,12 +283,6 @@ func (s *Store) CreateInTx(ctx context.Context, tx *sql.Tx, systemID int64, a Au
 // the pointer nil to keep the existing rows untouched — this is what
 // lets the SPA send `{enabled:false}` without a full automation body.
 //
-// Preset-owned rows (`preset_slug != ""`) copy-on-write when the
-// patch mutates rule content (name / order / triggers / actions).
-// A toggle-only patch (`{enabled:...}` alone) updates the preset row
-// in place — enable/disable is a UX affordance, not a rule mutation,
-// so it shouldn't leak fork rows.
-//
 // Refuses when the post-patch shape would content-match a different
 // row (see findMatching); returns *ErrDuplicateRule which the API
 // surface maps to 409.
@@ -341,29 +333,13 @@ func (s *Store) UpdateInTx(ctx context.Context, tx *sql.Tx, systemID, id int64, 
 	} else if match != nil {
 		return 0, match
 	}
-	if shouldForkPreset(orig, p) {
-		id, err = s.forkPresetRow(ctx, tx, systemID, orig, post)
-	} else {
-		err = s.applyFieldUpdate(ctx, tx, id, p)
-	}
-	if err != nil {
+	if err := s.applyFieldUpdate(ctx, tx, id, p); err != nil {
 		return 0, err
 	}
 	if err := validateAskLimit(ctx, tx, systemID); err != nil {
 		return 0, err
 	}
 	return id, nil
-}
-
-// shouldForkPreset returns true when a patch on a preset-owned row
-// mutates rule content (name / order / triggers / actions). Bare
-// enable/disable toggles skip the fork — they're UX flips, not
-// substantive edits.
-func shouldForkPreset(orig *Automation, p AutomationPatch) bool {
-	if orig.PresetSlug == "" {
-		return false
-	}
-	return p.Name != nil || p.OrderIndex != nil || p.Triggers != nil || p.Ask != nil || p.Actions != nil
 }
 
 // applyPatch returns a new Automation with the patch's non-nil fields
@@ -454,47 +430,6 @@ func patchFields(ctx context.Context, tx *sql.Tx, id int64, p AutomationPatch, n
 	return nil
 }
 
-// forkPresetRow inserts a fresh user-owned copy carrying the
-// post-patch shape and soft-disables the preset original in the same
-// tx. Precondition: shouldForkPreset(orig, patch) returned true.
-func (s *Store) forkPresetRow(ctx context.Context, tx *sql.Tx, systemID int64, orig, post *Automation) (int64, error) {
-	// Preserve the operator's rename if they set one; otherwise mark
-	// the fork with " (edited)" so it's visibly distinct from the
-	// preset original in the SPA list.
-	forkName := post.Name
-	if forkName == orig.Name {
-		forkName = orig.Name + " (edited)"
-	}
-	now := time.Now().Unix()
-	res, err := tx.ExecContext(ctx, `
-			INSERT INTO automations(system_id, name, order_index, enabled, preset_slug,
-			                        created_at, updated_at)
-			VALUES (?, ?, ?, ?, NULL, ?, ?)
-		`, systemID, forkName, post.OrderIndex, boolInt(post.Enabled), now, now)
-	if err != nil {
-		return 0, err
-	}
-	newID, err := res.LastInsertId()
-	if err != nil {
-		return 0, err
-	}
-	if err := writeTriggers(ctx, tx, newID, post.Triggers, now); err != nil {
-		return 0, err
-	}
-	if err := writeAsk(ctx, tx, newID, post.Ask); err != nil {
-		return 0, err
-	}
-	if err := s.writeActions(ctx, tx, newID, post.Actions, now); err != nil {
-		return 0, err
-	}
-	// Soft-disable the preset original — the operator's edit
-	// replaces it functionally, but the seeded row survives so
-	// re-picking the preset later doesn't dupe-insert.
-	_, err = tx.ExecContext(ctx,
-		`UPDATE automations SET enabled = 0, updated_at = ? WHERE id = ?`, now, orig.ID)
-	return newID, err
-}
-
 // findMatching scans existing automations for one whose triggers +
 // actions content-match a's. Returns *ErrDuplicateRule on hit, nil on
 // no match. excludeID skips the self-match case: when Update is
@@ -529,25 +464,11 @@ func (s *Store) findMatching(ctx context.Context, systemID int64, a *Automation,
 }
 
 // Delete removes an automation; children cascade via FK.
-//
-//   - Preset-owned rows soft-disable in place instead of an actual
-//     DELETE. The seeded row survives so re-picking the preset later
-//     doesn't dupe-insert; the operator sees it as "disabled" in the
-//     list and can toggle it back on later.
-//   - User-owned rows drop the row (and children via cascade FK).
 func (s *Store) Delete(ctx context.Context, systemID, id int64) error {
 	return s.DB.WriteTx(ctx, func(tx *sql.Tx) error { return s.DeleteInTx(ctx, tx, systemID, id) })
 }
 
 func (s *Store) DeleteInTx(ctx context.Context, tx *sql.Tx, systemID, id int64) error {
-	orig, err := s.Get(ctx, systemID, id)
-	if err != nil {
-		return err
-	}
-	if orig.PresetSlug != "" {
-		disabled := false
-		return s.applyFieldUpdate(ctx, tx, id, AutomationPatch{Enabled: &disabled})
-	}
 	res, err := tx.ExecContext(ctx, `DELETE FROM automations WHERE system_id = ? AND id = ?`, systemID, id)
 	if err != nil {
 		return err

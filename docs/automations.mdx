@@ -266,28 +266,13 @@ Explicitly adopted or rule-assigned tags remain ordinary rule input. This does
 not introduce model-authored external actions or change explicitly configured
 internal automation behavior. See [LLM classifier](/llm-classifier).
 
-## Preset ownership
+## No built-in rules
 
-Filing-tree presets seed a small starter set of automations. Editing a
-preset-owned automation creates a user-owned copy and disables the original.
-Reapplying a preset preserves the copy and the disabled original. Existing rule
-names remain local; imports report preserved/skipped rows rather than replacing
-them. The Automations screen keeps preset-owned entries in a collapsed
-**Built-in automations** list so user-created rules remain easy to scan.
-
-Taxonomy v1 imports only its explicit portable action subset, not every runtime
-action. Category skips skip whole dependent starters. Default taxonomy exports
-preserve supported preset-owned rule identity/order as named explicit starters,
-including keyword-generated rules; disabled/unrepresentable behavior fails.
-Tree-only export omits all starters. User-owned rules/forks require a complete
-backup. See [Filing trees](/jd#optional-starters).
-
-Preset category keywords match case-insensitive whole words or phrases, not
-substrings: `lease` matches a lease document but not `please`. Migration `0002`
-repairs existing generated preset keyword rules. User-owned copies and other
-regex filters retain their explicit matching semantics. This correction does
-not refile previously processed documents. Review incorrect categories before relying on archive
-matching, which can otherwise reuse those documents as examples.
+Filing trees carry no automations; every rule belongs to the archive that
+created it. Upgrading removes the rules earlier presets installed. A built-in
+rule you edited was already saved as your own copy, so it stays. Taxonomy
+import and export cover the filing tree only; rules move with a
+[complete backup](/backup-restore).
 
 ## API
 

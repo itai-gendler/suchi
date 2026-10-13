@@ -10,12 +10,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
-	"strings"
 
-	"github.com/johnnybravo-xyz/suchi/core/automations"
 	"github.com/johnnybravo-xyz/suchi/core/db"
 	"github.com/johnnybravo-xyz/suchi/core/jd/presetfile"
-	"github.com/johnnybravo-xyz/suchi/core/slug"
 	"github.com/johnnybravo-xyz/suchi/core/taxonomy/exporter"
 )
 
@@ -41,23 +38,10 @@ type Diff struct {
 	CategoriesIncoming  int               `json:"categories_incoming"`
 	CategoriesToAdd     []int             `json:"categories_to_add"`
 	Collisions          []MergeCollision  `json:"collisions"`
-	KeywordsToSeed      int               `json:"keywords_to_seed"`
-	AutomationsToSeed   int               `json:"automations_to_seed"`
-	RulesToAdd          []string          `json:"rules_to_add"`
-	RulesPreserved      []PreservedRule   `json:"rules_preserved"`
-	RulesSkipped        []SkippedRule     `json:"rules_skipped"`
 	Applied             bool              `json:"applied"`
 	IndexRefreshPending bool              `json:"index_refresh_pending"`
 }
 
-type PreservedRule struct {
-	Name    string `json:"name"`
-	Enabled bool   `json:"enabled"`
-}
-type SkippedRule struct {
-	Name   string `json:"name"`
-	Reason string `json:"reason"`
-}
 type MergeCollision struct {
 	Code             int    `json:"code"`
 	Existing         string `json:"existing"`
@@ -78,12 +62,6 @@ type importPlan struct {
 	areas        map[int]bool
 	replacements map[int]bool
 	switching    bool
-	rules        []plannedRule
-}
-type plannedRule struct {
-	seed     presetfile.SeedAutomation
-	order    int
-	keywords []string
 }
 
 // Preview uses a single read transaction. Apply rebuilds this same plan while
@@ -122,7 +100,7 @@ func previewTx(ctx context.Context, tx *sql.Tx, pf *presetfile.PresetFile, opts 
 			SystemsIntroduced: dest.Introduce || dest.OriginalCode != "", ExistingSystemCode: dest.ExistingSystemCode,
 			Format: pf.Format, PresetID: pf.ID, PresetVersion: pf.Version, Name: pf.Name, Story: pf.Story,
 			ContentSHA256: opts.ContentSHA256, Mode: "merge", UserAreas: []presetfile.Area{}, GeneratedAreas: []presetfile.Area{},
-			CategoriesToAdd: []int{}, Collisions: []MergeCollision{}, RulesToAdd: []string{}, RulesPreserved: []PreservedRule{}, RulesSkipped: []SkippedRule{},
+			CategoriesToAdd: []int{}, Collisions: []MergeCollision{},
 		}}
 	existing := map[int]string{}
 	for _, a := range current.Areas {
@@ -259,63 +237,10 @@ func previewTx(ctx context.Context, tx *sql.Tx, pf *presetfile.PresetFile, opts 
 			p.diff.Collisions = append(p.diff.Collisions, collision)
 		}
 	}
-	var rules []automations.Automation
-	if !dest.Create {
-		rules, err = automations.ListTx(ctx, tx, dest.Target.ID)
-		if err != nil {
-			return nil, err
-		}
-	}
-	byName := map[string]automations.Automation{}
-	for _, rule := range rules {
-		byName[rule.Name] = rule
-	}
-	var relevantRules []automations.Automation
-	plannedNames := map[string]bool{}
-	for _, candidate := range incomingRules(pf, p.codes) {
-		if prior, exists := byName[candidate.seed.Name]; exists {
-			relevantRules = append(relevantRules, prior)
-			p.diff.RulesPreserved = append(p.diff.RulesPreserved, PreservedRule{prior.Name, prior.Enabled})
-			continue
-		}
-		reason := ""
-		if opts.SkipSeeds {
-			reason = "starter rules not requested"
-		} else {
-			for _, action := range candidate.seed.Actions {
-				if code, ok := intField(action.Params, "jd_category_code"); ok {
-					if _, exists := p.codes[code]; !exists {
-						reason = fmt.Sprintf("category %d was skipped or has an unresolved collision", code)
-						break
-					}
-				}
-			}
-		}
-		if reason != "" {
-			p.diff.RulesSkipped = append(p.diff.RulesSkipped, SkippedRule{candidate.seed.Name, reason})
-			continue
-		}
-		if plannedNames[candidate.seed.Name] {
-			return nil, fmt.Errorf("starter rule %q is planned more than once; rename the explicit starter or remove the category keywords, then preview again", candidate.seed.Name)
-		}
-		plannedNames[candidate.seed.Name] = true
-		p.rules = append(p.rules, candidate)
-		p.diff.RulesToAdd = append(p.diff.RulesToAdd, candidate.seed.Name)
-		if len(candidate.keywords) > 0 {
-			p.diff.KeywordsToSeed += len(candidate.keywords)
-		} else {
-			p.diff.AutomationsToSeed++
-		}
-	}
-	refs, err := referenceState(ctx, tx, dest.Target.ID, p.rules)
-	if err != nil {
-		return nil, err
-	}
 	binding := struct {
 		Destination       destination
 		Source            string
 		Input             *presetfile.PresetFile
-		SkipSeeds         bool
 		Remaps            map[int]int
 		Replacements      map[int]bool
 		SwitchFromPreset  string
@@ -323,9 +248,7 @@ func previewTx(ctx context.Context, tx *sql.Tx, pf *presetfile.PresetFile, opts 
 		Tree              *presetfile.PresetFile
 		IDs               map[int]int64
 		Filed, Configured bool
-		Rules             []automations.Automation
-		References        []string
-	}{dest, opts.ContentSHA256, pf, opts.SkipSeeds, opts.Remaps, opts.Replacements, opts.SwitchFromPreset, opts.SetIDs, current, p.categoryIDs, filed, configured, relevantRules, refs}
+	}{dest, opts.ContentSHA256, pf, opts.Remaps, opts.Replacements, opts.SwitchFromPreset, opts.SetIDs, current, p.categoryIDs, filed, configured}
 	b, err := json.Marshal(binding)
 	if err != nil {
 		return nil, err
@@ -333,71 +256,4 @@ func previewTx(ctx context.Context, tx *sql.Tx, pf *presetfile.PresetFile, opts 
 	h := sha256.Sum256(b)
 	p.diff.StateHash = hex.EncodeToString(h[:])
 	return p, nil
-}
-
-// Resolve only names this import will use. Slug aliases matter because the
-// existing named-taxonomy owner deliberately reuses them instead of duplicating.
-func referenceState(ctx context.Context, tx *sql.Tx, systemID int64, rules []plannedRule) ([]string, error) {
-	names := map[string]bool{}
-	add := func(table, name string) {
-		// Apply resolves trimmed exact names before canonical slug aliases.
-		name = strings.TrimSpace(name)
-		if name != "" {
-			names[table+"\x00"+name] = true
-		}
-	}
-	for _, rule := range rules {
-		t := rule.seed.Trigger
-		add("tags", t.FilterTag)
-		add("correspondents", t.FilterCorrespondent)
-		for _, a := range rule.seed.Actions {
-			if name, ok := stringField(a.Params, "tag"); ok {
-				add("tags", name)
-			}
-			if list, ok := stringSliceField(a.Params, "tags"); ok {
-				for _, name := range list {
-					add("tags", name)
-				}
-			}
-			if name, ok := stringField(a.Params, "correspondent"); ok {
-				add("correspondents", name)
-			}
-		}
-	}
-	keys := make([]string, 0, len(names))
-	for key := range names {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-	out := []string{}
-	for _, key := range keys {
-		var table, name string
-		for i := range key {
-			if key[i] == 0 {
-				table, name = key[:i], key[i+1:]
-				break
-			}
-		}
-		rows, err := tx.QueryContext(ctx, "SELECT id,name,slug FROM "+table+" WHERE system_id=? AND (name=? OR slug=?) ORDER BY id", systemID, name, slug.Make(name))
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, key)
-		for rows.Next() {
-			var id int64
-			var n, s string
-			if err := rows.Scan(&id, &n, &s); err != nil {
-				rows.Close()
-				return nil, err
-			}
-			b, _ := json.Marshal([]any{id, n, s})
-			out = append(out, string(b))
-		}
-		if err := rows.Err(); err != nil {
-			rows.Close()
-			return nil, err
-		}
-		rows.Close()
-	}
-	return out, nil
 }

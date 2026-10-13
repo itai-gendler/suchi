@@ -17,28 +17,12 @@ name = "Properties"
   code = 11
   name = "Tenancy agreements"
   description = "ASTs and renewals."
-  keywords = ["tenancy", "AST", "renewal"]
 
   [[areas.categories]]
   code = 12
   name = "Deposits"
-  keywords = ["deposit", "DPS", "TDS"]
 
   [[areas.categories]]
   code = 13
   name = "Safety certificates"
-  keywords = ["gas safety", "CP12", "EICR", "EPC"]
 
-
-[[seeds.automations]]
-name = "File gas certificates"
-
-  [seeds.automations.trigger]
-  type = 2
-  filter_content_matching = "gas safety"
-
-  [[seeds.automations.actions]]
-  kind = "assign_tags"
-
-    [seeds.automations.actions.params]
-    tag = "certificate"

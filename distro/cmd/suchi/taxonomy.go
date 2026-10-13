@@ -104,7 +104,6 @@ func runTaxonomyImport(args []string) int {
 	remaps := taxonomyRemaps{}
 	var (
 		apply        = fs.Bool("apply", false, "actually write. Default is dry-run.")
-		skipSeeds    = fs.Bool("skip-seeds", false, "only touch the JD tree, without starter automations")
 		format       = fs.String("format", "", "override auto-detect: huml|toml")
 		systemCode   = fs.String("system", "", "target system code (default: original archive)")
 		existingCode = fs.String("existing-system-code", "", "preserve the original archive under this code on first SYS import")
@@ -167,7 +166,7 @@ func runTaxonomyImport(args []string) int {
 	}
 
 	hash := sha256.Sum256(b)
-	opts := importer.Options{SkipSeeds: *skipSeeds, Remaps: remaps, ContentSHA256: hex.EncodeToString(hash[:]), TargetSystem: targetCode, ExistingSystemCode: *existingCode}
+	opts := importer.Options{Remaps: remaps, ContentSHA256: hex.EncodeToString(hash[:]), TargetSystem: targetCode, ExistingSystemCode: *existingCode}
 	preview, err := importer.Preview(ctx, d, pf, opts)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "preview: %v\n", err)
@@ -189,13 +188,7 @@ func runTaxonomyImport(args []string) int {
 			fmt.Println("access: existing system memberships and document ACLs remain unchanged")
 		}
 	}
-	fmt.Printf("mode: %s; adds %d categories and %d rules\n", preview.Mode, len(preview.CategoriesToAdd), len(preview.RulesToAdd))
-	for _, rule := range preview.RulesPreserved {
-		fmt.Printf("preserves rule %q (enabled=%v)\n", rule.Name, rule.Enabled)
-	}
-	for _, rule := range preview.RulesSkipped {
-		fmt.Printf("skips rule %q: %s\n", rule.Name, rule.Reason)
-	}
+	fmt.Printf("mode: %s; adds %d categories\n", preview.Mode, len(preview.CategoriesToAdd))
 	for _, collision := range preview.Collisions {
 		fmt.Printf("collision %d: %q / %q (resolved=%v); use --remap %d:skip or --remap %d:<free-code>\n",
 			collision.Code, collision.Existing, collision.Incoming, collision.Resolved, collision.Code, collision.Code)
@@ -216,13 +209,12 @@ func runTaxonomyImport(args []string) int {
 func runTaxonomyExport(args []string) int {
 	fs := flag.NewFlagSet("suchi taxonomy export", flag.ContinueOnError)
 	format := fs.String("format", "huml", "output format: huml|toml")
-	skipSeeds := fs.Bool("skip-seeds", false, "export the filing tree without keywords or starter rules")
 	systemCode := fs.String("system", "", "system code (default: original archive)")
 	if err := fs.Parse(args); err != nil {
 		return flagParseExit(err)
 	}
 	if fs.NArg() != 0 {
-		fmt.Fprintln(os.Stderr, "usage: suchi taxonomy export [--format huml|toml] [--skip-seeds]")
+		fmt.Fprintln(os.Stderr, "usage: suchi taxonomy export [--format huml|toml]")
 		return 2
 	}
 	outputFormat, err := preferredTaxonomyFormat(*format)
@@ -250,7 +242,7 @@ func runTaxonomyExport(args []string) int {
 		fmt.Fprintf(os.Stderr, "system: %v\n", err)
 		return 1
 	}
-	pf, err := exporter.BuildExport(ctx, d, system.ID, *skipSeeds)
+	pf, err := exporter.BuildExport(ctx, d, system.ID)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "read: %v\n", err)
 		return 1
@@ -369,7 +361,7 @@ func (r *taxonomyRemaps) Set(value string) error {
 }
 
 func parseTaxonomyImportArgs(fs *flag.FlagSet, args []string) (string, error) {
-	usage := "usage: suchi taxonomy import <file> [--apply] [--skip-seeds] [--format huml|toml] [--remap incoming:target]"
+	usage := "usage: suchi taxonomy import <file> [--apply] [--format huml|toml] [--remap incoming:target]"
 	path := ""
 	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
 		path, args = args[0], args[1:]

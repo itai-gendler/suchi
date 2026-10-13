@@ -17,24 +17,9 @@ areas::
         code: 11
         name: "Tenancy agreements"
         description: "ASTs and renewals."
-        keywords:: "tenancy", "AST", "renewal"
       - ::
         code: 12
         name: "Deposits"
-        keywords:: "deposit", "DPS", "TDS"
       - ::
         code: 13
         name: "Safety certificates"
-        keywords:: "gas safety", "CP12", "EICR", "EPC"
-seeds::
-  automations::
-    - ::
-      name: "File gas certificates"
-      trigger::
-        type: 2
-        filter_content_matching: "gas safety"
-      actions::
-        - ::
-          kind: "assign_tags"
-          params::
-            tag: "certificate"

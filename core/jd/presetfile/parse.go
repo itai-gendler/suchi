@@ -53,6 +53,7 @@ func Parse(data []byte, format SerFormat) (*PresetFile, error) {
 	if raw["format"] != Format {
 		return nil, Errors{noPos("format must be %q, got %v", Format, raw["format"])}
 	}
+	dropLegacyRules(raw)
 	var pf PresetFile
 	if err := decodeRaw(reflect.ValueOf(&pf).Elem(), raw, ""); err != nil {
 		return nil, Errors{noPos("%s", err)}
@@ -91,6 +92,39 @@ func Parse(data []byte, format SerFormat) (*PresetFile, error) {
 	pf.Areas = append(pf.Areas, Area{Code: 40, Name: "System", Categories: []Category{{Code: 49, Name: "Inbox"}}})
 	pf.Inbox = 49
 	return &pf, nil
+}
+
+// dropLegacyRules removes the category keywords and seeds.automations that
+// v0.2 exports wrote, so those files still import their filing tree.
+func dropLegacyRules(raw map[string]any) {
+	delete(raw, "seeds")
+	dropKeywords(raw["categories"])
+	for _, area := range listItems(raw["areas"]) {
+		if m, ok := area.(map[string]any); ok {
+			dropKeywords(m["categories"])
+		}
+	}
+}
+
+func dropKeywords(categories any) {
+	for _, category := range listItems(categories) {
+		if m, ok := category.(map[string]any); ok {
+			delete(m, "keywords")
+		}
+	}
+}
+
+// listItems accepts both []any (HuML) and []map[string]any (TOML tables).
+func listItems(list any) []any {
+	v := reflect.ValueOf(list)
+	if v.Kind() != reflect.Slice {
+		return nil
+	}
+	items := make([]any, v.Len())
+	for i := range items {
+		items[i] = v.Index(i).Interface()
+	}
+	return items
 }
 
 // decodeRaw uses the public schema's tags but never performs scalar coercion.
@@ -208,9 +242,6 @@ func Marshal(pf *PresetFile, format SerFormat) ([]byte, error) {
 		m["categories"] = raw.Categories
 	} else {
 		m["areas"] = raw.Areas
-	}
-	if raw.Seeds != nil {
-		m["seeds"] = raw.Seeds
 	}
 	var data []byte
 	switch format {

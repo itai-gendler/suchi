@@ -2,179 +2,19 @@
 
 package automations_test
 
-// Preset-owned automation behavior:
-//
-//   - Enable/disable toggles the preset row in place (was: forked).
-//     Toggling is a UX flip, not a rule mutation.
-//   - Substantive edits (name / order / triggers / actions) copy-on-
-//     write: new user-owned row carries the patch, preset original
-//     soft-disabled.
-//   - Delete disables the preset row in place (was: forked).
-//   - Save (create or edit) refuses to produce a content-duplicate of
-//     an existing row; the store returns *ErrDuplicateRule pointing
-//     at the existing match.
+// Save (create or edit) refuses to produce a content-duplicate of an
+// existing row; the store returns *ErrDuplicateRule pointing at the
+// existing match.
 
 import (
 	"context"
 	"errors"
 	"testing"
-	"time"
 
 	"github.com/johnnybravo-xyz/suchi/core/automations"
-	"github.com/johnnybravo-xyz/suchi/core/db"
 )
 
-// seedPresetRow inserts a preset-owned row with one trigger and one
-// action so tests exercise the same shape production seeds produce.
-func seedPresetRow(t *testing.T, ctx context.Context, d *db.DB, name, presetSlug string) int64 {
-	t.Helper()
-	now := time.Now().Unix()
-	res, err := d.Write.ExecContext(ctx, `
-		INSERT INTO automations(system_id, name, order_index, enabled, preset_slug,
-		                        created_at, updated_at)
-		VALUES (1, ?, 0, 1, ?, ?, ?)
-	`, name, presetSlug, now, now)
-	if err != nil {
-		t.Fatal(err)
-	}
-	id, err := res.LastInsertId()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := d.Write.ExecContext(ctx, `
-		INSERT INTO automation_triggers(automation_id, type, filter_content_re, created_at)
-		VALUES (?, 'document_added', 'electricity', ?)
-	`, id, now); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := d.Write.ExecContext(ctx, `
-		INSERT INTO automation_actions(automation_id, order_index, kind, params_json, created_at)
-		VALUES (?, 0, 'assign_title', '{"template":"{{title}}"}', ?)
-	`, id, now); err != nil {
-		t.Fatal(err)
-	}
-	return id
-}
-
-// Toggle on/off/on/off on a preset row keeps the same row id, no
-// fork rows accumulate. This regresses the "toggle-then-enable
-// returns 400" bug.
-func TestStore_Update_TogglePresetIsIdempotent(t *testing.T) {
-	ctx := context.Background()
-	d, _ := setup(t, ctx)
-	origID := seedPresetRow(t, ctx, d, "Tag utility bills", "solo")
-
-	s := automations.New(d, testActions(t))
-	off := false
-	on := true
-
-	for i, flip := range []*bool{&off, &on, &off, &on} {
-		patched, err := s.Update(ctx, 1, origID, automations.AutomationPatch{Enabled: flip})
-		if err != nil {
-			t.Fatalf("iter %d: %v", i, err)
-		}
-		if patched.ID != origID {
-			t.Fatalf("iter %d: expected same id %d, got fork %d", i, origID, patched.ID)
-		}
-		if patched.Enabled != *flip {
-			t.Fatalf("iter %d: enabled = %v, want %v", i, patched.Enabled, *flip)
-		}
-		if patched.PresetSlug != "solo" {
-			t.Fatalf("iter %d: preset_slug = %q, want solo (row must stay preset-owned)",
-				i, patched.PresetSlug)
-		}
-	}
-
-	// No "(edited)" fork row leaked across the four toggles.
-	var forks int
-	if err := d.Read.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM automations WHERE name LIKE '%%(edited)%%'`,
-	).Scan(&forks); err != nil {
-		t.Fatal(err)
-	}
-	if forks != 0 {
-		t.Errorf("stray fork rows after toggle: %d", forks)
-	}
-}
-
-// Substantive edits still fork — the operator diverged from the
-// preset, so a user-owned copy is warranted.
-func TestStore_Update_SubstantiveEditForksPreset(t *testing.T) {
-	ctx := context.Background()
-	d, _ := setup(t, ctx)
-	origID := seedPresetRow(t, ctx, d, "File tax documents", "household")
-
-	s := automations.New(d, testActions(t))
-	newName := "File tax + insurance docs"
-	patched, err := s.Update(ctx, 1, origID, automations.AutomationPatch{Name: &newName})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if patched.ID == origID {
-		t.Fatalf("substantive edit must fork; got same id %d", origID)
-	}
-	if patched.Name != newName {
-		t.Fatalf("fork name = %q, want %q", patched.Name, newName)
-	}
-	if patched.PresetSlug != "" {
-		t.Fatalf("fork must be user-owned, got preset_slug=%q", patched.PresetSlug)
-	}
-
-	// Original preserved but soft-disabled.
-	var origEnabled int
-	if err := d.Read.QueryRowContext(ctx,
-		`SELECT enabled FROM automations WHERE id = ?`, origID).Scan(&origEnabled); err != nil {
-		t.Fatal(err)
-	}
-	if origEnabled != 0 {
-		t.Errorf("original enabled = %d, want 0 (soft-disabled)", origEnabled)
-	}
-}
-
-// Delete on a preset row disables it in place — no fork row created.
-// Matches the "preset seeds are undeletable, best you can do is
-// disable" semantics documented in docs/jd.mdx.
-func TestStore_Delete_PresetRowDisablesInPlace(t *testing.T) {
-	ctx := context.Background()
-	d, _ := setup(t, ctx)
-	origID := seedPresetRow(t, ctx, d, "File tax documents", "household")
-
-	s := automations.New(d, testActions(t))
-	if err := s.Delete(ctx, 1, origID); err != nil {
-		t.Fatal(err)
-	}
-
-	var (
-		enabled int
-		slug    string
-	)
-	if err := d.Read.QueryRowContext(ctx,
-		`SELECT enabled, COALESCE(preset_slug, '') FROM automations WHERE id = ?`, origID,
-	).Scan(&enabled, &slug); err != nil {
-		t.Fatal(err)
-	}
-	if enabled != 0 {
-		t.Errorf("original enabled = %d, want 0", enabled)
-	}
-	if slug != "household" {
-		t.Errorf("preset_slug = %q, want household (must survive)", slug)
-	}
-
-	// No fork row exists.
-	var forks int
-	if err := d.Read.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM automations WHERE preset_slug IS NULL`,
-	).Scan(&forks); err != nil {
-		t.Fatal(err)
-	}
-	if forks != 0 {
-		t.Errorf("expected no fork rows, got %d", forks)
-	}
-}
-
-// User-owned toggle also stays in place (unchanged from prior
-// behavior; keeps the test for regression coverage).
-func TestStore_Update_UserOwnedIsNormalUpdate(t *testing.T) {
+func TestStore_Update_ToggleIsInPlace(t *testing.T) {
 	ctx := context.Background()
 	d, _ := setup(t, ctx)
 
@@ -192,7 +32,7 @@ func TestStore_Update_UserOwnedIsNormalUpdate(t *testing.T) {
 		t.Fatal(err)
 	}
 	if patched.ID != created.ID {
-		t.Fatalf("user-owned patch must update in place; got new id %d", patched.ID)
+		t.Fatalf("patch must update in place; got new id %d", patched.ID)
 	}
 	if patched.Enabled {
 		t.Fatalf("expected enabled=false")

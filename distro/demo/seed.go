@@ -14,20 +14,42 @@ import (
 	"strings"
 
 	"github.com/johnnybravo-xyz/suchi/core/api"
-	"github.com/johnnybravo-xyz/suchi/core/jd/presetfile"
 )
 
 // Manifest is the schema written to corpus/manifest.json in the sibling
 // suchi-demo repo. Kept intentionally flat — the demo corpus is
 // human-authored and this struct is the only contract.
 type Manifest struct {
-	Version     string                      `json:"version"`
-	Notes       string                      `json:"notes,omitempty"`
-	Personas    []string                    `json:"personas,omitempty"`
-	Clusters    map[string]ManifestCluster  `json:"clusters,omitempty"`
-	Fixtures    []ManifestFixture           `json:"fixtures"`
-	SavedViews  []ManifestSavedView         `json:"saved_views,omitempty"`
-	Automations []presetfile.SeedAutomation `json:"automations,omitempty"`
+	Version     string                     `json:"version"`
+	Notes       string                     `json:"notes,omitempty"`
+	Personas    []string                   `json:"personas,omitempty"`
+	Clusters    map[string]ManifestCluster `json:"clusters,omitempty"`
+	Fixtures    []ManifestFixture          `json:"fixtures"`
+	SavedViews  []ManifestSavedView        `json:"saved_views,omitempty"`
+	Automations []ManifestAutomation       `json:"automations,omitempty"`
+}
+
+// ManifestAutomation is one demo rule. Filters name tags and correspondents;
+// the seeder resolves them to rows in the demo archive.
+type ManifestAutomation struct {
+	Name    string           `json:"name"`
+	Trigger ManifestTrigger  `json:"trigger"`
+	Actions []ManifestAction `json:"actions"`
+}
+
+type ManifestTrigger struct {
+	Type                  int    `json:"type"`
+	FilterPath            string `json:"filter_path,omitempty"`
+	FilterFilename        string `json:"filter_filename,omitempty"`
+	FilterTitleMatching   string `json:"filter_title_matching,omitempty"`
+	FilterContentMatching string `json:"filter_content_matching,omitempty"`
+	FilterTag             string `json:"filter_has_tag,omitempty"`
+	FilterCorrespondent   string `json:"filter_has_correspondent,omitempty"`
+}
+
+type ManifestAction struct {
+	Kind   string         `json:"kind"`
+	Params map[string]any `json:"params"`
 }
 
 // ManifestSavedView is one demo dashboard view owned by the seed user.
@@ -135,7 +157,7 @@ type SeedOptions struct {
 
 	// AutomationIngest returns true when it inserted a new rule and false
 	// when a same-name rule was preserved.
-	AutomationIngest func(ctx context.Context, order int, automation presetfile.SeedAutomation) (bool, error)
+	AutomationIngest func(ctx context.Context, order int, automation ManifestAutomation) (bool, error)
 
 	// LinkIngest writes one fixture's document links after every fixture is
 	// stored, so targets later in the manifest resolve. It returns true when

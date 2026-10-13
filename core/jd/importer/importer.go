@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 // Package importer owns preview and atomic application of validated taxonomies.
-// Imports add user structure and starter rules; existing rows always win.
+// Imports add filing structure; existing rows always win.
 package importer
 
 import (
@@ -11,19 +11,15 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"regexp"
-	"strings"
 	"time"
 
 	"github.com/johnnybravo-xyz/suchi/core/approvals"
-	"github.com/johnnybravo-xyz/suchi/core/automations"
 	"github.com/johnnybravo-xyz/suchi/core/db"
 	"github.com/johnnybravo-xyz/suchi/core/jd/presetfile"
 	"github.com/johnnybravo-xyz/suchi/core/jd/systems"
 	index "github.com/johnnybravo-xyz/suchi/core/render/index"
 	"github.com/johnnybravo-xyz/suchi/core/render/view"
 	"github.com/johnnybravo-xyz/suchi/core/rescan"
-	"github.com/johnnybravo-xyz/suchi/core/taxonomy"
 	pluginapi "github.com/johnnybravo-xyz/suchi/plugin-api"
 )
 
@@ -31,7 +27,6 @@ type Options struct {
 	TargetSystem       string
 	ExistingSystemCode string
 	ActorID            int64
-	SkipSeeds          bool
 	Remaps             map[int]int
 	Replacements       map[int]bool
 	SwitchFromPreset   string
@@ -89,38 +84,6 @@ func Apply(ctx context.Context, d *db.DB, log *slog.Logger, pf *presetfile.Prese
 		systemID := plan.destination.Target.ID
 		if err := applyTree(ctx, tx, pf, plan); err != nil {
 			return err
-		}
-		if opts.SwitchFromPreset != "" {
-			now := time.Now().Unix()
-			if _, err := tx.ExecContext(ctx, `UPDATE automations SET suspended=1,updated_at=? WHERE system_id=? AND preset_slug=?`,
-				now, systemID, opts.SwitchFromPreset); err != nil {
-				return err
-			}
-			for _, rule := range plan.diff.RulesPreserved {
-				if _, err := tx.ExecContext(ctx, `UPDATE automations SET preset_slug=?,suspended=0,updated_at=? WHERE system_id=? AND preset_slug=? AND name=?`,
-					pf.ID, now, systemID, opts.SwitchFromPreset, rule.Name); err != nil {
-					return err
-				}
-			}
-			if _, err := tx.ExecContext(ctx, `UPDATE automations SET suspended=0,updated_at=? WHERE system_id=? AND preset_slug=?`,
-				now, systemID, pf.ID); err != nil {
-				return err
-			}
-		}
-		// Resolve every surviving rule before materializing any rule. Named
-		// references use their existing owner and roll back with this transaction.
-		resolved := make([]automations.Automation, 0, len(plan.rules))
-		for _, rule := range plan.rules {
-			a, err := resolveRule(ctx, tx, systemID, rule, pf.ID, plan.categoryIDs, plan.codes)
-			if err != nil {
-				return err
-			}
-			resolved = append(resolved, a)
-		}
-		for _, rule := range resolved {
-			if err := insertRule(ctx, tx, systemID, rule); err != nil {
-				return err
-			}
 		}
 		if plan.destination.Create {
 			var actor *pluginapi.Principal
@@ -180,7 +143,7 @@ func Apply(ctx context.Context, d *db.DB, log *slog.Logger, pf *presetfile.Prese
 	if err != nil {
 		return nil, err
 	}
-	log.Info("taxonomy.imported", "preset", pf.ID, "mode", diff.Mode, "categories_added", len(diff.CategoriesToAdd), "rules_added", len(diff.RulesToAdd), "index_refresh", "pending")
+	log.Info("taxonomy.imported", "preset", pf.ID, "mode", diff.Mode, "categories_added", len(diff.CategoriesToAdd), "index_refresh", "pending")
 	return diff, nil
 }
 
@@ -252,103 +215,6 @@ func applyTree(ctx context.Context, tx *sql.Tx, pf *presetfile.PresetFile, p *im
 	return nil
 }
 
-func incomingRules(pf *presetfile.PresetFile, codes codeMap) []plannedRule {
-	var rules []plannedRule
-	if pf.Seeds != nil {
-		for i, seed := range pf.Seeds.Automations {
-			rules = append(rules, plannedRule{seed: seed, order: i})
-		}
-	}
-	for _, a := range pf.Areas {
-		for _, c := range a.Categories {
-			if len(c.Keywords) == 0 {
-				continue
-			}
-			effective, ok := codes[c.Code]
-			if !ok {
-				effective = c.Code
-			}
-			patterns := make([]string, 0, len(c.Keywords))
-			for _, keyword := range c.Keywords {
-				patterns = append(patterns, regexp.QuoteMeta(strings.TrimSpace(keyword)))
-			}
-			rules = append(rules, plannedRule{
-				seed: presetfile.SeedAutomation{
-					Name:    fmt.Sprintf("%s: file %d %s", pf.ID, effective, c.Name),
-					Trigger: presetfile.Trigger{Type: 2, FilterContentMatching: `(?:^|[^\p{L}\p{N}_])(?:` + strings.Join(patterns, "|") + `)(?:$|[^\p{L}\p{N}_])`},
-					Actions: []presetfile.Action{{Kind: "assign_jd_category", Params: map[string]any{"jd_category_code": c.Code}}},
-				}, order: 100, keywords: c.Keywords,
-			})
-		}
-	}
-	return rules
-}
-
-func resolveRule(ctx context.Context, tx *sql.Tx, systemID int64, rule plannedRule, preset string, categoryIDs map[int]int64, codes codeMap) (automations.Automation, error) {
-	t := rule.seed.Trigger
-	trigger := automations.Trigger{Type: automations.TriggerFromCode(t.Type), FilterPath: t.FilterPath, FilterFilename: t.FilterFilename,
-		FilterTitleRE: t.FilterTitleMatching, FilterContentRE: t.FilterContentMatching,
-		FilterEmailFrom: t.FilterEmailFrom, FilterEmailSubject: t.FilterEmailSubject, FilterEmailFolder: t.FilterEmailFolder, FilterEmailHasAttachment: t.FilterEmailHasAttachment,
-	}
-	for _, ref := range []struct {
-		table taxonomy.NamedTable
-		name  string
-		dst   *int64
-	}{
-		{taxonomy.TableTags, t.FilterTag, &trigger.FilterTagID},
-		{taxonomy.TableCorrespondents, t.FilterCorrespondent, &trigger.FilterCorrID},
-	} {
-		if ref.name == "" {
-			continue
-		}
-		id, err := taxonomy.UpsertByName(ctx, tx, systemID, ref.table, ref.name, time.Now().Unix())
-		if err != nil {
-			return automations.Automation{}, err
-		}
-		*ref.dst = id
-	}
-	a := automations.Automation{Name: rule.seed.Name, OrderIndex: rule.order, PresetSlug: preset, Enabled: true, Triggers: []automations.Trigger{trigger}}
-	for i, action := range rule.seed.Actions {
-		params, err := resolveActionParams(ctx, tx, systemID, action, categoryIDs, codes)
-		if err != nil {
-			return a, fmt.Errorf("rule %q action %d: %w", a.Name, i, err)
-		}
-		if len(rule.keywords) > 0 {
-			params["_preset_keywords"] = rule.keywords
-		}
-		a.Actions = append(a.Actions, automations.Action{OrderIndex: i, Kind: action.Kind, Params: params})
-	}
-	return a, nil
-}
-
-func insertRule(ctx context.Context, tx *sql.Tx, systemID int64, rule automations.Automation) error {
-	now := time.Now().Unix()
-	result, err := tx.ExecContext(ctx, `INSERT INTO automations(system_id,name,order_index,enabled,preset_slug,created_at,updated_at) VALUES(?,?,?,1,?,?,?)`, systemID, rule.Name, rule.OrderIndex, rule.PresetSlug, now, now)
-	if err != nil {
-		return err
-	}
-	id, err := result.LastInsertId()
-	if err != nil {
-		return err
-	}
-	t := rule.Triggers[0]
-	_, err = tx.ExecContext(ctx, `INSERT INTO automation_triggers(automation_id,type,filter_path,filter_filename,filter_tag_id,filter_corr_id,filter_title_re,filter_content_re,filter_email_from,filter_email_subject,filter_email_folder,filter_email_has_attachment,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-		id, t.Type, nullIfEmpty(t.FilterPath), nullIfEmpty(t.FilterFilename), nullID(t.FilterTagID), nullID(t.FilterCorrID), nullIfEmpty(t.FilterTitleRE), nullIfEmpty(t.FilterContentRE), nullIfEmpty(t.FilterEmailFrom), nullIfEmpty(t.FilterEmailSubject), nullIfEmpty(t.FilterEmailFolder), t.FilterEmailHasAttachment, now)
-	if err != nil {
-		return err
-	}
-	for _, action := range rule.Actions {
-		b, err := json.Marshal(action.Params)
-		if err != nil {
-			return err
-		}
-		if _, err := tx.ExecContext(ctx, `INSERT INTO automation_actions(automation_id,order_index,kind,params_json,created_at) VALUES(?,?,?,?,?)`, id, action.OrderIndex, action.Kind, string(b), now); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 func writeImportProvenance(ctx context.Context, tx *sql.Tx, systemID int64, pf *presetfile.PresetFile, hash string, setIDs []string) error {
 	authoring, err := json.Marshal(struct {
 		System     string   `json:"system,omitempty"`
@@ -381,10 +247,4 @@ func nullIfEmpty(s string) any {
 		return nil
 	}
 	return s
-}
-func nullID(id int64) any {
-	if id == 0 {
-		return nil
-	}
-	return id
 }

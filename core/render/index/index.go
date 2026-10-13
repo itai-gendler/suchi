@@ -72,7 +72,7 @@ func (h *Handler) Handle(ctx context.Context, event pluginapi.Event) error {
 	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	pf, err := exporter.BuildExport(ctx, h.db, systemID, true)
+	pf, err := exporter.BuildExport(ctx, h.db, systemID)
 	if err == nil {
 		var data []byte
 		data, err = presetfile.Marshal(pf, presetfile.FormatHuML)

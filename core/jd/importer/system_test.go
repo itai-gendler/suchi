@@ -6,7 +6,6 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/johnnybravo-xyz/suchi/core/automations"
 	"github.com/johnnybravo-xyz/suchi/core/jd/importer"
 	"github.com/johnnybravo-xyz/suchi/core/jd/systems"
 	"github.com/johnnybravo-xyz/suchi/core/render/view"
@@ -63,7 +62,7 @@ func TestFirstSystemImportRetainsIdentityMembershipAndGrants(t *testing.T) {
 	apply(t, d, pf, importer.Options{})
 	pf.System = ""
 	apply(t, d, pf, importer.Options{})
-	exported, err := exporter.BuildExport(t.Context(), d, 1, true)
+	exported, err := exporter.BuildExport(t.Context(), d, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -98,7 +97,7 @@ func TestFirstSystemSeparateDestinationAndFailedTransition(t *testing.T) {
 				t.Fatal("preview wrote system records")
 			}
 			if fail {
-				if _, err := d.ExecWrite(t.Context(), `CREATE TRIGGER fail_new_rule BEFORE INSERT ON automation_actions BEGIN SELECT RAISE(ABORT,'reject rule'); END`); err != nil {
+				if _, err := d.ExecWrite(t.Context(), `CREATE TRIGGER fail_index BEFORE INSERT ON jobs BEGIN SELECT RAISE(ABORT,'reject job'); END`); err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -106,7 +105,7 @@ func TestFirstSystemSeparateDestinationAndFailedTransition(t *testing.T) {
 			_, err = importer.Apply(t.Context(), d, logger(), pf, opts)
 			if fail {
 				if err == nil {
-					t.Fatal("injected rule failure ignored")
+					t.Fatal("injected write failure ignored")
 				}
 				if n := count(t, d, `SELECT COUNT(*) FROM jd_systems WHERE code<>''`); n != 0 {
 					t.Fatal("failed apply left named or new system")
@@ -208,30 +207,14 @@ func TestImportRechecksActorAndTargetMembershipState(t *testing.T) {
 	}
 }
 
-func TestRepeatedCodesNamesAndRulesStayInTheirSystem(t *testing.T) {
+func TestRepeatedCodesAndNamesStayInTheirSystem(t *testing.T) {
 	d := openTestDB(t)
 	pf := smallPreset(t)
 	pf.System = "S01"
 	apply(t, d, pf, importer.Options{})
-	id := document(t, d, "Invoice", "electricity")
 	other := smallPreset(t)
 	other.System = "S02"
 	apply(t, d, other, importer.Options{})
-	if _, err := d.ExecWrite(t.Context(), `UPDATE automations SET enabled=0 WHERE system_id=1`); err != nil {
-		t.Fatal(err)
-	}
-	if err := automations.ApplyOnDocumentAdded(t.Context(), d, testActions(t), logger(), id); err != nil {
-		t.Fatal(err)
-	}
-	if code := count(t, d, `SELECT c.code FROM documents d JOIN jd_categories c ON c.id=d.jd_category_id WHERE d.id=?`, id); code != 49 {
-		t.Fatal("foreign system rule classified document")
-	}
-	if n := count(t, d, `SELECT COUNT(*) FROM document_tags WHERE document_id=?`, id); n != 0 {
-		t.Fatal("foreign system rule tagged document")
-	}
-	if n := count(t, d, `SELECT COUNT(*) FROM tags WHERE name='Tax'`); n != 2 {
-		t.Fatal("same-name starters collided across systems")
-	}
 	selected, err := systems.ByCode(t.Context(), d.Read, "S02")
 	if err != nil {
 		t.Fatal(err)
@@ -239,14 +222,14 @@ func TestRepeatedCodesNamesAndRulesStayInTheirSystem(t *testing.T) {
 	other.System = ""
 	other.Areas[0].Categories[0].Description = "Incoming description is not a rename"
 	apply(t, d, other, importer.Options{TargetSystem: "S02"})
-	if n := count(t, d, `SELECT COUNT(*) FROM automations WHERE system_id=1 AND enabled=1`); n != 0 {
-		t.Fatal("selected unprefixed reimport resurrected another system rules")
+	if n := count(t, d, `SELECT COUNT(*) FROM jd_categories WHERE code=11 AND name='Bills'`); n != 2 {
+		t.Fatalf("same-code categories collided across systems: %d", n)
 	}
-	exported, err := exporter.BuildExport(t.Context(), d, selected.ID, false)
+	exported, err := exporter.BuildExport(t.Context(), d, selected.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if exported.System != "S02" || len(exported.Seeds.Automations) != 2 {
+	if exported.System != "S02" || len(exported.Areas) != 2 {
 		t.Fatalf("wrong scoped export: %+v", exported)
 	}
 }

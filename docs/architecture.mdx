@@ -717,12 +717,9 @@ filing-tree choice. The browser reads it through `GET /api/admin/setup/state`.
 `POST /api/admin/setup/preset/preview` produces the bound review and
 `POST /api/admin/setup/preset/apply` consumes its `expected_state_hash`.
 
-`core/taxonomy/exporter` exports consistent `archive` revision-1 snapshots. Tree-only omits
-keywords/starters; seeded export rejects unrepresentable/disabled behavior and
-preserves rule identity/order. Import provenance is neither installed-pack state
-nor whole-archive attribution. Preset keywords use literal word/phrase patterns;
-published migration 0002 repaired generated rules without altering user copies or
-categories, leaving no runtime compatibility layer. [JD](/jd) and
+`core/taxonomy/exporter` exports consistent `archive` revision-1 tree snapshots.
+Filing trees carry no automations; every rule is archive-owned. Import provenance
+is neither installed-pack state nor whole-archive attribution. [JD](/jd) and
 [Automations](/automations) own authoring/operator details.
 
 `core/intelligence` validates facts; API source visibility/fact filters precede

@@ -58,6 +58,14 @@ Notable user-visible changes to Suchi are recorded here.
   `INGEST_FS_RECURSIVE=off` restores top-level-only discovery; durable
   observations skip unchanged files, and failures remain at their source path.
 
+### Removed
+
+- Filing trees no longer install automations, and taxonomy files no longer
+  carry category keywords or starter rules. Upgrading deletes the rules earlier
+  presets installed; built-in rules you edited were already saved as your own
+  copies and stay. Older taxonomy files still import their tree. The
+  `--skip-seeds` flag and `skip_seeds`/`include_seeds` request fields are gone.
+
 ## [0.2.1] - 2026-10-10
 
 Source tag only: no binaries, images or GitHub release are published for this

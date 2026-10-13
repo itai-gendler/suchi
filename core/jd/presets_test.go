@@ -106,7 +106,7 @@ func TestApplyPresetPreservesFiledAndTrashedDocuments(t *testing.T) {
 	}
 }
 
-func TestPresetChangeReviewsMappingsAndSuspendsSourceRules(t *testing.T) {
+func TestPresetChangeReviewsMappings(t *testing.T) {
 	d := openTestDB(t)
 	ctx := context.Background()
 	log := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelWarn}))
@@ -172,16 +172,6 @@ func TestPresetChangeReviewsMappingsAndSuspendsSourceRules(t *testing.T) {
 	if vendorAgreementID != projectAgreementsID || vendorName != "Supplier contracts" {
 		t.Fatalf("mapped vendor category=(%d,%q), want preserved id %d", vendorAgreementID, vendorName, projectAgreementsID)
 	}
-	var activeSource, activeTarget int
-	if err := d.Read.QueryRowContext(ctx, `SELECT COUNT(*) FROM automations WHERE preset_slug='freelance' AND suspended=0`).Scan(&activeSource); err != nil {
-		t.Fatal(err)
-	}
-	if err := d.Read.QueryRowContext(ctx, `SELECT COUNT(*) FROM automations WHERE preset_slug='smb_billing' AND suspended=0`).Scan(&activeTarget); err != nil {
-		t.Fatal(err)
-	}
-	if activeSource != 0 || activeTarget == 0 {
-		t.Fatalf("active preset rules: freelance=%d smb=%d", activeSource, activeTarget)
-	}
 }
 
 func TestPresetChangeFiltersAutomaticReplacementsAgainstCurrentTree(t *testing.T) {
@@ -240,7 +230,7 @@ func TestReapplyingSoloUpdatesAnOlderTreeInPlace(t *testing.T) {
 	d := openTestDB(t)
 	ctx := context.Background()
 	log := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelWarn}))
-	if err := jd.ApplyPreset(ctx, d, log, "solo", jd.ApplyPresetOpts{SystemID: 1, SkipSeeds: true}); err != nil {
+	if err := jd.ApplyPreset(ctx, d, log, "solo", jd.ApplyPresetOpts{SystemID: 1}); err != nil {
 		t.Fatal(err)
 	}
 	var loansID int64
@@ -259,7 +249,7 @@ func TestReapplyingSoloUpdatesAnOlderTreeInPlace(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	request := jd.PresetChangeRequest{PresetID: "solo", SystemID: 1, SkipSeeds: true}
+	request := jd.PresetChangeRequest{PresetID: "solo", SystemID: 1}
 	preview, err := jd.PreviewPresetChange(ctx, d, request)
 	if err != nil {
 		t.Fatal(err)

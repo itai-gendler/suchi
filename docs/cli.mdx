@@ -103,16 +103,15 @@ suchi taxonomy validate core/jd/presets/household.toml && echo ok
 
 Preview a `suchi-taxonomy/v1` import against the local instance. Dry-run is the
 default; the summary identifies the destination, original-archive preservation and
-initial access for a newly created system, alongside additions, preserved/skipped
-rules and collisions. `--apply` performs the same preview and transactional freshness
-recheck as the HTTP importer. Skipping seeds still validates the whole file.
+initial access for a newly created system, alongside category additions and
+collisions. `--apply` performs the same preview and transactional freshness
+recheck as the HTTP importer. Imports never create or change automations.
 
 ### Flags
 
 | Flag                            | Required | Purpose                                                                                                                  |
 | ------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------ |
 | `--apply`                       | no       | Actually write. Default is dry-run.                                                                                      |
-| `--skip-seeds`                  | no       | Only touch the JD tree — no preset automations.                                                                          |
 | `--format <fmt>`                | no       | Override extension-based detection: `huml` or `toml`.                                                                    |
 | `--remap <a:b>`                 | no       | Merge collision: move incoming code `a` to `b`, or use `a:skip`. Repeatable.                                             |
 | `--system <CODE>`               | no       | Target an existing system for unprefixed input; must agree with a prefixed file.                                         |
@@ -120,9 +119,8 @@ recheck as the HTTP importer. Skipping seeds still validates the whole file.
 
 Only safe initial unconfigured setup can replace the bootstrap tree. Filed
 documents (including recoverable Trash) and dependent user configuration prevent
-replacement. Later imports merge: preserve local descriptions, existing rule
-names, disabled originals and user forks; require a remap/skip for collisions.
-Skipping a category skips its whole dependent starter.
+replacement. Later imports merge: preserve local descriptions and require a
+remap/skip for collisions.
 
 Without `--existing-system-code`, first prefixed Apply adopts the original archive
 under the file's code/name, retaining IDs and grants. Newly created systems initially
@@ -142,21 +140,16 @@ suchi taxonomy import core/jd/presets/household.toml --apply
 
 Export a validated current snapshot on stdout, with `id = "archive"` and content
 `version = 1`. Only user structure is serialized; generated System/49 is implicit.
-The default includes representable preset-owned keywords/starters with symbolic
-references, not user-owned rules/forks or a full archive backup. Disabled or
-unrepresentable starters fail rather than being re-enabled or silently lost.
-Explicit tree-only export omits both keywords and starters. Legacy incompatible
+Automations are not exported; a full archive backup carries them. Legacy incompatible
 reserved rows fail export without repairing or hiding database contents.
 
-| Flag              | Purpose                                                 |
-| ----------------- | ------------------------------------------------------- |
-| `--format <fmt>`  | Output `huml` (default) or `toml`.                      |
-| `--skip-seeds`    | Tree and descriptions only; omit keywords and starters. |
-| `--system <CODE>` | Select one system; omission uses the original.          |
+| Flag              | Purpose                                        |
+| ----------------- | ---------------------------------------------- |
+| `--format <fmt>`  | Output `huml` (default) or `toml`.             |
+| `--system <CODE>` | Select one system; omission uses the original. |
 
 ```bash
 suchi taxonomy export --format toml > my-tree.toml
-suchi taxonomy export --format huml --skip-seeds > filing-tree.huml
 ```
 
 ## `suchi taxonomy merge [flags]`

@@ -24,7 +24,6 @@ type PresetChangeRequest struct {
 	SetIDs            []string
 	Replacements      map[int]bool
 	Remaps            map[int]int
-	SkipSeeds         bool
 	ConfirmBlank      bool
 	ExpectedStateHash string
 	SystemID          int64
@@ -104,7 +103,7 @@ func planPresetChange(ctx context.Context, d *db.DB, log *slog.Logger, request P
 		}
 	}
 	opts := importer.Options{
-		TargetSystem: current.Code, ActorID: request.ActorID, SkipSeeds: request.SkipSeeds,
+		TargetSystem: current.Code, ActorID: request.ActorID,
 		Remaps: request.Remaps, Replacements: replacements, SwitchFromPreset: current.PresetID,
 		SetIDs: setIDs, ContentSHA256: contentHash, ExpectedStateHash: request.ExpectedStateHash,
 	}

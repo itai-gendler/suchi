@@ -13,7 +13,6 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/johnnybravo-xyz/suchi/core/jd/presetfile"
 	"github.com/johnnybravo-xyz/suchi/distro/demo"
 )
 
@@ -57,18 +56,18 @@ func TestSeedFromManifestAutomations(t *testing.T) {
 	dir := t.TempDir()
 	writeManifest(t, dir, demo.Manifest{
 		Version: demo.DemoCorpusVersion,
-		Automations: []presetfile.SeedAutomation{
-			{Name: "Route utilities", Trigger: presetfile.Trigger{Type: 2}, Actions: []presetfile.Action{{Kind: "assign_tags"}}},
-			{Name: "Existing", Trigger: presetfile.Trigger{Type: 2}, Actions: []presetfile.Action{{Kind: "assign_tags"}}},
-			{Name: "Bad trigger", Trigger: presetfile.Trigger{Type: 0}, Actions: []presetfile.Action{{Kind: "assign_tags"}}},
-			{Name: "Bad action", Trigger: presetfile.Trigger{Type: 2}, Actions: []presetfile.Action{{}}},
+		Automations: []demo.ManifestAutomation{
+			{Name: "Route utilities", Trigger: demo.ManifestTrigger{Type: 2}, Actions: []demo.ManifestAction{{Kind: "assign_tags"}}},
+			{Name: "Existing", Trigger: demo.ManifestTrigger{Type: 2}, Actions: []demo.ManifestAction{{Kind: "assign_tags"}}},
+			{Name: "Bad trigger", Trigger: demo.ManifestTrigger{Type: 0}, Actions: []demo.ManifestAction{{Kind: "assign_tags"}}},
+			{Name: "Bad action", Trigger: demo.ManifestTrigger{Type: 2}, Actions: []demo.ManifestAction{{}}},
 		},
 	})
 
 	stats, err := demo.SeedFromManifest(context.Background(), demo.SeedOptions{
 		CorpusDir: dir,
 		Log:       slog.New(slog.NewTextHandler(io.Discard, nil)),
-		AutomationIngest: func(_ context.Context, _ int, automation presetfile.SeedAutomation) (bool, error) {
+		AutomationIngest: func(_ context.Context, _ int, automation demo.ManifestAutomation) (bool, error) {
 			return automation.Name == "Route utilities", nil
 		},
 	})
