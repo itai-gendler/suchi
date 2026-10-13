@@ -85,7 +85,7 @@ func newRegistry(fsys fs.FS, pattern string, log *slog.Logger) (*Registry, error
 	}
 	fallback, ok := loaded[DefaultLocale]
 	if !ok {
-		return nil, errors.New("English fallback catalog is missing")
+		return nil, errors.New("english fallback catalog is missing")
 	}
 	keys := sortedKeys(fallback)
 	locales := make([]string, 0, len(loaded))
