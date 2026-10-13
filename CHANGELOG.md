@@ -6,6 +6,10 @@ Notable user-visible changes to Suchi are recorded here.
 
 ### Changed
 
+- Money values written in local formats (`1.234,56 €`, `€1,234.56`,
+  `1'234.50`, `EUR1234.56`) are read as amounts in custom-field writes,
+  `field:` queries and imports. Imported money values are now stored as
+  numbers instead of text.
 - Similar documents and local automatic filing now find neighbours in Chinese,
   Japanese, Korean and Thai documents, which have no spaces between words.
 - Suggested dates written in other languages and scripts are no longer

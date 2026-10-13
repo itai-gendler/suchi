@@ -1525,15 +1525,16 @@ accept only same-system live targets.
 
 **Body:** `{"value": <T>}` where `<T>` matches the field's `data_type`:
 
-| data_type            | Accepted `value` shape                                                 |
-| -------------------- | ---------------------------------------------------------------------- |
-| `text`, `url`        | string                                                                 |
-| `number`, `monetary` | number OR numeric string                                               |
-| `date`               | ISO string `"YYYY-MM-DD"` OR unix seconds                              |
-| `bool`               | boolean OR any of `"yes"`/`"no"`/`"1"`/`"0"`                           |
-| `select`             | string; must appear in the field's `extra_data.choices`                |
-| `multi`              | `["a","b"]` OR comma-separated string; each element must be in choices |
-| `documentlink`       | integer document id; refuses trashed/missing targets, self-links, and targets in the source's version family |
+| data_type      | Accepted `value` shape                                                                                       |
+| -------------- | ------------------------------------------------------------------------------------------------------------ |
+| `text`, `url`  | string                                                                                                       |
+| `number`       | number OR numeric string                                                                                     |
+| `monetary`     | number OR amount text such as `"EUR1234.56"`, `"1.234,56 €"`, `"€1,234.56"`                                  |
+| `date`         | ISO string `"YYYY-MM-DD"` OR unix seconds                                                                    |
+| `bool`         | boolean OR any of `"yes"`/`"no"`/`"1"`/`"0"`                                                                 |
+| `select`       | string; must appear in the field's `extra_data.choices`                                                      |
+| `multi`        | `["a","b"]` OR comma-separated string; each element must be in choices                                       |
+| `documentlink` | integer document id; refuses trashed/missing targets, self-links, and targets in the source's version family |
 
 `url` validates as `http`/`https`. Empty value ⇒ row is deleted.
 

@@ -271,3 +271,25 @@ func TestCompileFieldPresence(t *testing.T) {
 		t.Fatal("ordered field presence was accepted")
 	}
 }
+
+func TestMoneyFieldAcceptsLocalAmounts(t *testing.T) {
+	for query, want := range map[string]float64{
+		`field:"Invoice amount">=1.234,56`: 1234.56,
+		`field:"Invoice amount">=€50`:      50,
+		`field:"Invoice amount">=1.234`:    1.234,
+	} {
+		parsed, err := Parse(query)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resolved, err := Resolve(context.Background(), parsed, fakeResolver{values: map[string][]Candidate{
+			"field:Invoice amount": {{ID: 10, Label: "Invoice amount", DataType: "monetary"}},
+		}})
+		if err != nil {
+			t.Fatalf("%s: %v", query, err)
+		}
+		if got := Compile(resolved).Predicates[0].Args; !reflect.DeepEqual(got, []any{int64(10), want}) {
+			t.Errorf("%s args=%v, want %v", query, got, want)
+		}
+	}
+}

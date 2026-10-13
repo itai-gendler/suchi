@@ -358,6 +358,10 @@ proposals.
 
 ## Migration report
 
+Money custom-field values exported as text with a currency code
+(`"EUR1234.56"`) import as numbers, so money filters and display work. The
+currency code is dropped; Suchi money fields have no currency.
+
 Every non-dry-run import writes a markdown report to `--report
 ./import-report.md` (default). The report has these sections:
 

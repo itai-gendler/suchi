@@ -36,6 +36,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/johnnybravo-xyz/suchi/core/customfield"
 )
 
 // Object is the Django-style manifest row shape. fields is deferred to
@@ -247,6 +249,12 @@ func (c CustomFieldInstance) EffectiveValue() json.RawMessage {
 		b, _ := json.Marshal(*c.ValueFloat)
 		return b
 	case c.ValueMonetary != nil:
+		// Exports write money as text with a currency code ("EUR1234.56");
+		// store the number so money filters and display work.
+		if amount, err := customfield.ParseAmount(*c.ValueMonetary); err == nil {
+			b, _ := json.Marshal(amount)
+			return b
+		}
 		b, _ := json.Marshal(*c.ValueMonetary)
 		return b
 	case len(c.ValueSelect) > 0:

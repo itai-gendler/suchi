@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/johnnybravo-xyz/suchi/core/customfield"
 	"github.com/johnnybravo-xyz/suchi/core/intelligence"
 )
 
@@ -75,6 +76,9 @@ func Resolve(ctx context.Context, query Query, resolver Resolver) (ResolvedQuery
 				switch item.FieldDataType {
 				case "number", "monetary":
 					item.Number, err = strconv.ParseFloat(clause.FieldValue, 64)
+					if err != nil && item.FieldDataType == "monetary" {
+						item.Number, err = customfield.ParseAmount(clause.FieldValue)
+					}
 					if err != nil {
 						return ResolvedQuery{}, filterError(clause.Position, clause.Filter,
 							fmt.Sprintf("%s requires a number", clause.Value), nil)
