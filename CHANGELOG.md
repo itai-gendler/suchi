@@ -6,6 +6,8 @@ Notable user-visible changes to Suchi are recorded here.
 
 ### Changed
 
+- Similar documents and local automatic filing now find neighbours in Chinese,
+  Japanese, Korean and Thai documents, which have no spaces between words.
 - Suggested dates written in other languages and scripts are no longer
   discarded: month names in 17 languages, CJK and Korean date markers, Japanese
   era years, Buddhist-era years and non-Latin digits now match the extracted

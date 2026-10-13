@@ -115,7 +115,7 @@ func compileTextMembership(clause Clause, negated bool) Predicate {
 	if trigram := compileTrigramText(clause); trigram != "" {
 		sql += " UNION SELECT rowid FROM documents_trigram WHERE documents_trigram MATCH ?"
 		args = append(args, trigram)
-	} else if unspacedScript(clause.Text) {
+	} else if UnspacedScript(clause.Text) {
 		columns := []string{"title", "content"}
 		switch clause.Field {
 		case TextTitle:
@@ -153,7 +153,9 @@ func compileTrigramText(clause Clause) string {
 	}
 }
 
-func unspacedScript(text string) bool {
+// UnspacedScript reports text in a script written without spaces between
+// words, where word tokenizers see whole sentences as one token.
+func UnspacedScript(text string) bool {
 	for _, r := range text {
 		if unicode.In(r, unicode.Han, unicode.Hiragana, unicode.Katakana, unicode.Hangul, unicode.Thai, unicode.Lao, unicode.Khmer, unicode.Myanmar) {
 			return true

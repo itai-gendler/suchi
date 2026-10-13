@@ -21,6 +21,7 @@ import (
 	"github.com/johnnybravo-xyz/suchi/core/authz"
 	"github.com/johnnybravo-xyz/suchi/core/db"
 	"github.com/johnnybravo-xyz/suchi/core/jd/systems"
+	"github.com/johnnybravo-xyz/suchi/core/searchquery"
 )
 
 // Doc is one row in the ranked result set.
@@ -112,6 +113,15 @@ func topDocs(ctx context.Context, reader systems.Queryer, id int64, limit int, p
 	if len(tokens) == 0 {
 		return []Doc{}, nil
 	}
+	// Character windows from unspaced scripts only match in the trigram
+	// index. One index per source keeps neighbour scores on one bm25 scale.
+	index := "documents_fts"
+	for _, t := range tokens {
+		if searchquery.UnspacedScript(t) {
+			index = "documents_trigram"
+			break
+		}
+	}
 	// Build an FTS5 MATCH query: `"tok1" OR "tok2" OR ...`. Quoting
 	// each token defends against a stray FTS operator character in
 	// the source doc's vocabulary — safer than escaping char-by-char.
@@ -150,10 +160,10 @@ func topDocs(ctx context.Context, reader systems.Queryer, id int64, limit int, p
 	q := `
 		SELECT d.id, d.title, COALESCE(d.mime_type, ''),
 		       COALESCE(d.jd_category_id, 0), d.created_at,
-		       bm25(documents_fts, 3.0, 1.0) AS rank
-		  FROM documents_fts
-		  JOIN documents d ON d.id = documents_fts.rowid
-		 WHERE documents_fts MATCH ?
+		       bm25(` + index + `, 3.0, 1.0) AS rank
+		  FROM ` + index + `
+		  JOIN documents d ON d.id = ` + index + `.rowid
+		 WHERE ` + index + ` MATCH ?
 		   AND d.id != ?
 		   AND d.trashed_at IS NULL` + visibility + currentness + `
 		 ORDER BY rank
@@ -184,8 +194,10 @@ func topDocs(ctx context.Context, reader systems.Queryer, id int64, limit int, p
 }
 
 // TopTokens extracts the most-frequent alphanumeric tokens of length
-// >= 4 from text. Case-folded; return list is sorted by frequency
-// then alphabetically for determinism. Not a proper stopword list —
+// >= 4 from text. Runs in scripts written without spaces (Chinese,
+// Japanese, Korean, Thai) yield overlapping three-character windows
+// instead, skipping all-Hiragana windows, which are grammar. Case-folded;
+// return list is sorted by frequency then alphabetically for determinism. Not a proper stopword list —
 // the length threshold drops most English function words ("the",
 // "and", "for", "is") cheaply enough that a curated dictionary
 // wouldn't pay for itself.
@@ -196,13 +208,20 @@ func TopTokens(text string, k int) []string {
 	freq := map[string]int{}
 	var buf strings.Builder
 	flush := func() {
-		if buf.Len() >= 4 {
-			w := buf.String()
-			if !isTrivialToken(w) {
-				freq[w]++
-			}
-		}
+		w := buf.String()
 		buf.Reset()
+		if searchquery.UnspacedScript(w) {
+			runes := []rune(w)
+			for i := 0; i+3 <= len(runes); i++ {
+				if window := runes[i : i+3]; !allHiragana(window) {
+					freq[string(window)]++
+				}
+			}
+			return
+		}
+		if len(w) >= 4 && !isTrivialToken(w) {
+			freq[w]++
+		}
 	}
 	for _, r := range text {
 		if unicode.IsLetter(r) || unicode.IsDigit(r) {
@@ -258,4 +277,13 @@ func isTrivialToken(w string) bool {
 		return true
 	}
 	return false
+}
+
+func allHiragana(runes []rune) bool {
+	for _, r := range runes {
+		if !unicode.Is(unicode.Hiragana, r) {
+			return false
+		}
+	}
+	return true
 }

@@ -220,16 +220,19 @@ suggestions at 20 by default and 50 explicitly.
 
 ## Similar documents
 
-`GET /api/documents/{id}/similar` uses the word FTS5 index as a local “more like
-this” reader. It does not use the trigram index, so text in scripts written
-without spaces contributes whole runs as tokens and finds fewer neighbours:
+`GET /api/documents/{id}/similar` uses FTS5 as a local “more like this” reader:
 
 1. Read the source title plus at most the first 4,096 content bytes.
-2. Extract alphanumeric tokens of length four or more.
+2. Extract alphanumeric tokens of length four or more. Runs in Chinese,
+   Japanese, Korean, Thai and other scripts written without spaces yield
+   overlapping three-character windows instead; windows of Hiragana alone are
+   grammar and are dropped.
 3. Remove a deterministic set of low-information function, question and email
    boilerplate words.
 4. Select at most ten tokens by frequency, then alphabetically for ties.
-5. OR-join each token as a quoted FTS term.
+5. OR-join each token as a quoted FTS term: in the trigram index when any
+   token is a character window, otherwise in the word index. One index per
+   source keeps neighbour scores comparable.
 6. Exclude the source document and trash.
 7. Apply the caller's visibility predicate.
 8. Rank with title `3.0`, content `1.0`, and no recency term.

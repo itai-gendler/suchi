@@ -263,11 +263,36 @@ func TestTopTokens(t *testing.T) {
 		{"Bescom BESCOM bescom Insurance", 2, []string{"bescom", "insurance"}},
 		// Common question, connective, modal, and email words drop.
 		{"What's this? Whom shall we thank? Please reply while we wait. Invoice", 5, []string{"invoice", "reply", "wait"}},
+		// Unspaced scripts yield three-character windows; all-Hiragana windows drop.
+		{"電気料金のお知らせ 電気料金", 3, []string{"気料金", "電気料", "お知ら"}},
+		{"ありがとうございます", 5, nil},
 	}
 	for _, tc := range cases {
 		got := similar.TopTokens(tc.in, tc.k)
 		if !reflect.DeepEqual(got, tc.want) {
 			t.Errorf("TopTokens(%q, %d) = %v, want %v", tc.in, tc.k, got, tc.want)
+		}
+	}
+}
+
+// Japanese text has no spaces, so neighbours come from shared character
+// windows in the trigram index rather than from whole-sentence word tokens.
+func TestSimilarDocuments_FindsUnspacedNeighbours(t *testing.T) {
+	s := newSimilarServer(t)
+	for i := 0; i < 15; i++ {
+		seedSimilarDoc(t, s, 1, "レシピ"+strconv.Itoa(i), "パスタとトマトとバジルを煮込んで四人分を盛り付けます")
+	}
+	src := seedSimilarDoc(t, s, 1, "電気料金請求書3月", "3月分の電気料金請求書をお送りします。電気料金のお支払いは月末までです。")
+	near := seedSimilarDoc(t, s, 1, "電気料金請求書4月", "4月の電気料金請求書です。電気料金を口座から引き落とします。")
+	far := seedSimilarDoc(t, s, 1, "自動車保険", "自動車保険の更新手続きについてご案内します。")
+
+	code, body := doSimilar(t, s, src, adminPrincipal(1))
+	if code != 200 || len(body.Results) == 0 || body.Results[0].ID != near {
+		t.Fatalf("status=%d results=%+v, want %d first", code, body.Results, near)
+	}
+	for _, r := range body.Results {
+		if r.ID == far {
+			t.Fatalf("unrelated insurance document matched: %+v", body.Results)
 		}
 	}
 }
