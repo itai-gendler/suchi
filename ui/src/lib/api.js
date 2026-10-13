@@ -23,9 +23,10 @@ class ApiError extends Error {
             : status === 429 ? 'apiError.rateLimited'
               : status >= 500 ? 'apiError.server'
                 : 'apiError.requestFailed'
-    // 4xx server text is actionable (validation paths, conflicts); 5xx text
-    // is already generic, so the localized status text replaces it.
-    super(status < 500 && data?.error || t(key, { status }))
+    // Server text is actionable (validation paths, 503 setup hints). For 500
+    // and 502 the server sends only generic text, so the localized
+    // status text replaces it.
+    super(status !== 500 && status !== 502 && (data?.error || data?.message) || t(key, { status }))
     this.status = status
     this.code = code
     this.data = data

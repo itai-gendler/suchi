@@ -507,7 +507,7 @@
             </div>
           </fieldset>
           {#if index < intakeRules.length - 1}
-            <div class="rule-or" role="separator" aria-label={translate("mailAccountForm.or")}><span>{translate("mailAccountForm.or")}</span></div>
+            <div class="rule-or" role="separator" aria-label={translate("mailAccountForm.or")}><span>{translate("mailAccountForm.or").toLocaleUpperCase()}</span></div>
           {/if}
         {/each}
       </div>

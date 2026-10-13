@@ -148,7 +148,7 @@
     }
     if (filters.tags__id__in) summary.push(translate("views.tagValue", { tag: nameFor(tags, filters.tags__id__in, translate("views.selectedTag")) }))
     if (filters.correspondents__id__in) summary.push(translate("views.correspondentValue", { correspondent: nameFor(corrs, filters.correspondents__id__in, translate("views.selectedCorrespondent")) }))
-    if (filters.sensitivity) summary.push(sensitivityLabel(filters.sensitivity))
+    if (filters.sensitivity) summary.push(sensitivityLabel(filters.sensitivity).toLocaleLowerCase())
     if (filters.ordering) summary.push(filters.ordering === 'title' ? translate("views.titleOrder") : filters.ordering === '-created_at' ? translate("views.newestFirst") : translate("views.customOrder"))
     return summary.join(' · ') || translate("views.allDocuments")
   }

@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script>
   import { t as translate } from '../lib/i18n.svelte.js'
-  import { formatDate, plural } from '../lib/format.js'
+  import { formatDate, formatNumber, plural } from '../lib/format.js'
   import { scopedHash as filingHref } from '../lib/systems.svelte.js'
   import { onDestroy } from 'svelte'
   import { listIntelligence, listSavedViews } from '../lib/api.js'
@@ -375,6 +375,7 @@
         <h3 id="agenda-title" class="agenda-count">
           {#if loading}{translate("common.loading")}
           {:else if error}{translate("calendar.unavailable")}
+          {:else if eventTotal > events.length}{translate("calendar.shownOfDates", { shown: formatNumber(events.length), dates: plural("calendar.dateCount", eventTotal) })}
           {:else}{plural("calendar.dateCount", eventTotal)}{/if}
         </h3>
       </header>
