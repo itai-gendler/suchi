@@ -2,7 +2,7 @@
 <script>
   import { t as translate } from "../lib/i18n.svelte.js";
   import { scopedHash as filingHref, systems, captureScope, scopeCurrent } from '../lib/systems.svelte.js'
-  import { onDestroy } from 'svelte'
+  import { onDestroy, untrack } from 'svelte'
   import { listDocuments, listTags, listAllTags, listCorrespondents, patchDocument, deleteDocument, bulkEdit, createShareLink, thumbPath, decryptDocument, decryptBatch, extractIntelligence } from '../lib/api.js'
   import { route, go } from '../lib/router.svelte.js'
   import { uploadBus } from '../lib/upload_bus.svelte.js'
@@ -524,7 +524,9 @@
     systems.generation
     route.path
     route.query.toString()
-    clearSel()
+    // clearSel reads bulk state; tracking it would re-clear the selection
+    // whenever a bulk edit finishes.
+    untrack(clearSel)
     load()
   })
   $effect(() => {
