@@ -83,3 +83,65 @@ func TestEvidenceDoesNotInventDatePrecision(t *testing.T) {
 		}
 	}
 }
+
+func TestDateQuotesInManyLanguagesAndScripts(t *testing.T) {
+	for _, tc := range []struct {
+		raw, date, precision string
+		valid                bool
+	}{
+		{"13. Oktober 2026", "2026-10-13", "day", true},
+		{"13. Okt. 2026", "2026-10-13", "day", true},
+		{"Dienstag, 13. Oktober 2026", "2026-10-13", "day", true},
+		{"13. MÄRZ 2026", "2026-03-13", "day", true},
+		{"13 octobre 2026", "2026-10-13", "day", true},
+		{"13 de octubre de 2026", "2026-10-13", "day", true},
+		{"13 ottobre 2026", "2026-10-13", "day", true},
+		{"13 października 2026", "2026-10-13", "day", true},
+		{"13. lokakuuta 2026", "2026-10-13", "day", true},
+		{"13 октября 2026 г.", "2026-10-13", "day", true},
+		{"13 ekim 2026", "2026-10-13", "day", true},
+		{"2026年10月13日", "2026-10-13", "day", true},
+		{"令和8年10月13日", "2026-10-13", "day", true},
+		{"２０２６年１０月１３日", "2026-10-13", "day", true},
+		{"2026년 10월 13일", "2026-10-13", "day", true},
+		{"١٣/١٠/٢٠٢٦", "2026-10-13", "day", true},
+		{"13 ตุลาคม 2569", "2026-10-13", "day", true},
+		{"13.10.26", "2026-10-13", "day", true},
+		{"October 13th, 2026", "2026-10-13", "day", true},
+		{"2026-10-13", "2026-10-13", "day", true},
+		{"02/01/2006", "2006-01-02", "day", true},
+		{"02/01/2006", "2006-02-01", "day", true},
+		{"Oktober 2026", "2026-10-01", "month", true},
+		{"2026年10月", "2026-10-01", "month", true},
+		{"10/2026", "2026-10-01", "month", true},
+		{"14. Oktober 2026", "2026-10-13", "day", false},
+		{"13. November 2026", "2026-10-13", "day", false},
+		{"13.10.2026 14:30", "2026-10-13", "day", false},
+		{"Oktober 2026", "2026-10-13", "day", false},
+		{"martes 13 2026", "2026-10-13", "day", false},
+		{"13 Oktober November 2026", "2026-10-13", "day", false},
+		{"2026年10月", "2026-10-13", "day", false},
+		{"Steuerjahr 2025", "2025-01-01", "year", true},
+		{"Oktober 2026", "2026-01-01", "year", false},
+	} {
+		value := DateValue{Date: tc.date, Precision: tc.precision}
+		if got := dateTextMatches(tc.raw, value); got != tc.valid {
+			t.Errorf("%q as %s/%s = %v, want %v", tc.raw, tc.date, tc.precision, got, tc.valid)
+		}
+	}
+}
+
+func TestMonthSpellingsNameOneMonth(t *testing.T) {
+	seen := map[string]int{}
+	for language, months := range monthWords {
+		for i, spellings := range months {
+			for _, spelling := range spellings {
+				key := foldWord(spelling)
+				if month, ok := seen[key]; ok && month != i+1 {
+					t.Errorf("%s %q names month %d and %d", language, spelling, month, i+1)
+				}
+				seen[key] = i + 1
+			}
+		}
+	}
+}

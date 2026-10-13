@@ -6,6 +6,10 @@ Notable user-visible changes to Suchi are recorded here.
 
 ### Changed
 
+- Suggested dates written in other languages and scripts are no longer
+  discarded: month names in 17 languages, CJK and Korean date markers, Japanese
+  era years, Buddhist-era years and non-Latin digits now match the extracted
+  date.
 - Search, Documents, Calendar and Ask your documents also match text inside
   words: German compounds (`Versicherung` finds `Krankenversicherung`) and
   Chinese, Japanese, Korean and Thai text written without spaces. English
