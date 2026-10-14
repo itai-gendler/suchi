@@ -4,6 +4,8 @@ Notable user-visible changes to Suchi are recorded here.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-14
+
 ### Changed
 
 - The demo corpus now opens with Japanese, Korean and German documents in the
@@ -663,7 +665,8 @@ version. Installations keep using the v0.2.0 artifacts.
   and saved document passwords are sealed at rest.
 - Setup, demo isolation, error responses, and capability removal fail closed.
 
-[Unreleased]: https://github.com/johnnybravo-xyz/suchi/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/johnnybravo-xyz/suchi/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/johnnybravo-xyz/suchi/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/johnnybravo-xyz/suchi/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/johnnybravo-xyz/suchi/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/johnnybravo-xyz/suchi/compare/v0.1.0-beta.3...v0.1.0
