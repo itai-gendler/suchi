@@ -410,6 +410,38 @@ func TestChatAppliesCompleteDocumentScope(t *testing.T) {
 	}
 }
 
+func TestChatScopeFiltersDocumentsWithoutCorrespondents(t *testing.T) {
+	s := newChatTestServer(t)
+	seedChatDoc(t, s, 60, 1, "Missing correspondent", "missing correspondent evidence", "internal", false)
+	seedChatDoc(t, s, 61, 1, "Assigned correspondent", "missing correspondent evidence", "internal", false)
+	if _, err := s.DB.Write.ExecContext(context.Background(), `
+		INSERT INTO correspondents(system_id, id, name, slug, created_at, updated_at)
+		VALUES (1, 6, 'Assigned', 'assigned', 0, 0);
+		INSERT INTO document_correspondents(document_id, correspondent_id, role)
+		VALUES (61, 6, 'sender')
+	`); err != nil {
+		t.Fatal(err)
+	}
+	s.ChatCompletion = func(context.Context, string, []ChatCompletionMessage, int) (string, error) {
+		return `{"answer":"Scoped [1].","citations":[1],"sufficient":true}`, nil
+	}
+
+	rec := doChatRequest(t, s, http.MethodPost, "/api/chat", `{
+		"question":"missing correspondent",
+		"scope":{"correspondent_missing":true}
+	}`, adminPrincipal(1))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	var out ChatResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil {
+		t.Fatal(err)
+	}
+	if len(out.Sources) != 1 || out.Sources[0].ID != 60 {
+		t.Fatalf("sources=%+v", out.Sources)
+	}
+}
+
 func TestQueryErrorLogExcludesRawQuery(t *testing.T) {
 	var logs bytes.Buffer
 	s := &Server{Log: slog.New(slog.NewTextHandler(&logs, nil))}

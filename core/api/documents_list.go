@@ -16,6 +16,7 @@
 //                               matches ANY (OR semantics — one doc
 //                               with 2 correspondents shouldn't need
 //                               both ids to appear).
+//   correspondents__isnull   — "true" to match documents without any correspondent.
 //   q                         — shared rich text + metadata query.
 //   created_at__gte, __lte    — unix seconds inclusive.
 //   trashed                   — "1" / "true" to show only trashed

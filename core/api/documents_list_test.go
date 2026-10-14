@@ -16,6 +16,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"net/http/httptest"
 	"os"
 	"reflect"
@@ -236,6 +237,33 @@ func TestListDocuments_ReadsAllCorrespondentRelations(t *testing.T) {
 		if !reflect.DeepEqual(row.Correspondents, want[row.ID]) {
 			t.Errorf("doc %d correspondents=%v, want %v", row.ID, row.Correspondents, want[row.ID])
 		}
+	}
+}
+
+func TestListDocuments_FiltersDocumentsWithoutCorrespondents(t *testing.T) {
+	s := newListServer(t)
+	inbox := seedStatsJDInbox(t, s.DB)
+	missing := seedStatsDoc(t, s.DB, 1, "corr-missing", "No correspondent", inbox, false, 100)
+	present := seedStatsDoc(t, s.DB, 1, "corr-present", "Has correspondent", inbox, false, 200)
+	if _, err := s.DB.Write.ExecContext(t.Context(), `
+		INSERT INTO correspondents(system_id, id, name, slug, created_at, updated_at)
+		VALUES (1, 7, 'Present', 'present', 0, 0);
+		INSERT INTO document_correspondents(document_id, correspondent_id, role)
+		VALUES (?, 7, 'sender')
+	`, present); err != nil {
+		t.Fatal(err)
+	}
+
+	code, rows, count := doList(t, s,
+		"/api/documents/?correspondents__isnull=true", adminPrincipal(1))
+	if code != http.StatusOK || count != 1 || len(rows) != 1 || rows[0].ID != missing {
+		t.Fatalf("status=%d count=%d rows=%+v", code, count, rows)
+	}
+	code, _, _ = doList(t, s,
+		"/api/documents/?correspondents__isnull=true&correspondents__id__in=7",
+		adminPrincipal(1))
+	if code != http.StatusBadRequest {
+		t.Fatalf("combined correspondent filters status=%d, want %d", code, http.StatusBadRequest)
 	}
 }
 

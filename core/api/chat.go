@@ -111,17 +111,18 @@ type ChatHistoryMessage struct {
 }
 
 type ChatScope struct {
-	Query            string                  `json:"query,omitempty"`
-	Version          searchquery.VersionMode `json:"version,omitempty"`
-	DocumentIDs      []int64                 `json:"document_ids,omitempty"`
-	JDCategoryID     int64                   `json:"jd_category_id,omitempty"`
-	Sensitivity      string                  `json:"sensitivity,omitempty"`
-	TagIDs           []int64                 `json:"tag_ids,omitempty"`
-	CorrespondentIDs []int64                 `json:"correspondent_ids,omitempty"`
-	CreatedAtGTE     *int64                  `json:"created_at_gte,omitempty"`
-	CreatedAtLTE     *int64                  `json:"created_at_lte,omitempty"`
-	Language         string                  `json:"language,omitempty"`
-	ShareLink        string                  `json:"share_link,omitempty"`
+	Query                string                  `json:"query,omitempty"`
+	Version              searchquery.VersionMode `json:"version,omitempty"`
+	DocumentIDs          []int64                 `json:"document_ids,omitempty"`
+	JDCategoryID         int64                   `json:"jd_category_id,omitempty"`
+	Sensitivity          string                  `json:"sensitivity,omitempty"`
+	TagIDs               []int64                 `json:"tag_ids,omitempty"`
+	CorrespondentIDs     []int64                 `json:"correspondent_ids,omitempty"`
+	CorrespondentMissing bool                    `json:"correspondent_missing,omitempty"`
+	CreatedAtGTE         *int64                  `json:"created_at_gte,omitempty"`
+	CreatedAtLTE         *int64                  `json:"created_at_lte,omitempty"`
+	Language             string                  `json:"language,omitempty"`
+	ShareLink            string                  `json:"share_link,omitempty"`
 }
 
 type ChatRequest struct {
@@ -297,7 +298,8 @@ func (s *Server) PostChat(w http.ResponseWriter, r *http.Request) {
 		(in.Scope.CreatedAtGTE != nil && *in.Scope.CreatedAtGTE < 0) ||
 		(in.Scope.CreatedAtLTE != nil && *in.Scope.CreatedAtLTE < 0) ||
 		(in.Scope.Sensitivity != "" && !SensitivityLevels[in.Scope.Sensitivity]) ||
-		(in.Scope.ShareLink != "" && in.Scope.ShareLink != "active") {
+		(in.Scope.ShareLink != "" && in.Scope.ShareLink != "active") ||
+		(in.Scope.CorrespondentMissing && len(in.Scope.CorrespondentIDs) > 0) {
 		s.writeError(w, http.StatusBadRequest, "bad_scope", "scope is invalid")
 		return
 	}
@@ -752,7 +754,8 @@ func (scope ChatScope) documentScope() documentScope {
 		DocumentIDs: scope.DocumentIDs, JDCategoryID: scope.JDCategoryID,
 		Sensitivity: scope.Sensitivity,
 		TagIDs:      scope.TagIDs, CorrespondentIDs: scope.CorrespondentIDs,
-		CreatedAtGTE: scope.CreatedAtGTE, CreatedAtLTE: scope.CreatedAtLTE,
+		CorrespondentMissing: scope.CorrespondentMissing,
+		CreatedAtGTE:         scope.CreatedAtGTE, CreatedAtLTE: scope.CreatedAtLTE,
 		Language: scope.Language, ShareLink: scope.ShareLink,
 	}
 }

@@ -18,18 +18,19 @@ import (
 const maxDocumentScopeIDs = 100
 
 type documentScope struct {
-	Query            string
-	Version          searchquery.VersionMode
-	VersionExplicit  bool
-	DocumentIDs      []int64
-	JDCategoryID     int64
-	Sensitivity      string
-	TagIDs           []int64
-	CorrespondentIDs []int64
-	CreatedAtGTE     *int64
-	CreatedAtLTE     *int64
-	Language         string
-	ShareLink        string
+	Query                string
+	Version              searchquery.VersionMode
+	VersionExplicit      bool
+	DocumentIDs          []int64
+	JDCategoryID         int64
+	Sensitivity          string
+	TagIDs               []int64
+	CorrespondentIDs     []int64
+	CorrespondentMissing bool
+	CreatedAtGTE         *int64
+	CreatedAtLTE         *int64
+	Language             string
+	ShareLink            string
 }
 
 type documentScopeError struct {
@@ -68,6 +69,16 @@ func documentScopeFromQuery(values url.Values) (documentScope, error) {
 	}
 	if scope.CorrespondentIDs, err = parseBoundedCSVIDs(values.Get("correspondents__id__in"), maxDocumentScopeIDs); err != nil {
 		return documentScope{}, &documentScopeError{Code: "bad_correspondents", Message: "correspondents__id__in " + err.Error()}
+	}
+	switch raw := strings.TrimSpace(values.Get("correspondents__isnull")); raw {
+	case "":
+	case "true", "1":
+		scope.CorrespondentMissing = true
+	default:
+		return documentScope{}, &documentScopeError{Code: "bad_correspondents", Message: "correspondents__isnull must be true"}
+	}
+	if scope.CorrespondentMissing && len(scope.CorrespondentIDs) > 0 {
+		return documentScope{}, &documentScopeError{Code: "bad_correspondents", Message: "correspondents__isnull cannot be combined with correspondents__id__in"}
 	}
 	if scope.CreatedAtGTE, err = optionalNonNegativeInt(values.Get("created_at__gte")); err != nil {
 		return documentScope{}, &documentScopeError{Code: "bad_created_at_gte", Message: "created_at__gte must be a non-negative unix seconds integer"}
@@ -168,6 +179,12 @@ func appendDocumentScopePredicates(ctx context.Context, where []string, args []a
 		for _, id := range scope.CorrespondentIDs {
 			args = append(args, id)
 		}
+	}
+	if scope.CorrespondentMissing {
+		where = append(where, `NOT EXISTS (
+			SELECT 1 FROM document_correspondents dc
+			WHERE dc.document_id = d.id
+		)`)
 	}
 	if scope.CreatedAtGTE != nil {
 		where = append(where, "d.created_at >= ?")
