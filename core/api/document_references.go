@@ -35,6 +35,7 @@ type DocumentCustomFieldValue struct {
 	Name         string          `json:"name"`
 	DataType     string          `json:"data_type"`
 	ExtraData    json.RawMessage `json:"extra_data"`
+	ManagedBy    string          `json:"managed_by,omitempty"`
 	Value        any             `json:"value"`
 	DisplayValue string          `json:"display_value"`
 }
@@ -52,12 +53,13 @@ type storedCustomFieldValue struct {
 	Name      string
 	DataType  string
 	ExtraData string
+	ManagedBy string
 	Row       customfield.ValueRow
 }
 
 func (s *Server) loadCustomFieldValues(ctx context.Context, p *pluginapi.Principal, documentID int64) ([]DocumentCustomFieldValue, error) {
 	rows, err := s.DB.Read.QueryContext(ctx, `
-		SELECT f.id, f.name, f.data_type, f.extra_data,
+		SELECT f.id, f.name, f.data_type, f.extra_data, f.managed_by,
 		       v.value_text, v.value_number, v.value_int, v.value_bool, v.value_date
 		FROM document_custom_field_values v
 		JOIN custom_fields f ON f.id = v.field_id
@@ -73,7 +75,7 @@ func (s *Server) loadCustomFieldValues(ctx context.Context, p *pluginapi.Princip
 	targetIDs := make([]int64, 0)
 	for rows.Next() {
 		var value storedCustomFieldValue
-		if err := rows.Scan(&value.FieldID, &value.Name, &value.DataType, &value.ExtraData,
+		if err := rows.Scan(&value.FieldID, &value.Name, &value.DataType, &value.ExtraData, &value.ManagedBy,
 			&value.Row.Text, &value.Row.Number, &value.Row.Int, &value.Row.Bool, &value.Row.Date); err != nil {
 			return nil, err
 		}
@@ -102,7 +104,8 @@ func (s *Server) loadCustomFieldValues(ctx context.Context, p *pluginapi.Princip
 			}
 			out = append(out, DocumentCustomFieldValue{
 				FieldID: value.FieldID, Name: value.Name, DataType: value.DataType,
-				ExtraData: json.RawMessage(value.ExtraData), Value: target, DisplayValue: target.Title,
+				ExtraData: json.RawMessage(value.ExtraData), ManagedBy: value.ManagedBy,
+				Value: target, DisplayValue: target.Title,
 			})
 			continue
 		}
@@ -113,8 +116,8 @@ func (s *Server) loadCustomFieldValues(ctx context.Context, p *pluginapi.Princip
 		if ok {
 			out = append(out, DocumentCustomFieldValue{
 				FieldID: value.FieldID, Name: value.Name, DataType: value.DataType,
-				ExtraData: json.RawMessage(value.ExtraData), Value: typed,
-				DisplayValue: customfield.Lookup(value.DataType).Render(value.Row),
+				ExtraData: json.RawMessage(value.ExtraData), ManagedBy: value.ManagedBy,
+				Value: typed, DisplayValue: customfield.Lookup(value.DataType).Render(value.Row),
 			})
 		}
 	}

@@ -17,16 +17,18 @@ func seedDocumentReferences(t *testing.T, s *Server) {
 	t.Helper()
 	if _, err := s.DB.Write.Exec(`
 		INSERT INTO jd_system_members(system_id,user_id,created_at) VALUES (2,5,0);
-		INSERT INTO custom_fields(id,system_id,name,data_type,extra_data,created_at,updated_at) VALUES
-			(102,1,'Amount','number','{}',0,0),
-			(103,1,'Active','bool','{}',0,0),
-			(104,1,'Labels','multi','{"choices":["a","b"]}',0,0),
-			(105,1,'Related','documentlink','{}',0,0),
-			(106,1,'Secret','documentlink','{}',0,0),
-			(107,1,'Due','date','{}',0,0);
+		INSERT INTO custom_fields(id,system_id,name,data_type,extra_data,managed_by,created_at,updated_at) VALUES
+			(102,1,'Amount','number','{}','',0,0),
+			(103,1,'Active','bool','{}','',0,0),
+			(104,1,'Labels','multi','{"choices":["a","b"]}','',0,0),
+			(105,1,'Related','documentlink','{}','',0,0),
+			(106,1,'Secret','documentlink','{}','',0,0),
+			(107,1,'Due','date','{}','',0,0),
+			(108,1,'invoice_total_gross','monetary','{}','zugferd',0,0);
 		INSERT INTO document_custom_field_values(document_id,field_id,value_text) VALUES
 			(101,101,'memo'),(101,104,'["a","b"]');
-		INSERT INTO document_custom_field_values(document_id,field_id,value_number) VALUES (101,102,12.5);
+		INSERT INTO document_custom_field_values(document_id,field_id,value_number) VALUES
+			(101,102,12.5),(101,108,13.5);
 		INSERT INTO document_custom_field_values(document_id,field_id,value_bool) VALUES (101,103,0);
 		INSERT INTO document_custom_field_values(document_id,field_id,value_date) VALUES (101,107,1704067200);
 		INSERT INTO document_custom_field_values(document_id,field_id,value_int) VALUES
@@ -63,6 +65,7 @@ func TestDocumentDetailProjectsTypedCustomFieldsWithoutHiddenTargets(t *testing.
 			Name         string          `json:"name"`
 			DataType     string          `json:"data_type"`
 			ExtraData    json.RawMessage `json:"extra_data"`
+			ManagedBy    string          `json:"managed_by"`
 			Value        json.RawMessage `json:"value"`
 			DisplayValue string          `json:"display_value"`
 		} `json:"custom_fields"`
@@ -74,19 +77,25 @@ func TestDocumentDetailProjectsTypedCustomFieldsWithoutHiddenTargets(t *testing.
 	for _, field := range body.CustomFields {
 		values[field.Name] = field.Value
 	}
-	if len(values) != 6 {
+	if len(values) != 7 {
 		t.Fatalf("custom fields = %s", w.Body.String())
 	}
 	for name, want := range map[string]string{
 		"Active": "false", "Amount": "12.5", "Due": "1704067200", "Labels": `["a","b"]`, "Local field": `"memo"`,
+		"invoice_total_gross": "13.5",
 	} {
 		if got := string(values[name]); got != want {
 			t.Errorf("%s value = %s, want %s", name, got, want)
 		}
 	}
 	for _, field := range body.CustomFields {
-		if field.Name == "Amount" && field.DisplayValue != "12.5" {
-			t.Errorf("Amount display value = %q", field.DisplayValue)
+		if field.Name == "invoice_total_gross" {
+			if field.DisplayValue != "13.50" {
+				t.Errorf("invoice_total_gross display value = %q", field.DisplayValue)
+			}
+			if field.ManagedBy != "zugferd" {
+				t.Errorf("invoice_total_gross managed_by = %q", field.ManagedBy)
+			}
 		}
 		if field.Name == "Labels" && string(field.ExtraData) != `{"choices":["a","b"]}` {
 			t.Errorf("Labels extra_data = %s", field.ExtraData)

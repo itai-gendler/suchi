@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script>
   import { t as translate } from "../lib/i18n.svelte.js";
-  import { plural } from '../lib/format.js'
+  import { customFieldLabel, plural } from '../lib/format.js'
   import { captureScope, scopeCurrent, systems } from '../lib/systems.svelte.js'
   import { go } from '../lib/router.svelte.js'
   import { adminListUsers, adminPatchUser,
@@ -693,13 +693,14 @@
         {/if}
         <div class="index">
           {#each fields as f (f.id)}
+            {@const label = customFieldLabel(f)}
             <div class="field-entry">
               <div class="irow">
                 <span class="grow">
                   <input class="inline-edit"
-                         aria-label={f.managed_by ? translate("peopleSettings.valueManaged", { "name": f.name }) : translate("peopleSettings.renameValue", { "name": f.name })}
+                         aria-label={f.managed_by ? translate("peopleSettings.valueManaged", { "name": label }) : translate("peopleSettings.renameValue", { "name": label })}
                          title={f.managed_by ? translate("peopleSettings.requiredByEInvoiceExtraction") : ''}
-                         value={f.name}
+                         value={label}
                          readonly={!!f.managed_by}
                          onchange={(e) => renameField(f, e.target.value)} />
                 </span>

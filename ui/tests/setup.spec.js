@@ -1979,7 +1979,7 @@ test('uses named folder-layout and typed custom-field automation controls', asyn
     renderedLayouts: [{ id: 4, name: 'Bills by year', path: 'Bills/{{ created_year }}/{{ title }}', uses_asn: false }],
     customFields: [
       { id: 12, name: 'Review status', data_type: 'select', extra_data: JSON.stringify({ choices: ['Needs review', 'Approved'] }) },
-      { id: 13, name: 'Invoice amount', data_type: 'number', extra_data: '{}' },
+      { id: 13, name: 'invoice_total_gross', data_type: 'monetary', extra_data: '{}', managed_by: 'zugferd' },
     ],
     automationActions: [
       { kind: 'assign_storage_path', name: 'Assign folder layout', params: [{ name: 'storage_path_id', type: 'id', target_kind: 'rendered_layout' }] },
@@ -2009,6 +2009,7 @@ test('uses named folder-layout and typed custom-field automation controls', asyn
   const fields = page.getByRole('combobox', { name: 'Custom field', exact: true })
   await expect(fields).toHaveValue('12')
   await expect(page.getByRole('combobox', { name: 'Custom field value' })).toHaveValue('Needs review')
+  await expect(fields.getByRole('option', { name: 'Invoice total (gross) · monetary' })).toHaveCount(1)
   await fields.selectOption('13')
   await expect(page.getByRole('spinbutton', { name: 'Custom field value' })).toBeVisible()
 })
@@ -2725,7 +2726,10 @@ test('starts view creation from the dashboard action', async ({ page }) => {
 test('stores new saved views as one canonical query', async ({ page }) => {
   await mockAPI(page, {
     jdCategories: [{ id: 6, code: 22, name: 'Investments', area_code: 20, area_name: 'Money', is_area: false }],
-    customFields: [{ id: 12, name: 'Payment receipt', data_type: 'documentlink' }],
+    customFields: [
+      { id: 12, name: 'Payment receipt', data_type: 'documentlink' },
+      { id: 13, name: 'invoice_number', data_type: 'text', managed_by: 'zugferd' },
+    ],
   })
   await page.goto('/#/views')
   await page.getByRole('button', { name: 'New view' }).click()
@@ -2737,6 +2741,7 @@ test('stores new saved views as one canonical query', async ({ page }) => {
   await dialog.getByLabel('Query').fill('"distribution advice"')
   await dialog.getByLabel('Filing category').selectOption('6')
   await dialog.getByLabel('Sensitivity', { exact: true }).selectOption('confidential')
+  await expect(dialog.getByLabel('Custom field value').getByRole('option', { name: 'Has value — Invoice number' })).toHaveCount(1)
   await dialog.getByLabel('Custom field value').selectOption({ label: 'Missing value — Payment receipt' })
   await expect(dialog.getByLabel('Document date from', { exact: true })).toHaveAttribute('placeholder', 'yyyy-mm-dd')
   await dialog.getByLabel('Document date from', { exact: true }).fill('2026-01-01')
@@ -3899,10 +3904,11 @@ test('managed custom fields are locked and user fields use an application delete
   })
 
   await page.goto('/#/settings?tab=archive&section=metadata&metadata=custom_fields')
-  const managed = page.getByRole('textbox', { name: 'invoice_number (managed)' })
+  const managed = page.getByRole('textbox', { name: 'Invoice number (managed)' })
   await expect(managed).toHaveAttribute('readonly', '')
+  await expect(managed).toHaveValue('Invoice number')
   await expect(page.getByText('Managed', { exact: true })).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Delete invoice_number' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Delete Invoice number' })).toHaveCount(0)
 
   await page.getByRole('button', { name: 'Delete Warranty end' }).click()
   let dialog = page.getByRole('alertdialog')

@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script>
   import { t as translate } from "../lib/i18n.svelte.js";
-  import { formatList } from '../lib/format.js'
+  import { customFieldLabel, formatList } from '../lib/format.js'
   import { listAutomations, createAutomation, patchAutomation, deleteAutomation,
            listTags, listCorrespondents, listCustomFields, listRenderedLayouts,
            adminListUsers, systemMembers, automationsSchema } from '../lib/api.js'
@@ -540,7 +540,7 @@
       case 'assign_custom_field': {
         const field = facets.customFields.find(candidate => Number(candidate.id) === Number(p.field_id))
         const value = Array.isArray(p.value) ? formatList(p.value.map(item => String(item))) : String(p.value ?? '')
-        return branch + (field ? translate("automations.setValueToValue", { "name": field.name, "value": value }) : translate("automations.setCustomField"))
+        return branch + (field ? translate("automations.setValueToValue", { "name": customFieldLabel(field), "value": value }) : translate("automations.setCustomField"))
       }
       default:
         return branch + (spec?.label || a.type)
@@ -878,7 +878,7 @@
                         }}>
                   <option value={0}>{translate("automations.chooseCustomField")}</option>
                   {#each availableCustomFields() as candidate}
-                    <option value={candidate.id}>{candidate.name} · {candidate.data_type}</option>
+                    <option value={candidate.id}>{customFieldLabel(candidate)} · {candidate.data_type}</option>
                   {/each}
                   {#if action.params.field_id && !availableCustomFields().some(candidate => Number(candidate.id) === Number(action.params.field_id))}
                     <option value={action.params.field_id}>{translate("automations.unavailableCustomField")}</option>

@@ -13,7 +13,7 @@
     parseFieldPresenceSelection,
     parseSavedViewFilters,
   } from '../lib/documentFilters.js'
-  import { SENSITIVITY_OPTIONS, plural, sensitivityLabel } from '../lib/format.js'
+  import { SENSITIVITY_OPTIONS, customFieldLabel, plural, sensitivityLabel } from '../lib/format.js'
   import { DATE_ROLES, intelligenceRoleLabel } from '../lib/intelligence.js'
   import Icon from '../lib/Icon.svelte'
   import ISODateInput from '../lib/ISODateInput.svelte'
@@ -162,7 +162,9 @@
   function fieldPresenceLabel(value) {
     const selection = parseFieldPresenceSelection(value)
     if (!selection) return translate("views.savedCustomField")
-    return translate("views.valueValue2", { value: translate(selection.missing ? "views.missingValue" : "views.hasValue"), name: selection.name })
+    const field = customFields.find(candidate => candidate.name === selection.name)
+    const name = field ? customFieldLabel(field) : selection.name
+    return translate("views.valueValue2", { value: translate(selection.missing ? "views.missingValue" : "views.hasValue"), name })
   }
 
   function configuredFilters(draft) {
@@ -496,8 +498,8 @@
                     <select class="input filter-value" aria-label={translate("views.customFieldValue")} bind:value={nv.fieldPresence}>
                       <option value="">{translate("views.chooseFieldCondition")}</option>
                       {#each customFields as field}
-                        <option value={fieldPresenceSelection(field.name)}>{translate("views.hasValueValue", { "name": field.name })}</option>
-                        <option value={fieldPresenceSelection(field.name, true)}>{translate("views.missingValueValue", { "name": field.name })}</option>
+                        <option value={fieldPresenceSelection(field.name)}>{translate("views.hasValueValue", { "name": customFieldLabel(field) })}</option>
+                        <option value={fieldPresenceSelection(field.name, true)}>{translate("views.missingValueValue", { "name": customFieldLabel(field) })}</option>
                       {/each}
                       {#if nv.fieldPresence && !knownFieldPresence(nv.fieldPresence)}
                         <option value={nv.fieldPresence}>{fieldPresenceLabel(nv.fieldPresence)}</option>

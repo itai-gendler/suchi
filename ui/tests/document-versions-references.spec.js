@@ -333,10 +333,16 @@ test('shows only populated typed metadata and keeps compact add and edit control
     if (path === '/api/documents/42' && request.method() === 'GET') {
       await route.fulfill({ json: detail(42, {
         title: 'Electricity bill',
-        custom_fields: [{
-          field_id: 11, name: 'Invoice amount', data_type: 'number',
-          extra_data: {}, value: invoiceAmount, display_value: String(invoiceAmount),
-        }],
+        custom_fields: [
+          {
+            field_id: 11, name: 'Invoice amount', data_type: 'number',
+            extra_data: {}, value: invoiceAmount, display_value: String(invoiceAmount),
+          },
+          {
+            field_id: 13, name: 'invoice_seller', data_type: 'text', managed_by: 'zugferd',
+            extra_data: {}, value: 'Example Energy', display_value: 'Example Energy',
+          },
+        ],
         notes,
       }) })
       return true
@@ -344,8 +350,9 @@ test('shows only populated typed metadata and keeps compact add and edit control
     if (path === '/api/custom_fields/') {
       await route.fulfill({ json: { results: [
         { id: 11, name: 'Invoice amount', data_type: 'number', extra_data: '{}' },
-        { id: 12, name: 'invoice_currency', data_type: 'text', extra_data: '{}' },
-        { id: 13, name: 'invoice_seller', data_type: 'text', extra_data: '{}' },
+        { id: 12, name: 'invoice_currency', data_type: 'text', extra_data: '{}', managed_by: 'zugferd' },
+        { id: 13, name: 'invoice_seller', data_type: 'text', extra_data: '{}', managed_by: 'zugferd' },
+        { id: 14, name: 'Warranty end', data_type: 'date', extra_data: '{}' },
       ] } })
       return true
     }
@@ -371,14 +378,20 @@ test('shows only populated typed metadata and keeps compact add and edit control
   await page.goto('/#/doc/42')
   await expect(page.locator('dt').filter({ hasText: /^invoice_currency$/ })).toHaveCount(0)
   await expect(page.locator('dt').filter({ hasText: /^invoice_seller$/ })).toHaveCount(0)
+  await expect(page.locator('dt').filter({ hasText: /^Invoice seller$/ })).toHaveCount(1)
   await expect(page.getByText('Not set', { exact: true })).toHaveCount(0)
-  const addField = page.getByRole('combobox', { name: 'Add custom field' })
-  await expect(addField.getByRole('option', { name: 'invoice_currency' })).toHaveCount(1)
-  await addField.selectOption('12')
-  const currencyRow = page.locator('dt').filter({ hasText: /^invoice_currency$/ }).locator('xpath=following-sibling::dd[1]')
-  await expect(currencyRow.getByLabel('invoice_currency')).toBeVisible()
-  await currencyRow.getByRole('button', { name: 'Cancel' }).click()
-  await expect(page.locator('dt').filter({ hasText: /^invoice_currency$/ })).toHaveCount(0)
+  await expect(page.locator('dl.kv > dt').last()).toHaveText('Custom fields')
+  const customFieldsRow = page.locator('dt').filter({ hasText: /^Custom fields$/ }).locator('xpath=following-sibling::dd[1]')
+  await expect(customFieldsRow.getByRole('combobox', { name: 'Add custom field' })).toHaveCount(0)
+  await customFieldsRow.getByRole('button', { name: 'Edit custom fields' }).click()
+  const addField = customFieldsRow.getByRole('combobox', { name: 'Add custom field' })
+  await expect(addField.getByRole('option', { name: 'Invoice currency' })).toHaveCount(0)
+  await expect(addField.getByRole('option', { name: 'Warranty end' })).toHaveCount(1)
+  await addField.selectOption('14')
+  const warrantyRow = page.locator('dt').filter({ hasText: /^Warranty end$/ }).locator('xpath=following-sibling::dd[1]')
+  await expect(warrantyRow.getByLabel('Warranty end')).toBeVisible()
+  await warrantyRow.getByRole('button', { name: 'Cancel' }).click()
+  await expect(customFieldsRow.getByRole('combobox', { name: 'Add custom field' })).toHaveCount(0)
 
   const fieldRow = page.locator('dt').filter({ hasText: /^Invoice amount$/ }).locator('xpath=following-sibling::dd[1]')
   await fieldRow.getByRole('button', { name: 'Edit' }).click()

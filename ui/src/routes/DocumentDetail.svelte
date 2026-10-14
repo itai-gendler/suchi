@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script>
   import { t as translate } from '../lib/i18n.svelte.js'
-  import { compareLocalized } from '../lib/format.js'
+  import { compareLocalized, customFieldLabel } from '../lib/format.js'
   import { scopedHash as filingHref } from '../lib/systems.svelte.js'
   import { captureScope, scopeCurrent } from '../lib/systems.svelte.js'
   import { onDestroy, untrack } from 'svelte'
@@ -43,6 +43,7 @@
   let backlinksPage = $state(1)
   let referenceEditors = $state({})
   let customFieldEditors = $state({})
+  let editingCustomFields = $state(false)
   let addingReference = $state(false)
   let newReferenceFieldID = $state('')
   let loading = $state(true)
@@ -144,6 +145,7 @@
         field_id: definition.id,
         name: definition.name,
         data_type: definition.data_type,
+        managed_by: definition.managed_by,
         extra_data: parseCustomFieldExtra(definition.extra_data),
         value: null,
         display_value: '',
@@ -159,13 +161,13 @@
         is_set: true,
       })
     }
-    return [...fields.values()].sort((a, b) => compareLocalized(String(a.name || ''), String(b.name || '')))
+    return [...fields.values()].sort((a, b) => compareLocalized(customFieldLabel(a), customFieldLabel(b)))
   })
   const displayedOrdinaryCustomFields = $derived(ordinaryCustomFields.filter(field =>
     field.is_set || customFieldEditors[field.field_id]?.open
   ))
   const availableOrdinaryCustomFields = $derived(ordinaryCustomFields.filter(field =>
-    !field.is_set && !customFieldEditors[field.field_id]?.open
+    !field.managed_by && !field.is_set && !customFieldEditors[field.field_id]?.open
   ))
   const documentLinkFields = $derived.by(() => {
     const fields = new Map()
@@ -236,6 +238,7 @@
     backlinksPage = 1
     referenceEditors = {}
     customFieldEditors = {}
+    editingCustomFields = false
     similar = null
     addingReference = false
     newReferenceFieldID = ''
@@ -484,7 +487,10 @@
     event.currentTarget.value = ''
     if (!fieldID) return
     const field = ordinaryCustomFields.find(candidate => Number(candidate.field_id) === fieldID)
-    if (field) startCustomFieldEdit(field)
+    if (field) {
+      editingCustomFields = false
+      startCustomFieldEdit(field)
+    }
   }
 
   function customFieldValueReady(field, editor) {
@@ -514,10 +520,10 @@
       const next = { ...customFieldEditors }
       delete next[field.field_id]
       customFieldEditors = next
-      notify?.(translate("documentDetail.valueSaved", { "name": field.name }))
+      notify?.(translate("documentDetail.valueSaved", { "name": customFieldLabel(field) }))
     } catch (ex) {
       if (!disposed && version === loadVersion && id === documentID && scopeCurrent(scope)) {
-        updateCustomFieldEditor(field.field_id, { busy: false, error: ex.message || translate("documentDetail.couldNotSaveValue", { "name": field.name }) })
+        updateCustomFieldEditor(field.field_id, { busy: false, error: ex.message || translate("documentDetail.couldNotSaveValue", { "name": customFieldLabel(field) }) })
       }
     }
   }
@@ -536,10 +542,10 @@
       const next = { ...customFieldEditors }
       delete next[field.field_id]
       customFieldEditors = next
-      notify?.(translate("documentDetail.valueCleared", { "name": field.name }))
+      notify?.(translate("documentDetail.valueCleared", { "name": customFieldLabel(field) }))
     } catch (ex) {
       if (!disposed && version === loadVersion && id === documentID && scopeCurrent(scope)) {
-        updateCustomFieldEditor(field.field_id, { busy: false, error: ex.message || translate("documentDetail.couldNotClearValue", { "name": field.name }) })
+        updateCustomFieldEditor(field.field_id, { busy: false, error: ex.message || translate("documentDetail.couldNotClearValue", { "name": customFieldLabel(field) }) })
       }
     }
   }
@@ -1555,24 +1561,25 @@
           </dd>
           {#each displayedOrdinaryCustomFields as field (field.field_id)}
             {@const editor = customFieldEditors[field.field_id]}
-            <dt>{field.name}</dt>
+            {@const label = customFieldLabel(field)}
+            <dt>{label}</dt>
             <dd class="custom-field-value">
               {#if editor?.open}
                 <form class="custom-field-editor" onsubmit={(event) => saveCustomField(event, field)}>
                   {#if field.data_type === 'bool'}
-                    <select class="input" aria-label={field.name} value={editor.value}
+                    <select class="input" aria-label={label} value={editor.value}
                             onchange={(event) => updateCustomFieldEditor(field.field_id, { value: event.currentTarget.value })}>
                       <option value="true">{translate("documentDetail.yes")}</option>
                       <option value="false">{translate("documentDetail.no")}</option>
                     </select>
                   {:else if field.data_type === 'select'}
-                    <select class="input" aria-label={field.name} value={editor.value}
+                    <select class="input" aria-label={label} value={editor.value}
                             onchange={(event) => updateCustomFieldEditor(field.field_id, { value: event.currentTarget.value })}>
                       <option value="">{translate("documentDetail.selectAChoice")}</option>
                       {#each field.extra_data?.choices || [] as choice}<option value={choice}>{choice}</option>{/each}
                     </select>
                   {:else if field.data_type === 'multi'}
-                    <div class="custom-field-choices" aria-label={field.name}>
+                    <div class="custom-field-choices" aria-label={label}>
                       {#each field.extra_data?.choices || [] as choice}
                         <label>
                           <input type="checkbox" value={choice} checked={editor.value?.includes(choice)}
@@ -1586,7 +1593,7 @@
                       {/each}
                     </div>
                   {:else}
-                    <input class="input" aria-label={field.name}
+                    <input class="input" aria-label={label}
                            type={field.data_type === 'date' ? 'date' : field.data_type === 'url' ? 'url' : field.data_type === 'number' || field.data_type === 'monetary' ? 'number' : 'text'}
                            step={field.data_type === 'monetary' ? '0.01' : field.data_type === 'number' ? 'any' : undefined}
                            value={editor.value}
@@ -1616,17 +1623,6 @@
               {/if}
             </dd>
           {/each}
-          {#if !trashed && availableOrdinaryCustomFields.length}
-            <dt>{translate("documentDetail.customFields")}</dt>
-            <dd class="custom-field-add">
-              <select class="input" aria-label={translate("documentDetail.addCustomField")} value="" onchange={addCustomField}>
-                <option value="">{translate("documentDetail.addCustomField2")}</option>
-                {#each availableOrdinaryCustomFields as field (field.field_id)}
-                  <option value={field.field_id}>{field.name}</option>
-                {/each}
-              </select>
-            </dd>
-          {/if}
           <dt>{translate("documentDetail.languages")}</dt>
           <dd>
             {#if editingLanguages}
@@ -1653,6 +1649,31 @@
               </div>
             {/if}
           </dd>
+          {#if !trashed && availableOrdinaryCustomFields.length}
+            <dt>{translate("documentDetail.customFields")}</dt>
+            <dd class="custom-field-add">
+              {#if editingCustomFields}
+                <div class="metadata-display">
+                  <select class="input" aria-label={translate("documentDetail.addCustomField")} value="" onchange={addCustomField}>
+                    <option value="">{translate("documentDetail.addCustomField2")}</option>
+                    {#each availableOrdinaryCustomFields as field (field.field_id)}
+                      <option value={field.field_id}>{customFieldLabel(field)}</option>
+                    {/each}
+                  </select>
+                  <div class="metadata-actions">
+                    <button class="btn sm" type="button" onclick={() => (editingCustomFields = false)}>{translate("documentDetail.done")}</button>
+                  </div>
+                </div>
+              {:else}
+                <div class="metadata-display">
+                  <span class="metadata-value"></span>
+                  <div class="metadata-actions">
+                    <button class="btn sm" type="button" aria-label={translate("documentDetail.editCustomFields")} onclick={() => (editingCustomFields = true)}>{translate("documentDetail.edit")}</button>
+                  </div>
+                </div>
+              {/if}
+            </dd>
+          {/if}
         </dl>
         {#if shareURL}
           <div class="field" style="margin-top:12px;margin-bottom:0">
@@ -2224,7 +2245,7 @@
   .tag-actions :global(.tag-picker) { flex:1 1 140px }
   .inline-state { display:flex; align-items:center; justify-content:space-between; gap:10px; }
   .custom-field-value { min-width:0; }
-  .custom-field-add .input { width:100%; max-width:none; padding:4px 8px; font-size:.8rem; }
+  .custom-field-add .input { flex:1 1 180px; width:auto; max-width:none; padding:4px 8px; font-size:.8rem; }
   .custom-field-editor { display:grid; gap:7px; width:100%; }
   .custom-field-editor > .input { width:100%; max-width:none; }
   .custom-field-actions { display:flex; align-items:center; flex-wrap:wrap; gap:6px; }

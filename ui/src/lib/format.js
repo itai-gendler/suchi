@@ -4,6 +4,24 @@ import { localeState, t } from './i18n.svelte.js'
 
 const formatterCache = new Map()
 
+const managedFieldLabelKeys = Object.freeze({
+  zugferd: Object.freeze({
+    invoice_number: 'customFields.invoiceNumber',
+    invoice_date: 'customFields.invoiceDate',
+    invoice_currency: 'customFields.invoiceCurrency',
+    invoice_total_gross: 'customFields.invoiceTotalGross',
+    invoice_total_net: 'customFields.invoiceTotalNet',
+    invoice_seller: 'customFields.invoiceSeller',
+    invoice_seller_vat: 'customFields.invoiceSellerVat',
+    invoice_buyer: 'customFields.invoiceBuyer',
+  }),
+})
+
+export function customFieldLabel(field) {
+  const key = managedFieldLabelKeys[field?.managed_by]?.[field?.name]
+  return key ? t(key) : String(field?.name || '')
+}
+
 export function formatDate(value, options = { year: 'numeric', month: 'short', day: 'numeric' }) {
   const date = value instanceof Date ? value : new Date(value)
   if (Number.isNaN(date.getTime())) return t('common.invalidDate')
