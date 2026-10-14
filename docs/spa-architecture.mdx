@@ -188,6 +188,10 @@ unexpired, unrevoked links created by the current user, not documents merely
 visible through ACLs. At narrow widths, the tag, correspondent, share,
 sensitivity and date controls sit behind one screen-local disclosure; URL-derived
 chips remain visible and **Clear all** removes only those controls.
+The correspondent selector keeps ID and no-correspondent modes mutually
+exclusive in the hash. `correspondents__isnull=true` becomes
+`correspondent_missing` in the published Ask scope instead of being dropped
+between the list and research requests.
 
 The route publishes that same normalized hash context to Ask your documents
 before issuing its list request. The shell clears a published context only when
@@ -216,6 +220,11 @@ subtle **Let Suchi rename this** action. Rename completion updates local
 ownership to `human`; release sends only `title_owner: auto` and removes the
 lock without changing the title. Both paths use the same route-generation guard
 as other detail metadata writes.
+The Correspondents editor loads the existing system catalog on demand and sends
+one `bulk_edit set_correspondent` operation for the open document. It promotes a
+selected primary sender or clears sender roles with ID `0`, preserves other role
+relations in local state, and rejects late responses through the same generation
+guard.
 
 `DocumentDetail.svelte` owns similar-document results, version history,
 replacement upload, attributed exact-revision notes, typed custom fields,
@@ -309,6 +318,11 @@ and retains the selection on partial/total failure. Both invalidate late UI
 updates on route or system changes. Only admins see the **Manage tags** link
 beside a document's Tags; the Documents list stays limited to search, display and
 filter controls, and document screens do not mutate the catalog.
+
+`Documents.svelte` reuses its bounded correspondent facet for selection actions.
+The selection sends one `bulk_edit set_correspondent` request and then reloads
+the server-backed rows. The separate **No correspondent** filter means no role
+relation at all; it is not the same as clearing sender roles.
 
 `routes/FilingTreeSettings.svelte` owns the standalone Filing tree workspace:
 ready-made selection, the one-set-per-lane composer, reviewed category mappings,

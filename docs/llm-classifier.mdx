@@ -149,6 +149,8 @@ For hosted model assistance, Suchi sends:
 
 - extracted text from the current document
 - bounded filing context and a small set of similar-document titles
+- up to 100 most-used correspondent names and 100 most-used tag names from the
+  active filing system, with per-name length limits
 - the requested structured-output instructions
 - for each matching ask automation, its numeric ID, question text, and closed
   answer list (never its action mapping, destination IDs, or fixed values)
@@ -178,6 +180,11 @@ the current document. Duplicate IDs, unknown IDs, unavailable destinations,
 invented choices, and stale question definitions produce no mapped action.
 Invalid provider output fails or is ignored according to its bounded field
 without exposing raw output or document text in logs or API errors.
+
+Before proposing correspondent or tag changes, Suchi reloads the current catalog
+and reuses an existing ID for exact names/slugs and for one unambiguous narrow
+match (a plural variant or a company name extended by at most two words).
+Ambiguous matches remain new proposals rather than choosing an arbitrary entry.
 
 The confidence threshold ranges from `0.50` to `0.95` in `0.05` steps and
 defaults to `0.70`.

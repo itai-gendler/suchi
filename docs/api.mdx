@@ -650,6 +650,7 @@ Query params (all optional):
 | `split_origin_id`                    | Positive upload document id; returns its live QR-split children after ACL filtering.                                              |
 | `tags__id__in`                       | Up to 100 positive tag-ID tokens; duplicates are removed in first-seen order. Result must carry **every** unique ID (AND).   |
 | `correspondents__id__in`             | Up to 100 positive correspondent-ID tokens; duplicates are removed in first-seen order. Result matches **any** (OR).         |
+| `correspondents__isnull`                 | `true` or `1` matches documents with no correspondent relation of any role; cannot be combined with `correspondents__id__in`. |
 | `document_ids`                       | CSV of at most 100 positive document IDs; useful for exact snapshots. ACLs still apply.                                     |
 | `q`                                  | [Rich query string](/query-language); Search and Documents share its matching plan.                                              |
 | `created_at__gte`, `created_at__lte` | Unix-seconds date range (inclusive).                                                                                        |
@@ -658,8 +659,9 @@ Query params (all optional):
 | `trashed`                            | `1` or `true` returns only trashed rows; default returns live.                                                              |
 
 Scope filters are additive. Malformed or oversized ID lists return a field-specific
-`400`; an invalid language token returns `400 bad_lang`; any `share_link` value
-other than `active` returns `400 bad_share_link`.
+`400`; combining correspondent IDs with `correspondents__isnull` returns
+`400 bad_correspondents`; an invalid language token returns `400 bad_lang`; any
+`share_link` value other than `active` returns `400 bad_share_link`.
 
 Live discovery returns only the newest live version visible to the caller in
 each version family by default. Use `version:all` or `version:older` inside `q`
@@ -1039,7 +1041,7 @@ Scope: `documents:write`. Cap: 500 documents per call.
 
 | method                   | parameters                                                                                                                                                                                                                   |
 | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `set_correspondent`      | `{correspondent_id}`                                                                                                                                                                                                         |
+| `set_correspondent`      | `{correspondent_id}` promotes a positive ID to primary sender; `0` removes all sender roles while retaining recipient, cc, and other relations.                                                                                |
 | `set_rendered_layout`    | `{rendered_layout_id}`; `0` selects the default JD layout. `{{ asn }}` layouts require every selected document to have a previous archive number.                                                                    |
 | `set_jd_category`        | `{jd_category_id}`                                                                                                                                                                                                           |
 | `set_sensitivity`        | `{sensitivity}` — one of `""`, `public`, `internal`, `confidential`, `restricted`                                                                                                                                            |
@@ -2226,6 +2228,7 @@ Returns live runtime availability and a safe provider label:
     "sensitivity": "internal",
     "tag_ids": [8],
     "correspondent_ids": [12],
+    "correspondent_missing": false,
     "created_at_gte": 1788134400,
     "created_at_lte": 1790726399,
     "language": "en"
@@ -2237,9 +2240,10 @@ Returns live runtime availability and a safe provider label:
 History contains only the newest complete user/assistant pairs fitting four
 messages and 12 KB. `context_source_ids` contains at most three positive cited
 IDs. Scope accepts a rich query, up to 100 exact IDs, and additive category,
-sensitivity, tag IDs, correspondent IDs, inclusive created-time bounds, and
-language fields. Every source and context ID is reauthorized with
-fresh ACL, trash, sensitivity, and scope checks.
+sensitivity, tag IDs, correspondent IDs (or `correspondent_missing: true`),
+inclusive created-time bounds, and language fields. Missing-correspondent scope
+cannot be combined with correspondent IDs. Every source and context ID is
+reauthorized with fresh ACL, trash, sensitivity, and scope checks.
 
 The response contains at most six documents, structurally validated `citations`,
 grounding state, and complete suggested-detail counts. Suchi adds missing inline

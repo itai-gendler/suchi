@@ -649,6 +649,10 @@ Logs/metrics use matched route patterns, propagated outward through request copi
 and compiles parameterized SQL/FTS. `core/api/search_query.go` keeps ranked Search,
 sortable Documents and saved views on the same document-set contract while
 preserving response shapes. See [Search](/search).
+`core/api/document_scope.go` also owns the no-correspondent predicate used by
+Documents and Ask your documents. It applies inside the authorized document SQL,
+so counts, pages, retrieval candidates, and cited sources cannot broaden beyond
+the visible scope.
 
 Local matching proposes unresolved metadata for review before deterministic
 user automations. `core/automations` owns triggers/conditions/actions;
@@ -670,6 +674,13 @@ before ordinary classifier fields, and submits the resulting fixed effects
 through the existing automatic/document-change approval paths. The configured
 question lives only with its automation definition; raw answers and evidence
 quotes have no durable run-history table.
+
+Before classification transport, the handler loads at most 100 most-used
+correspondent names and 100 most-used tag names from the document's filing
+system. The provider sees those bounded names, not catalog IDs. Under the final
+writer transaction, the handler reloads the current complete catalog and maps an
+exact or one conservative unambiguous name variant to its existing ID; ambiguous
+values remain ordinary new proposals.
 
 [Automations](/automations#compiled-actions) owns the action contract. Integrations
 must not add another workflow engine. Advancement jobs carry system/run revision;

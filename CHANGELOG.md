@@ -6,6 +6,14 @@ Notable user-visible changes to Suchi are recorded here.
 
 ### Changed
 
+- Document Detail and Documents selection can now assign or clear primary
+  correspondents. Documents also filters items with no correspondent relation,
+  and **Ask your documents** keeps that scope.
+- Model classification now receives bounded existing correspondent and tag names
+  and reuses unambiguous catalog entries instead of creating near-duplicates.
+  Automation actions also accept correspondent and tag IDs decoded from JSON
+  numbers.
+
 - Upload is now one full-page queue. All selected files appear immediately in
   order with aggregate progress, plain processing states, safe retries and
   persistent completion actions; global drops navigate to the same surface
