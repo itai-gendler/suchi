@@ -833,10 +833,12 @@ owner advances the title revision used to invalidate stale suggestions.
 `text`/`url`/`select`, numbers for `number`/`monetary`, Unix seconds for `date`,
 booleans for `bool`, string arrays for `multi`, and a bounded exact-document
 summary for `documentlink`. `extra_data` carries choice definitions and
-`display_value` gives the server's formatted presentation. A document link is
-omitted when its exact target is trashed, missing, or not visible to the caller.
-The response never substitutes a newer version and never exposes the stored
-target ID separately.
+`display_value` gives the server's formatted presentation. Extraction-managed
+values include the same `managed_by` owner as their definition so clients can
+present a readable label without changing the stable field name. A document
+link is omitted when its exact target is trashed, missing, or not visible to the
+caller. The response never substitutes a newer version and never exposes the
+stored target ID separately.
 
 `notes` always belongs to this exact revision. `can_edit` reflects author/admin
 ownership; document change permission is checked again when mutating a note.

@@ -307,6 +307,14 @@ Components call named `api.js` operations, which own fetch and error parsing;
 before using them in a screen. API field names may stay technical; visible labels
 follow [Web app](/web-app).
 
+`customFieldLabel` in `lib/format.js` owns user-facing labels for
+extraction-managed definitions.
+Document Detail, Settings, Views, and Automations use that label while retaining
+the server's stable field name in IDs, automation parameters, and query text.
+Document Detail puts the generic add-field selector behind **Edit** in its final
+metadata row and excludes any definition with `managed_by`; populated managed
+values remain editable.
+
 `lib/TagPicker.svelte` is a local existing-tag combobox for document detail and
 Documents selection; it filters the complete catalog by name/slug and calls a
 screen-owned assignment callback on Enter/click. `api.js:listAllTags` follows

@@ -9,6 +9,11 @@ Notable user-visible changes to Suchi are recorded here.
 - The demo corpus now opens with Japanese, Korean and German documents in the
   dashboard's recent-document pile, with native-script metadata, curated source
   dates, and local Japanese and Korean font fallbacks.
+- Extraction-managed e-invoice fields now use readable labels in Document
+  Detail, Settings, Views, and Automations while their stable `invoice_*` API
+  and storage names remain unchanged. Document Detail keeps its ordinary
+  custom-field selector behind **Edit** in the final metadata row and does not
+  offer extraction-managed definitions there.
 - Document Detail and Documents selection can now assign or clear primary
   correspondents. Documents also filters items with no correspondent relation,
   and **Ask your documents** keeps that scope.

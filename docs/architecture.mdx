@@ -252,8 +252,9 @@ change type, and an in-use choice cannot disappear. `custom_fields.managed_by`
 records extraction-owned definitions. Migration 0004 adopts compatible
 `invoice_*` rows, database triggers reject definition mutation/deletion, and
 `core/pipeline/zugferd` creates or adopts the same typed fields transactionally.
-The API reserves those names and reports managed rows to the UI. Per-document
-values remain ordinary editable typed values. `core/customfield` remains the
+The API reserves those names and reports the extraction owner on managed
+definition and document-value rows. Per-document values remain ordinary editable
+typed values. `core/customfield` remains the
 single validation/write/render dispatch for API values, filesystem sidecars,
 automations, and imported values. `document_references.go` projects typed raw
 values, formatted display values, and choice metadata while retaining exact-link

@@ -290,9 +290,11 @@ their structured data extracted and written to custom fields:
 | `invoice_buyer`       | `BuyerTradeParty/Name` (BT-44)                          | text     |
 
 The definitions are created lazily for that filing system on its first
-successful e-invoice extraction. Document Detail shows extracted values on the
-matching invoice; unused definitions remain available through its add-field
-selector instead of appearing as empty rows on every document.
+successful e-invoice extraction. The UI presents readable invoice labels while
+the `invoice_*` names above remain the stable API and storage contract. Document
+Detail shows extracted values on the matching invoice and allows corrections.
+Managed definitions without an extracted value stay out of the generic
+add-custom-field selector and do not appear as empty rows on other documents.
 
 Recognised attachment names (case-insensitive): `factur-x.xml`,
 `zugferd-invoice.xml`, `xrechnung.xml`.

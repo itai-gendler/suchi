@@ -223,6 +223,16 @@ Delete action uses the same confirmation. Deleting removes document-tag links,
 re-roots surviving child tags, and cannot be undone. Creating and renaming tags
 also happen there; document screens only assign existing tags.
 
+## Document custom fields
+
+Document Detail shows custom fields that have values. Its final **Custom fields**
+row initially shows only **Edit**; opening it reveals **Add custom field** with
+ordinary user-created definitions. Extraction-managed e-invoice definitions are
+not offered there: they appear when extraction wrote a value and remain editable
+for corrections. Their readable labels, such as **Invoice seller** and **Seller
+VAT number**, are also used in Settings, Views, and Automations, while the stable
+`invoice_*` names remain in API requests, saved-view queries, and storage.
+
 ## Share links
 
 Users with **Create share links** can share one document from Document Detail or
