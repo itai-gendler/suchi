@@ -72,6 +72,7 @@
       sensitivity: scope.sensitivity || '',
       tag_ids: scope.tag_ids || [],
       correspondent_ids: scope.correspondent_ids || [],
+      correspondent_missing: !!scope.correspondent_missing,
       created_at_gte: scope.created_at_gte ?? null,
       created_at_lte: scope.created_at_lte ?? null,
       language: scope.language || '',

@@ -2468,6 +2468,28 @@ test('keeps document controls outside named document links and labels filters', 
   await expect(row.getByLabel('Select Electricity bill', { exact: true })).toBeVisible()
 })
 
+test('filters Documents to items without a correspondent', async ({ page }, testInfo) => {
+  await mockAPI(page, {
+    correspondents: [{ id: 8, name: 'Power company' }],
+    documents: [{ id: 42, title: 'Unassigned bill', created_at: 1780000000, tags: [] }],
+  })
+  await page.goto('/#/documents')
+  if (testInfo.project.name === 'mobile') {
+    await page.getByRole('button', { name: 'Filters', exact: true }).click()
+  }
+
+  const filtered = page.waitForRequest(request => {
+    const url = new URL(request.url())
+    return url.pathname === '/api/documents/' &&
+      url.searchParams.get('correspondents__isnull') === 'true' &&
+      !url.searchParams.has('correspondents__id__in')
+  })
+  await page.getByLabel('Filter by correspondent').selectOption('__missing__')
+  await filtered
+  await expect(page).toHaveURL(/#\/documents\?correspondents__isnull=true$/)
+  await expect(page.locator('.mobile-filter-chips')).toContainText('Correspondent: None')
+})
+
 test('collapses mobile document filters while retaining active chips and Clear all', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== 'mobile', 'mobile disclosure regression')
   await mockAPI(page, {
@@ -3461,6 +3483,35 @@ test('edits document tags inline and preserves tags when a change is refused', a
   await expect(row.locator('.pill')).toHaveText(['airtel', 'payment'])
 })
 
+test('sets and clears a document correspondent from the detail view', async ({ page }) => {
+  await mockAPI(page, {
+    correspondents: [{ id: 4, name: 'HSBC Amanah' }],
+    documentDetails: { 42: { document: { correspondents: [] } } },
+  })
+  const writes = []
+  await page.route('**/api/documents/bulk_edit', route => {
+    writes.push(route.request().postDataJSON())
+    return route.fulfill({ json: { applied: 1, results: [{ id: 42, ok: true }] } })
+  })
+
+  await page.goto('/#/doc/42')
+  const row = page.locator('.document-correspondents')
+  await expect(row).toContainText('No correspondent')
+  await row.getByRole('button', { name: 'Edit correspondent' }).click()
+  await row.getByRole('combobox', { name: 'Primary correspondent' }).selectOption('4')
+  await row.getByRole('button', { name: 'Save', exact: true }).click()
+  await expect(row).toContainText('HSBC Amanah · sender')
+
+  await row.getByRole('button', { name: 'Edit correspondent' }).click()
+  await row.getByRole('combobox', { name: 'Primary correspondent' }).selectOption('0')
+  await row.getByRole('button', { name: 'Save', exact: true }).click()
+  await expect(row).toContainText('No correspondent')
+  expect(writes).toEqual([
+    { documents: [42], method: 'set_correspondent', parameters: { correspondent_id: 4 } },
+    { documents: [42], method: 'set_correspondent', parameters: { correspondent_id: 0 } },
+  ])
+})
+
 test('keeps human titles locked until the owner returns naming to Suchi', async ({ page }) => {
   const writes = []
   await mockAPI(page, { documentDetails: {
@@ -3728,6 +3779,36 @@ test('bulk tag assignment retries partial failure without dropping the selection
   await expect(bar).toHaveCount(0)
   expect(writes).toHaveLength(2)
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+})
+
+test('sets a correspondent for selected documents', async ({ page }) => {
+  const documents = [
+    { id: 42, title: 'First invoice', created_at: 1780000000, tags: [] },
+    { id: 43, title: 'Second invoice', created_at: 1780000000, tags: [] },
+  ]
+  await mockAPI(page, {
+    documents,
+    correspondents: [{ id: 4, name: 'HSBC Amanah' }],
+  })
+  const writes = []
+  await page.route('**/api/documents/bulk_edit', route => {
+    writes.push(route.request().postDataJSON())
+    return route.fulfill({ json: {
+      applied: 2,
+      results: [{ id: 42, ok: true }, { id: 43, ok: true }],
+    } })
+  })
+
+  await page.goto('/#/documents')
+  await page.getByLabel('Select First invoice').check()
+  await page.getByLabel('Select Second invoice').check()
+  await page.getByLabel('Set correspondent for selection').selectOption('4')
+  await expect(page.locator('.bulkbar')).toHaveCount(0)
+  expect(writes).toEqual([{
+    documents: [42, 43],
+    method: 'set_correspondent',
+    parameters: { correspondent_id: 4 },
+  }])
 })
 
 test('bulk tag assignment is available to members but not in Inbox', async ({ page }) => {
@@ -5301,8 +5382,15 @@ test('sends the exact Inbox, Documents, and Search context with document questio
   expect(chatRequests.at(-1).scope).toEqual({
     query: 'needle', document_ids: [41, 42], jd_category_id: 6,
     sensitivity: 'internal', tag_ids: [5, 8],
-    correspondent_ids: [7], created_at_gte: 1785542400,
+    correspondent_ids: [7], correspondent_missing: false,
+    created_at_gte: 1785542400,
     created_at_lte: 1788134399, language: '', share_link: 'active',
+  })
+
+  await page.goto('/#/documents?correspondents__isnull=true')
+  await ask('unassigned scope')
+  expect(chatRequests.at(-1).scope).toMatchObject({
+    correspondent_ids: [], correspondent_missing: true,
   })
 
   await page.goto('/#/search?q=lease&lang=de')
@@ -5317,7 +5405,7 @@ test('sends the exact Inbox, Documents, and Search context with document questio
   await ask('cleared search scope')
   expect(chatRequests.at(-1).scope).toEqual({
     query: '', document_ids: [], jd_category_id: 0, sensitivity: '',
-    tag_ids: [], correspondent_ids: [],
+    tag_ids: [], correspondent_ids: [], correspondent_missing: false,
     created_at_gte: null, created_at_lte: null, language: 'de',
   })
 })

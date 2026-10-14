@@ -32,6 +32,7 @@
   const fQuery = $derived(route.query.get('q') || '')
   const fTag = $derived(route.query.get('tags__id__in') || '')
   const fCorr = $derived(route.query.get('correspondents__id__in') || '')
+  const fCorrMissing = $derived(route.query.get('correspondents__isnull') === 'true')
   const fSens = $derived(route.query.get('sensitivity') || '')
   const fDocumentIDs = $derived(route.query.get('document_ids') || '')
   const fShareLink = $derived(route.query.get('share_link') || '')
@@ -53,7 +54,9 @@
     if (fTag) {
       filters.push({ key: 'tags__id__in', label: `Tag: ${tags.find(tag => String(tag.id) === fTag)?.name || fTag}` })
     }
-    if (fCorr) {
+    if (fCorrMissing) {
+      filters.push({ key: 'correspondents__isnull', label: 'Correspondent: None' })
+    } else if (fCorr) {
       filters.push({ key: 'correspondents__id__in', label: `Correspondent: ${correspondents.find(correspondent => String(correspondent.id) === fCorr)?.name || fCorr}` })
     }
     if (fShareLink === 'active') filters.push({ key: 'share_link', label: 'Shared by me' })
@@ -99,6 +102,18 @@
     setRouteFilter('share_link', fShareLink === 'active' ? '' : 'active')
   }
 
+  function setCorrespondentFilter(value) {
+    queryAssistant.clear()
+    const params = new URLSearchParams(route.query)
+    params.delete('correspondents__id__in')
+    params.delete('correspondents__isnull')
+    if (value === '__missing__') params.set('correspondents__isnull', 'true')
+    else if (value) params.set('correspondents__id__in', value)
+    params.delete('page')
+    const query = params.toString()
+    go(`#${route.path}${query ? `?${query}` : ''}`)
+  }
+
   function pageHash(target) {
     const params = new URLSearchParams(route.query)
     if (target > 1) params.set('page', String(target))
@@ -141,7 +156,7 @@
   function clearDocumentFilters() {
     queryAssistant.clear()
     const params = new URLSearchParams(route.query)
-    for (const key of ['tags__id__in', 'correspondents__id__in', 'share_link', 'sensitivity', 'created_at__gte', 'created_at__lte']) {
+    for (const key of ['tags__id__in', 'correspondents__id__in', 'correspondents__isnull', 'share_link', 'sensitivity', 'created_at__gte', 'created_at__lte']) {
       params.delete(key)
     }
     params.delete('page')
@@ -195,6 +210,7 @@
         page, page_size: pageSize, ordering,
         q: fQuery, document_ids: fDocumentIDs,
         tags__id__in: fTag, correspondents__id__in: fCorr,
+        correspondents__isnull: fCorrMissing ? 'true' : '',
         sensitivity: fSens, jd_category_id: isInbox ? inbox?.id : jdFilter,
         created_at__gte: dateFrom ? Math.floor(new Date(dateFrom) / 1000) : '',
         created_at__lte: dateTo ? Math.floor(new Date(dateTo) / 1000) + 86399 : '',
@@ -210,6 +226,7 @@
         sensitivity: params.sensitivity || '',
         tag_ids: csvIDs(params.tags__id__in),
         correspondent_ids: csvIDs(params.correspondents__id__in),
+        correspondent_missing: params.correspondents__isnull === 'true',
         created_at_gte: params.created_at__gte === '' ? null : params.created_at__gte,
         created_at_lte: params.created_at__lte === '' ? null : params.created_at__lte,
         language: '',
@@ -386,6 +403,7 @@
   }
   const bulkRefile = (jdId) => bulk('Refiled', 'set_jd_category', { jd_category_id: Number(jdId) })
   const bulkSens = (s) => bulk('Sensitivity set', 'set_sensitivity', { sensitivity: s })
+  const bulkCorrespondent = (id) => bulk('Correspondent set', 'set_correspondent', { correspondent_id: Number(id) })
   const bulkRescan = () => bulk('Rescan started', 'rescan_enqueue', {})
   const bulkTrash = () => (trashRequest = { kind: 'bulk', count: sel.size })
   function openBulkShare() {
@@ -561,6 +579,14 @@
     {#if !isInbox}
       <button class="btn sm" disabled={bulkBusy} aria-expanded={bulkTagOpen}
               onclick={openBulkTags}>Add tags</button>
+      <select class="input" style="max-width:190px" aria-label="Set correspondent for selection"
+              disabled={bulkBusy} onchange={(event) => event.currentTarget.value !== '' && bulkCorrespondent(event.currentTarget.value)}>
+        <option value="" selected disabled>Correspondent…</option>
+        <option value="0">Clear sender</option>
+        {#each correspondents as correspondent}
+          <option value={correspondent.id}>{correspondent.name}</option>
+        {/each}
+      </select>
     {/if}
     {#if canAskArchive}
       <button class="btn sm" disabled={bulkBusy} onclick={() => onAskDocuments?.([...sel])}>
@@ -667,9 +693,12 @@
           {#each tags as t}<option value={t.id} selected={String(t.id) === fTag}>{t.name}</option>{/each}
         </select>
         <select class="input" aria-label="Filter by correspondent"
-                onchange={(e) => setRouteFilter('correspondents__id__in', e.target.value)}>
-          <option value="" selected={!fCorr}>All correspondents</option>
-          {#each correspondents as c}<option value={c.id} selected={String(c.id) === fCorr}>{c.name}</option>{/each}
+                onchange={(event) => setCorrespondentFilter(event.currentTarget.value)}>
+          <option value="" selected={!fCorr && !fCorrMissing}>All correspondents</option>
+          <option value="__missing__" selected={fCorrMissing}>No correspondent</option>
+          {#each correspondents as correspondent}
+            <option value={correspondent.id} selected={String(correspondent.id) === fCorr}>{correspondent.name}</option>
+          {/each}
         </select>
         <button type="button" class="btn sm document-share-filter" class:primary={fShareLink === 'active'}
                 aria-pressed={fShareLink === 'active'} onclick={toggleSharedByMe}>

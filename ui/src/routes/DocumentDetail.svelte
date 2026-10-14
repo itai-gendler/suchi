@@ -3,7 +3,7 @@
   import { scopedHash as filingHref } from '../lib/systems.svelte.js'
   import { captureScope, scopeCurrent } from '../lib/systems.svelte.js'
   import { onDestroy, untrack } from 'svelte'
-  import { getDocument, getDocumentIntrinsic, patchDocument, deleteDocument, restoreDocument, permanentlyDeleteDocument, documentVersions, documentBacklinks, uploadDocumentVersion, setDocumentCustomField, clearDocumentCustomField, createDocumentNote, updateDocumentNote, deleteDocumentNote, createShareLink, listShareLinks, deleteShareLink, previewPath, downloadPath, similarDocs, listGrants, putGrant, deleteGrant, listAllTags, listCustomFields, listDocuments, bulkEdit } from '../lib/api.js'
+  import { getDocument, getDocumentIntrinsic, patchDocument, deleteDocument, restoreDocument, permanentlyDeleteDocument, documentVersions, documentBacklinks, uploadDocumentVersion, setDocumentCustomField, clearDocumentCustomField, createDocumentNote, updateDocumentNote, deleteDocumentNote, createShareLink, listShareLinks, deleteShareLink, previewPath, downloadPath, similarDocs, listGrants, putGrant, deleteGrant, listAllTags, listCorrespondents, listCustomFields, listDocuments, bulkEdit } from '../lib/api.js'
   import { go } from '../lib/router.svelte.js'
   import { SENSITIVITY_OPTIONS, fmtDate, fmtBytes, isHighSensitivity, sensDot, sensitivityLabel } from '../lib/format.js'
   import { session } from '../lib/session.svelte.js'
@@ -59,6 +59,11 @@
   let tagsBusy = $state(false)
   let tagsError = $state('')
   let tagLoadError = $state('')
+  let editingCorrespondent = $state(false)
+  let correspondentOptions = $state([])
+  let correspondentDraft = $state('')
+  let correspondentBusy = $state(false)
+  let correspondentError = $state('')
   let shareURL = $state('')
   let shareBusy = $state(false)
   let documentLinkOpen = $state(false)
@@ -245,6 +250,11 @@
     tagsBusy = false
     tagsError = ''
     tagLoadError = ''
+    editingCorrespondent = false
+    correspondentOptions = []
+    correspondentDraft = ''
+    correspondentBusy = false
+    correspondentError = ''
     shareOpen = false
     shareLoadVersion++
     shareLinks = []
@@ -840,6 +850,71 @@
       return false
     } finally {
       if (!disposed && version === loadVersion && scopeCurrent(scope)) tagsBusy = false
+    }
+  }
+
+  async function startEditCorrespondent() {
+    if (correspondentBusy || trashed) return
+    const version = loadVersion
+    const scope = captureScope()
+    correspondentDraft = String(doc?.correspondents?.find(item => item.role === 'sender')?.id || 0)
+    editingCorrespondent = true
+    correspondentBusy = true
+    correspondentError = ''
+    try {
+      const response = await listCorrespondents()
+      if (disposed || version !== loadVersion || !scopeCurrent(scope)) return
+      correspondentOptions = [...(response.results || [])]
+      for (const current of doc?.correspondents || []) {
+        if (!correspondentOptions.some(option => option.id === current.id)) {
+          correspondentOptions.unshift({ id: current.id, name: current.name })
+        }
+      }
+    } catch (ex) {
+      if (!disposed && version === loadVersion && scopeCurrent(scope)) {
+        correspondentError = ex.message || 'Could not load correspondents'
+      }
+    } finally {
+      if (!disposed && version === loadVersion && scopeCurrent(scope)) correspondentBusy = false
+    }
+  }
+
+  async function saveCorrespondent(event) {
+    event.preventDefault()
+    if (correspondentBusy || trashed) return
+    const version = loadVersion
+    const scope = captureScope()
+    const documentID = Number(id)
+    const correspondentID = Number(correspondentDraft)
+    correspondentBusy = true
+    correspondentError = ''
+    try {
+      const result = await bulkEdit([documentID], 'set_correspondent', { correspondent_id: correspondentID })
+      if (disposed || version !== loadVersion || !scopeCurrent(scope)) return
+      const outcome = result?.results?.find(item => item.id === documentID)
+      if (!outcome?.ok) {
+        throw new Error(outcome?.code === 'forbidden' ? 'You do not have permission to edit this document.' : 'Could not update correspondent')
+      }
+      const current = doc.correspondents || []
+      const selected = correspondentOptions.find(item => item.id === correspondentID)
+        || current.find(item => item.id === correspondentID)
+      const retained = current.filter(item => selected
+        ? item.role !== 'sender' || item.id !== selected.id
+        : item.role !== 'sender')
+      doc = {
+        ...doc,
+        correspondents: selected
+          ? [{ id: selected.id, name: selected.name, role: 'sender' }, ...retained]
+          : retained,
+      }
+      editingCorrespondent = false
+      notify?.(selected ? 'Correspondent updated' : 'Sender cleared')
+    } catch (ex) {
+      if (!disposed && version === loadVersion && scopeCurrent(scope)) {
+        correspondentError = ex.message || 'Could not update correspondent'
+      }
+    } finally {
+      if (!disposed && version === loadVersion && scopeCurrent(scope)) correspondentBusy = false
     }
   }
 
@@ -1441,10 +1516,41 @@
               {#if tagsError}<p class="err" role="alert">{tagsError}</p>{/if}
             {/if}
           </dd>
-          {#if doc.correspondents?.length}
-            <dt>Correspondents</dt>
-            <dd>{#each doc.correspondents as c}<span class="pill" style="margin-right:5px">{c.name} · {c.role}</span>{/each}</dd>
-          {/if}
+          <dt>Correspondents</dt>
+          <dd class="document-correspondents">
+            {#if editingCorrespondent}
+              <form class="tag-actions" onsubmit={saveCorrespondent}>
+                <select class="input" aria-label="Primary correspondent" bind:value={correspondentDraft}
+                        disabled={correspondentBusy}>
+                  <option value="0">No sender</option>
+                  {#each correspondentOptions as correspondent}
+                    <option value={String(correspondent.id)}>{correspondent.name}</option>
+                  {/each}
+                </select>
+                <button class="btn sm primary" type="submit" disabled={correspondentBusy}>
+                  {correspondentBusy ? 'Working…' : 'Save'}
+                </button>
+                <button class="btn sm" type="button" disabled={correspondentBusy}
+                        onclick={() => { editingCorrespondent = false; correspondentError = '' }}>Cancel</button>
+              </form>
+              {#if correspondentError}<p class="err" role="alert">{correspondentError}</p>{/if}
+            {:else}
+              <div class="metadata-display">
+                <div class="metadata-value">
+                  {#each doc.correspondents || [] as correspondent}
+                    <span class="pill" style="margin-right:5px">{correspondent.name} · {correspondent.role}</span>
+                  {:else}
+                    <span class="sub">No correspondent</span>
+                  {/each}
+                </div>
+                {#if !trashed}
+                  <div class="metadata-actions">
+                    <button class="btn sm" aria-label="Edit correspondent" type="button" onclick={startEditCorrespondent}>Edit</button>
+                  </div>
+                {/if}
+              </div>
+            {/if}
+          </dd>
           {#each displayedOrdinaryCustomFields as field (field.field_id)}
             {@const editor = customFieldEditors[field.field_id]}
             <dt>{field.name}</dt>
