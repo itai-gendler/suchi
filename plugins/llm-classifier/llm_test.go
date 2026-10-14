@@ -8,6 +8,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -261,7 +262,7 @@ func TestClassifyHappyPath(t *testing.T) {
 	res, err := p.Classify(context.Background(),
 		"March invoice", "total due 4523 rupees",
 		[]JDCat{{Code: 31, Name: "Utilities"}, {Code: 22, Name: "Tax"}},
-		nil, nil)
+		nil, ClassificationVocabulary{}, nil)
 	if err != nil {
 		t.Fatalf("classify: %v", err)
 	}
@@ -780,6 +781,78 @@ func TestReplacedDateCannotReuseAnOutstandingReviewIdentity(t *testing.T) {
 	}
 }
 
+func TestHandlerReusesExistingVocabularyForNearModelValues(t *testing.T) {
+	ctx := context.Background()
+	d, docID := openHandlerDocument(t, "Statement", "HSBC account statement")
+	if _, err := d.Write.ExecContext(ctx, `
+		INSERT INTO correspondents(system_id, id, name, slug, created_at, updated_at)
+		VALUES (1, 11, 'HSBC Amanah', 'hsbc-amanah', 0, 0);
+		INSERT INTO tags(system_id, id, name, slug, created_at, updated_at)
+		VALUES (1, 21, 'bank statements', 'bank-statements', 0, 0);
+		INSERT INTO settings(key, value_json, updated_at)
+		VALUES ('classification.auto_apply', 'true', 0)
+		ON CONFLICT(key) DO UPDATE SET value_json=excluded.value_json
+	`); err != nil {
+		t.Fatal(err)
+	}
+
+	prompt := make(chan string, 1)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			Messages []CompletionMessage `json:"messages"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		for _, message := range body.Messages {
+			if message.Role == "user" {
+				prompt <- message.Content
+			}
+		}
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"{\"correspondent\":\"HSBC Amanah Malaysia Berhad\",\"tags\":[\"bank statement\",\"new label\"],\"confidence\":0.9}"}}]}`))
+	}))
+	defer srv.Close()
+
+	p, err := New(Config{EndpointURL: srv.URL, Model: "test", ConfidenceThreshold: 0.7}, silentLog())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := NewHandler(p, d, silentLog()).Handle(ctx, pluginapi.Event{SystemID: 1, Kind: Kind, DocID: docID}); err != nil {
+		t.Fatal(err)
+	}
+	userMessage := <-prompt
+	for _, name := range []string{"HSBC Amanah", "bank statements"} {
+		if !strings.Contains(userMessage, name) {
+			t.Errorf("classification prompt missing existing term %q: %s", name, userMessage)
+		}
+	}
+
+	var correspondentID, correspondentCount, existingTag, newTag int
+	if err := d.Read.QueryRowContext(ctx, `
+		SELECT
+			COALESCE((SELECT correspondent_id FROM document_correspondents
+				WHERE document_id=? AND role='sender' ORDER BY position,correspondent_id LIMIT 1),0),
+			(SELECT count(*) FROM correspondents WHERE system_id=1),
+			EXISTS(SELECT 1 FROM document_tags WHERE document_id=? AND tag_id=21),
+			EXISTS(SELECT 1 FROM document_tags dt JOIN tags t ON t.id=dt.tag_id
+				WHERE dt.document_id=? AND t.slug='new-label')
+	`, docID, docID, docID).Scan(&correspondentID, &correspondentCount, &existingTag, &newTag); err != nil {
+		t.Fatal(err)
+	}
+	if correspondentID != 11 || correspondentCount != 1 || existingTag != 1 || newTag != 1 {
+		t.Fatalf("correspondent=%d count=%d existing tag=%d new tag=%d",
+			correspondentID, correspondentCount, existingTag, newTag)
+	}
+}
+
+func TestVocabularyNearMatchRejectsAmbiguity(t *testing.T) {
+	entries := []vocabularyEntry{
+		{id: 1, name: "HSBC Amanah", slug: "hsbc-amanah"},
+		{id: 2, name: "HSBC Amanah Malaysia", slug: "hsbc-amanah-malaysia"},
+	}
+	if match, ok := matchVocabularyEntry(entries, "HSBC Amanah Malaysia Berhad"); ok {
+		t.Fatalf("ambiguous near match resolved to %+v", match)
+	}
+}
+
 func TestHandlerDoesNotAddCompetingCorrespondent(t *testing.T) {
 	ctx := context.Background()
 	d, docID := openHandlerDocument(t, "Statement", "credit card statement")
@@ -920,7 +993,7 @@ func TestClassifyInjectsJDCatsIntoUserMessage(t *testing.T) {
 				Description: "Bank, credit card\nand debit card statements, and letters about those accounts. " + strings.Repeat("x", 200)},
 			{Code: 51, Area: "Home", Name: "Utilities"},
 		},
-		nil, nil)
+		nil, ClassificationVocabulary{}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -961,7 +1034,8 @@ func TestClassifyInjectsSiblingTitles(t *testing.T) {
 
 	p, _ := New(Config{EndpointURL: srv.URL, Model: "x"}, silentLog())
 	_, err := p.Classify(context.Background(), "current", "body", nil,
-		[]string{"Electricity bill - Jul 2026", "Electricity bill - Jun 2026"}, nil)
+		[]string{"Electricity bill - Jul 2026", "Electricity bill - Jun 2026"},
+		ClassificationVocabulary{}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -973,6 +1047,50 @@ func TestClassifyInjectsSiblingTitles(t *testing.T) {
 		if !strings.Contains(gotUser, want) {
 			t.Errorf("user message missing %q; got: %s", want, gotUser)
 		}
+	}
+}
+
+func TestClassifyInjectsBoundedExistingVocabulary(t *testing.T) {
+	var gotUser string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			Messages []CompletionMessage `json:"messages"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Error(err)
+		}
+		for _, message := range body.Messages {
+			if message.Role == "user" {
+				gotUser = message.Content
+			}
+		}
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"{\"confidence\":0.9}"}}]}`))
+	}))
+	defer srv.Close()
+
+	correspondents := make([]string, maxClassificationVocabularyTerms+1)
+	for i := range correspondents {
+		correspondents[i] = fmt.Sprintf("Correspondent %03d", i)
+	}
+	p, _ := New(Config{EndpointURL: srv.URL, Model: "x"}, silentLog())
+	_, err := p.Classify(context.Background(), "statement", "body", nil, nil,
+		ClassificationVocabulary{Correspondents: correspondents, Tags: []string{"Banking", "Tax"}},
+		nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"Existing archive vocabulary",
+		`"correspondents":["Correspondent 000"`,
+		`"Correspondent 099"`,
+		`"tags":["Banking","Tax"]`,
+	} {
+		if !strings.Contains(gotUser, want) {
+			t.Errorf("user message missing %q: %s", want, gotUser)
+		}
+	}
+	if strings.Contains(gotUser, "Correspondent 100") {
+		t.Fatalf("vocabulary exceeded %d correspondents: %s", maxClassificationVocabularyTerms, gotUser)
 	}
 }
 
@@ -998,7 +1116,7 @@ func TestClassifyOmitsHeaderWhenJDCatsEmpty(t *testing.T) {
 	defer srv.Close()
 
 	p, _ := New(Config{EndpointURL: srv.URL, Model: "x"}, silentLog())
-	if _, err := p.Classify(context.Background(), "t", "c", nil, nil, nil); err != nil {
+	if _, err := p.Classify(context.Background(), "t", "c", nil, nil, ClassificationVocabulary{}, nil); err != nil {
 		t.Fatal(err)
 	}
 	if strings.Contains(gotUser, "Available Johnny-Decimal") {
@@ -1040,7 +1158,8 @@ func TestClassifyAddsBoundedAutomationQuestionsToExistingCall(t *testing.T) {
 		},
 	}}
 	result, err := p.Classify(context.Background(), "ACME warranty",
-		"This refrigerator is warranted against manufacturing defects.", nil, nil, questions)
+		"This refrigerator is warranted against manufacturing defects.", nil, nil,
+		ClassificationVocabulary{}, questions)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1258,7 +1377,7 @@ func TestDisableStopsClassifyUntilSetConfig(t *testing.T) {
 	if p.Enabled() {
 		t.Fatal("plugin remained enabled")
 	}
-	if _, err := p.Classify(context.Background(), "title", "content", nil, nil, nil); !errors.Is(err, ErrDisabled) {
+	if _, err := p.Classify(context.Background(), "title", "content", nil, nil, ClassificationVocabulary{}, nil); !errors.Is(err, ErrDisabled) {
 		t.Fatalf("Classify error = %v, want ErrDisabled", err)
 	}
 	if err := p.SetConfig(Config{EndpointURL: "http://localhost:11434/v1", Model: "x"}); err != nil {
@@ -1296,7 +1415,7 @@ func TestClassifyPropagatesHTTPError(t *testing.T) {
 	defer srv.Close()
 
 	p, _ := New(Config{EndpointURL: srv.URL, Model: "x"}, silentLog())
-	_, err := p.Classify(context.Background(), "t", "c", nil, nil, nil)
+	_, err := p.Classify(context.Background(), "t", "c", nil, nil, ClassificationVocabulary{}, nil)
 	if err == nil {
 		t.Fatal("500 should propagate as error")
 	}
@@ -1321,7 +1440,7 @@ func TestClassifyWrapsHTTP4xxAsTerminal(t *testing.T) {
 			defer srv.Close()
 
 			p, _ := New(Config{EndpointURL: srv.URL, Model: "x"}, silentLog())
-			_, err := p.Classify(context.Background(), "t", "c", nil, nil, nil)
+			_, err := p.Classify(context.Background(), "t", "c", nil, nil, ClassificationVocabulary{}, nil)
 			if err == nil {
 				t.Fatalf("HTTP %d should propagate as error", code)
 			}
@@ -1342,7 +1461,7 @@ func TestClassify429StaysRetryable(t *testing.T) {
 	defer srv.Close()
 
 	p, _ := New(Config{EndpointURL: srv.URL, Model: "x"}, silentLog())
-	_, err := p.Classify(context.Background(), "t", "c", nil, nil, nil)
+	_, err := p.Classify(context.Background(), "t", "c", nil, nil, ClassificationVocabulary{}, nil)
 	if err == nil {
 		t.Fatal("429 should propagate as error")
 	}

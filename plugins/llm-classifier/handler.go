@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/johnnybravo-xyz/suchi/core/approvals"
@@ -34,7 +35,7 @@ import (
 // up. Exported so main.go can read it into the version snapshot
 // it hands to core/rescan (which doesn't import this plugin to
 // keep the dep graph flat).
-const PipelineVersionLLM = 4
+const PipelineVersionLLM = 5
 
 // Handler is the durable-outbox Subscriber that runs the classifier on
 // `post-classify` jobs. Main registers it in a disabled state at boot so the
@@ -97,6 +98,10 @@ func (h *Handler) Handle(ctx context.Context, e pluginapi.Event) error {
 	if err != nil {
 		return err
 	}
+	vocabulary, err := h.loadClassificationVocabulary(ctx, baseline.SystemID)
+	if err != nil {
+		return err
+	}
 	siblings, supporters, err := h.loadNamingContext(ctx, e.DocID, baseline, 5)
 	if err != nil {
 		return err
@@ -118,7 +123,7 @@ func (h *Handler) Handle(ctx context.Context, e pluginapi.Event) error {
 	for i := range matchedQuestions {
 		questions[i] = matchedQuestions[i].Question
 	}
-	res, err := h.plugin.Classify(ctx, title, content, jdCats, siblings, questions)
+	res, err := h.plugin.Classify(ctx, title, content, jdCats, siblings, vocabulary, questions)
 	if errors.Is(err, ErrDisabled) {
 		return nil
 	}
@@ -328,7 +333,15 @@ func (h *Handler) Handle(ctx context.Context, e pluginapi.Event) error {
 			}
 		}
 		if !claimedCorrespondent && !hasCorrespondent && res.Correspondent != "" {
-			if err := propose(approvals.DocumentChange{Field: "correspondent", Value: res.Correspondent}, res.Confidence); err != nil {
+			change := approvals.DocumentChange{Field: "correspondent", Value: res.Correspondent}
+			entries, err := loadVocabularyEntries(ctx, tx, baseline.SystemID, "correspondents")
+			if err != nil {
+				return err
+			}
+			if entry, ok := matchVocabularyEntry(entries, res.Correspondent); ok {
+				change.ValueID, change.Value = entry.id, ""
+			}
+			if err := propose(change, res.Confidence); err != nil {
 				return err
 			}
 		}
@@ -344,32 +357,35 @@ func (h *Handler) Handle(ctx context.Context, e pluginapi.Event) error {
 			}
 		}
 		modelRequestedReview := false
+		var tagVocabulary []vocabularyEntry
+		if len(res.Tags) > 0 {
+			tagVocabulary, err = loadVocabularyEntries(ctx, tx, baseline.SystemID, "tags")
+			if err != nil {
+				return err
+			}
+		}
 		for _, tag := range res.Tags {
 			if slug.Make(tag) == "needs-review" {
 				modelRequestedReview = true
 				continue
 			}
-			var attached bool
-			if err := tx.QueryRowContext(ctx, `SELECT EXISTS (
-				SELECT 1 FROM document_tags dt JOIN tags t ON t.id=dt.tag_id
-				WHERE dt.document_id=? AND (t.name=? COLLATE NOCASE OR t.slug=?))`,
-				e.DocID, tag, slug.Make(tag)).Scan(&attached); err != nil {
-				return err
+			change := approvals.DocumentChange{Field: "tag", Value: tag}
+			if entry, ok := matchVocabularyEntry(tagVocabulary, tag); ok {
+				change.ValueID, change.Value = entry.id, ""
+				if claimedTags[entry.id] {
+					continue
+				}
+				var attached bool
+				if err := tx.QueryRowContext(ctx,
+					`SELECT EXISTS(SELECT 1 FROM document_tags WHERE document_id=? AND tag_id=?)`,
+					e.DocID, entry.id).Scan(&attached); err != nil {
+					return err
+				}
+				if attached {
+					continue
+				}
 			}
-			if attached {
-				continue
-			}
-			var existingID int64
-			err := tx.QueryRowContext(ctx,
-				`SELECT id FROM tags WHERE system_id=? AND (name=? COLLATE NOCASE OR slug=?) ORDER BY id LIMIT 1`,
-				baseline.SystemID, tag, slug.Make(tag)).Scan(&existingID)
-			if err != nil && !errors.Is(err, sql.ErrNoRows) {
-				return err
-			}
-			if err == nil && claimedTags[existingID] {
-				continue
-			}
-			if err := propose(approvals.DocumentChange{Field: "tag", Value: tag}, res.Confidence); err != nil {
+			if err := propose(change, res.Confidence); err != nil {
 				return err
 			}
 		}
@@ -503,6 +519,122 @@ func (h *Handler) loadJDCategories(ctx context.Context, systemID int64) ([]JDCat
 		out = append(out, c)
 	}
 	return out, rows.Err()
+}
+
+// The prompt gets the most-used terms first and stays bounded even when an
+// archive has accumulated a large catalog.
+func (h *Handler) loadClassificationVocabulary(ctx context.Context, systemID int64) (ClassificationVocabulary, error) {
+	load := func(query string) ([]string, error) {
+		rows, err := h.db.Read.QueryContext(ctx, query, systemID, maxClassificationVocabularyTerms)
+		if err != nil {
+			return nil, err
+		}
+		defer rows.Close()
+		names := make([]string, 0, maxClassificationVocabularyTerms)
+		for rows.Next() {
+			var name string
+			if err := rows.Scan(&name); err != nil {
+				return nil, err
+			}
+			names = append(names, name)
+		}
+		return names, rows.Err()
+	}
+	correspondents, err := load(`
+		SELECT c.name
+		FROM correspondents c
+		WHERE c.system_id = ?
+		ORDER BY (
+			SELECT count(*) FROM document_correspondents dc
+			WHERE dc.correspondent_id = c.id
+		) DESC, c.name COLLATE NOCASE, c.id
+		LIMIT ?`)
+	if err != nil {
+		return ClassificationVocabulary{}, err
+	}
+	tags, err := load(`
+		SELECT t.name
+		FROM tags t
+		WHERE t.system_id = ?
+		ORDER BY (
+			SELECT count(*) FROM document_tags dt
+			WHERE dt.tag_id = t.id
+		) DESC, t.name COLLATE NOCASE, t.id
+		LIMIT ?`)
+	if err != nil {
+		return ClassificationVocabulary{}, err
+	}
+	return ClassificationVocabulary{Correspondents: correspondents, Tags: tags}, nil
+}
+
+type vocabularyEntry struct {
+	id   int64
+	name string
+	slug string
+}
+
+func loadVocabularyEntries(ctx context.Context, tx *sql.Tx, systemID int64, table string) ([]vocabularyEntry, error) {
+	if table != "correspondents" && table != "tags" {
+		return nil, errors.New("classifier: invalid vocabulary table")
+	}
+	rows, err := tx.QueryContext(ctx,
+		"SELECT id,name,slug FROM "+table+" WHERE system_id=? ORDER BY id",
+		systemID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var entries []vocabularyEntry
+	for rows.Next() {
+		var entry vocabularyEntry
+		if err := rows.Scan(&entry.id, &entry.name, &entry.slug); err != nil {
+			return nil, err
+		}
+		entries = append(entries, entry)
+	}
+	return entries, rows.Err()
+}
+
+func matchVocabularyEntry(entries []vocabularyEntry, value string) (vocabularyEntry, bool) {
+	proposed := slug.Make(value)
+	if proposed == "" {
+		return vocabularyEntry{}, false
+	}
+	for _, entry := range entries {
+		if proposed == entry.slug || strings.EqualFold(strings.Join(strings.Fields(value), " "), strings.Join(strings.Fields(entry.name), " ")) {
+			return entry, true
+		}
+	}
+	var match vocabularyEntry
+	found := false
+	for _, entry := range entries {
+		if !simpleVocabularyNearMatch(proposed, entry.slug) {
+			continue
+		}
+		if found {
+			return vocabularyEntry{}, false
+		}
+		match, found = entry, true
+	}
+	return match, found
+}
+
+// Near matching is deliberately narrow: plural variants and a company name
+// extended by at most two suffix words. Ambiguous matches remain new proposals.
+func simpleVocabularyNearMatch(left, right string) bool {
+	if len(left) >= 4 && len(right) >= 4 &&
+		strings.TrimSuffix(left, "s") == strings.TrimSuffix(right, "s") {
+		return true
+	}
+	shorter, longer := left, right
+	if len(shorter) > len(longer) {
+		shorter, longer = longer, shorter
+	}
+	shortWords := strings.Count(shorter, "-") + 1
+	longWords := strings.Count(longer, "-") + 1
+	return shortWords >= 2 && longWords-shortWords <= 2 &&
+		strings.HasPrefix(longer, shorter+"-")
 }
 
 // Keep authorized selection, prompt titles and provenance in one read snapshot.

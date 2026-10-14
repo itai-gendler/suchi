@@ -142,6 +142,13 @@ type JDCat struct {
 	Description string
 }
 
+// ClassificationVocabulary contains bounded filing-system terms that the model
+// should reuse instead of inventing near-duplicate correspondents and tags.
+type ClassificationVocabulary struct {
+	Correspondents []string `json:"correspondents,omitempty"`
+	Tags           []string `json:"tags,omitempty"`
+}
+
 // maxCategoryDescriptionRunes bounds each description in the prompt; the
 // full category list is sent with every classification.
 const maxCategoryDescriptionRunes = 120
@@ -381,11 +388,11 @@ func (p *Plugin) RuntimeInfo() (host string, local bool) {
 // suggestion. jdCats is the installation's user-facing Johnny-Decimal
 // categories; pass nil or an empty slice when unknown (the model will
 // fall back to guessing rather than blocking classification).
-// siblingTitles are recent titles of similar docs. questions are bounded
-// automation prompts selected locally; their action mappings never leave Suchi.
-// Errors are wrapped with the endpoint host so an operator can grep them across
-// logs.
-func (p *Plugin) Classify(ctx context.Context, title, content string, jdCats []JDCat, siblingTitles []string, questions []automations.ModelQuestion) (*Result, error) {
+// siblingTitles are recent titles of similar docs. vocabulary contains existing
+// filing-system terms to reuse. questions are bounded automation prompts
+// selected locally; their action mappings never leave Suchi. Errors are wrapped
+// with the endpoint host so an operator can grep them across logs.
+func (p *Plugin) Classify(ctx context.Context, title, content string, jdCats []JDCat, siblingTitles []string, vocabulary ClassificationVocabulary, questions []automations.ModelQuestion) (*Result, error) {
 	// Snapshot the config once at the top so a concurrent SetConfig
 	// doesn't split this call across two configurations.
 	if p == nil {
@@ -398,7 +405,7 @@ func (p *Plugin) Classify(ctx context.Context, title, content string, jdCats []J
 	cfg := rt.cfg
 	originalContent := content
 	content = selectClassificationContent(content, cfg.MaxContentChars)
-	body := buildRequestBody(cfg.Model, title, content, jdCats, siblingTitles, questions)
+	body := buildRequestBody(cfg.Model, title, content, jdCats, siblingTitles, vocabulary, questions)
 	rb, err := p.doCompletion(ctx, rt, body)
 	if err != nil {
 		return nil, err
@@ -600,6 +607,33 @@ func lastChars(value string, limit int) string {
 	return value
 }
 
+const maxClassificationVocabularyTerms = 100
+
+func boundedClassificationVocabulary(vocabulary ClassificationVocabulary) ClassificationVocabulary {
+	vocabulary.Correspondents = boundedVocabularyTerms(vocabulary.Correspondents, 200)
+	vocabulary.Tags = boundedVocabularyTerms(vocabulary.Tags, 64)
+	return vocabulary
+}
+
+func boundedVocabularyTerms(values []string, maxRunes int) []string {
+	limit := min(len(values), maxClassificationVocabularyTerms)
+	out := make([]string, 0, limit)
+	seen := make(map[string]bool, limit)
+	for _, value := range values {
+		value = truncateChars(strings.Join(strings.Fields(value), " "), maxRunes)
+		key := strings.ToLower(value)
+		if value == "" || seen[key] {
+			continue
+		}
+		seen[key] = true
+		out = append(out, value)
+		if len(out) == maxClassificationVocabularyTerms {
+			break
+		}
+	}
+	return out
+}
+
 // ---------- helpers, kept unexported + testable ----------
 
 // buildRequestBody assembles the /v1/chat/completions payload with a JSON
@@ -607,7 +641,7 @@ func lastChars(value string, limit int) string {
 // it can reach persistence. JD categories go in the user message so the
 // static system prompt stays cacheable server-side; only the
 // per-installation taxonomy varies per request.
-func buildRequestBody(model, title, content string, jdCats []JDCat, siblingTitles []string, questions []automations.ModelQuestion) []byte {
+func buildRequestBody(model, title, content string, jdCats []JDCat, siblingTitles []string, vocabulary ClassificationVocabulary, questions []automations.ModelQuestion) []byte {
 	var cats strings.Builder
 	if len(jdCats) > 0 {
 		cats.WriteString("\n\nAvailable Johnny-Decimal categories as code – area › name: description (pick the most specific code from this list only; return 0 if none fit):\n")
@@ -626,6 +660,13 @@ func buildRequestBody(model, title, content string, jdCats []JDCat, siblingTitle
 			fmt.Fprintf(&siblings, "  • %s\n", t)
 		}
 	}
+	var vocabularyInput strings.Builder
+	vocabulary = boundedClassificationVocabulary(vocabulary)
+	if len(vocabulary.Correspondents) > 0 || len(vocabulary.Tags) > 0 {
+		input, _ := json.Marshal(map[string]any{"existing_archive_vocabulary": vocabulary})
+		vocabularyInput.WriteString("\n\nExisting archive vocabulary (JSON):\n")
+		vocabularyInput.Write(input)
+	}
 	system := systemPrompt
 	var automationInput strings.Builder
 	if len(questions) > 0 {
@@ -637,8 +678,8 @@ func buildRequestBody(model, title, content string, jdCats []JDCat, siblingTitle
 	msg := []map[string]any{
 		{"role": "system", "content": system},
 		{"role": "user", "content": fmt.Sprintf(
-			"Title: %s\n\nContent:\n%s%s%s%s\n\nRespond with a single JSON object matching the schema. No prose.",
-			title, content, cats.String(), siblings.String(), automationInput.String())},
+			"Title: %s\n\nContent:\n%s%s%s%s%s\n\nRespond with a single JSON object matching the schema. No prose.",
+			title, content, cats.String(), siblings.String(), vocabularyInput.String(), automationInput.String())},
 	}
 	payload := map[string]any{
 		"model":       model,
@@ -660,8 +701,10 @@ const systemPrompt = `You classify archival documents.
 
 Respond with a JSON object:
   title: 5-8 word document title (empty string if unclear)
-  correspondent: sender/issuer name (empty if unclear)
-  tags: 0-5 short lowercase labels like ["utilities","invoice"]
+  correspondent: sender/issuer name (empty if unclear). When the user supplies
+                 existing_archive_vocabulary, reuse an exact listed name when it fits
+  tags: 0-5 short lowercase labels like ["utilities","invoice"]. Reuse supplied
+        existing tag names when they fit; propose a new value only when none fits
   jd_category: pick the most specific code from the list of Johnny-Decimal
                categories the user provides; return 0 if no listed code fits
   confidence: 0.0-1.0 self-assessed confidence

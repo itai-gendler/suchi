@@ -660,7 +660,8 @@ func Run(ctx context.Context, opts Options) error {
 		}
 		started := time.Now()
 		result, err := probe.Classify(rctx, "Suchi connection test",
-			"Connection test document. No user document content is included.", nil, nil, nil)
+			"Connection test document. No user document content is included.", nil, nil,
+			llmclassifier.ClassificationVocabulary{}, nil)
 		if err != nil {
 			return api.LLMTestResult{}, err
 		}
