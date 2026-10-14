@@ -1,0 +1,10 @@
+scenarioKinds:
+- id: primary
+  name: Primary
+  description: An established successful outcome, including a supported alternative or unattended run.
+- id: validation
+  name: Validation
+  description: An established refusal of input, access, or admission without the forbidden effect.
+- id: edge
+  name: Edge
+  description: An established empty, conflicting, unavailable, failed, or interrupted outcome.
