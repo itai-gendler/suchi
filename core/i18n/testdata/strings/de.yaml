@@ -1,0 +1,40 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+meta.direction: ltr
+
+auth.login.title: Anmelden
+auth.login.subtitle: um mit suchi fortzufahren.
+auth.login.email: E-Mail
+auth.login.password: Passwort
+auth.login.submit: Anmelden
+auth.demo: Demo
+
+auth.setup.title: suchi einrichten
+auth.setup.body: Ersteinrichtung des Administrators. Das einmalige Token steht im Serverprotokoll als
+auth.setup.body_suffix: Fügen Sie es unten ein.
+auth.setup.token: Einrichtungstoken
+auth.setup.token_placeholder: Token aus dem Protokoll einfügen
+auth.setup.email: Administrator-E-Mail
+auth.setup.display_name: Anzeigename
+auth.setup.optional: (optional)
+auth.setup.password: Passwort
+auth.setup.submit: Administrator erstellen
+
+share.page_suffix: Freigabe
+share.link_expired: Link abgelaufen
+share.invalid_full: Dieser Freigabelink ist ungültig, abgelaufen oder wurde widerrufen. Bitten Sie den Absender um einen neuen Link.
+share.invalid_short: Dieser Freigabelink ist ungültig, abgelaufen oder wurde widerrufen.
+share.wrong_password: Falsches Passwort. Versuchen Sie es erneut.
+share.password: Passwort
+share.unlock: Entsperren
+share.document_number: "Dokument #%d"
+share.unknown_type: unbekannter Typ
+share.by_name_host_html: "Freigegeben von <strong>%s</strong> <span aria-hidden=\"true\">·</span> %s"
+share.by_name_html: "Freigegeben von <strong>%s</strong>"
+share.from_host_html: "Freigegeben über <strong>%s</strong>"
+share.shared_document: Freigegebenes Dokument
+share.available_until: "Verfügbar bis %s UTC"
+share.size_gb: "%.1f GB"
+share.size_mb: "%.1f MB"
+share.size_kb: "%.1f KB"
+share.size_b: "%d B"
+share.powered_by: Bereitgestellt von

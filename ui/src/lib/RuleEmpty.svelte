@@ -1,5 +1,6 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script>
+  import { t as translate } from "./i18n.svelte.js";
   let {
     title,
     description = '',
@@ -10,7 +11,7 @@
   } = $props()
 </script>
 
-<div class={`rule-empty ${className}`}>
+<div class={translate("ruleEmpty.ruleEmptyValue", { "className": className })}>
   <h3>{title}</h3>
   {#if description}<p>{description}</p>{/if}
   {#if patterns.length}

@@ -313,6 +313,12 @@ reports; it performs no update check.
 decryption passwords, and Mailboxes for capable members. **Profile** saves the
 display name/photo and shows the canonical sign-in email and method.
 
+**Language** defaults to the browser preference. Choosing a supported language
+saves it to the account and applies it across signed-in browsers; choosing
+**Automatic** resumes browser negotiation. Unsupported languages and missing
+messages fall back to English. The selection covers the SPA plus bootstrap,
+sign-in, setup, and public share pages.
+
 For a local-password account, **Change email** opens a focused dialog for the
 new address, exact confirmation, and current password. The change is immediate:
 Suchi sends no confirmation, recovery, or old-address notification email. It is
@@ -385,8 +391,8 @@ their definitions are read-only and cannot be deleted, while their per-document
 values remain editable.
 
 **Filing tree** owns presets, custom tree construction, and taxonomy
-import/export. Preview precedes taxonomy Apply; export explicitly offers starter
-rules or tree only. **What is included?** explains why neither replaces a [full
+import/export. Preview precedes taxonomy Apply; export contains the tree only.
+**What is included?** explains why it does not replace a [full
 backup](/backup-restore).
 
 **Advanced > Folder layouts** controls paths in the local rendered filesystem.
@@ -446,9 +452,9 @@ confirm **Blank** to start from scratch. That selection satisfies archive setup;
 all other configuration remains optional.
 
 **Import a file** sits beside preset cards and shares Settings' importer. Choose
-HuML/TOML or paste content, include/exclude starter rules, Preview and Apply.
+HuML/TOML or paste content, then Preview and Apply.
 Preview separates your tree from generated System/49, explains 00.00 and shows
-additions, preserved rules and collision choices. A blank tree needs confirmation;
+additions and collision choices. A blank tree needs confirmation;
 stale previews preserve input and require re-preview. Success refreshes archive state and
 the sidebar. Later applications merge, without resetting existing filing.
 Validation checks supported structure, not domain correctness or rule trust.

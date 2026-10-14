@@ -310,6 +310,9 @@ var handlerNumber = &Handler{
 var handlerMonetary = &Handler{
 	Name: "monetary",
 	Validate: func(_ json.RawMessage, raw any) (any, error) {
+		if text, ok := raw.(string); ok && strings.TrimSpace(text) != "" {
+			return ParseAmount(text)
+		}
 		return coerceFloat(raw)
 	},
 	Write: func(ctx context.Context, tx *sql.Tx, docID, fieldID int64, typed any) error {

@@ -122,33 +122,14 @@ func (s *Server) compileQueryWith(ctx context.Context, q sqlQueryer, raw string)
 	return searchquery.Compile(resolved), nil
 }
 
+// appendQueryPredicates adds text membership and filter predicates. Text
+// ranking stays with the callers that order by relevance.
 func appendQueryPredicates(where []string, args []any, plan searchquery.Plan) ([]string, []any) {
-	return appendQueryPredicatesWithMatch(where, args, plan,
-		`EXISTS (SELECT 1 FROM documents_fts WHERE documents_fts.rowid = d.id AND documents_fts MATCH ?)`)
-}
-
-// List queries must let MATCH drive the scan instead of probing FTS per document.
-func appendFTSDrivenQueryPredicates(where []string, args []any, plan searchquery.Plan) ([]string, []any) {
-	return appendQueryPredicatesWithMatch(where, args, plan, `documents_fts MATCH ?`)
-}
-
-func appendQueryPredicatesWithMatch(where []string, args []any, plan searchquery.Plan, matchSQL string) ([]string, []any) {
-	if plan.Match != "" {
-		where = append(where, matchSQL)
-		args = append(args, plan.Match)
-	}
-	for _, predicate := range plan.Predicates {
+	for _, predicate := range append(append([]searchquery.Predicate{}, plan.TextPredicates...), plan.Predicates...) {
 		where = append(where, predicate.SQL)
 		args = append(args, predicate.Args...)
 	}
 	return where, args
-}
-
-func queryDocumentFTSJoin(plan searchquery.Plan) string {
-	if plan.Match == "" {
-		return ""
-	}
-	return " JOIN documents_fts ON documents_fts.rowid = d.id"
 }
 
 func (s *Server) writeQueryError(w http.ResponseWriter, operation, raw string, err error) bool {

@@ -1,5 +1,6 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script>
+  import { t as translate } from "../lib/i18n.svelte.js";
   import { scopedHash as filingHref } from '../lib/systems.svelte.js'
   import Icon from '../lib/Icon.svelte'
   import { documentListHash } from '../lib/documentFilters.js'
@@ -10,28 +11,28 @@
   const paperTrailQuery = 'from:"Northstar Cloud" version:all'
 
   const cards = [
-    { title: 'Filter by language',
-      hint: 'German documents from Berlin. Full-text search is Unicode-aware.',
+    { title: translate("demo.filterByLanguage"),
+      hint: translate("demo.germanDocumentsFromBerlinFullTextSearchIs"),
       href: '#/search?lang=de',
       icon: 'search' },
-    { title: 'Browse the Johnny Decimal tree',
-      hint: 'Jump to Bank & card statements (category 21) and see the real filing structure.',
+    { title: translate("demo.browseTheJohnnyDecimalTree"),
+      hint: translate("demo.jumpToBankCardStatementsCategory21And"),
       jdCode: 21,
       icon: 'docs' },
-    { title: 'Similar documents',
-      hint: 'Open any utility bill; the Similar strip finds the rest of its household.',
+    { title: translate("demo.similarDocuments"),
+      hint: translate("demo.openAnyUtilityBillTheSimilarStripFinds"),
       href: '#/documents?q=tag%3Autilities',
       icon: 'docs' },
-    { title: 'Automations',
-      hint: 'Manifest-owned examples tag utility bills and invoices.',
+    { title: translate("demo.automations"),
+      hint: translate("demo.manifestOwnedExamplesTagUtilityBillsAndInvoices"),
       href: '#/automations',
       icon: 'zap' },
-    { title: 'Approvals inbox',
-      hint: 'Review requests and document suggestions share one durable inbox.',
+    { title: translate("demo.approvalsInbox"),
+      hint: translate("demo.reviewRequestsAndDocumentSuggestionsShareOneDurable"),
       href: '#/tasks',
       icon: 'tasks' },
-    { title: 'Upload something',
-      hint: 'Drop a PDF or image anywhere. Scratch uploads are cleared on reset.',
+    { title: translate("demo.uploadSomething"),
+      hint: translate("demo.dropAPdfOrImageAnywhereScratchUploads"),
       href: '#/upload',
       icon: 'inbox' },
   ]
@@ -44,19 +45,19 @@
 
 <div class="demo-wrap">
   <header class="demo-hero">
-    <span class="eyebrow">Live archive · resets daily</span>
-    <h1>Find the document. See what comes next.</h1>
-    <p class="lede">Search an anonymized archive, follow its deadlines back to the document, and trace a contract's paper trail. These examples open the real product so you can inspect every result.</p>
-    <div class="hero-note"><Icon name="help" size={14} /><span>Use the help icon in the top-right from any screen to return here.</span></div>
+    <span class="eyebrow">{translate("demo.liveArchiveResetsDaily")}</span>
+    <h1>{translate("demo.findTheDocumentSeeWhatComesNext")}</h1>
+    <p class="lede">{translate("demo.searchAnAnonymizedArchiveFollowItsDeadlines")}</p>
+    <div class="hero-note"><Icon name="help" size={14} /><span>{translate("demo.useTheHelpIconInTheTop")}</span></div>
   </header>
 
   <section class="guided" aria-labelledby="guided-title">
     <div class="section-head">
       <div>
-        <span class="eyebrow">Two-minute guided tour</span>
-        <h2 id="guided-title">From a precise search to a contract's paper trail</h2>
+        <span class="eyebrow">{translate("demo.twoMinuteGuidedTour")}</span>
+        <h2 id="guided-title">{translate("demo.fromAPreciseSearchToAContract")}</h2>
       </div>
-      <span class="tour-time">3 steps · anonymized data</span>
+      <span class="tour-time">{translate("demo.3StepsAnonymizedData")}</span>
     </div>
 
     <div class="tour-grid">
@@ -64,14 +65,14 @@
         <span class="step-number">01</span>
         <span class="step-icon"><Icon name="search" size={20} /></span>
         <div class="step-copy">
-          <span class="step-kicker">Rich query language</span>
-          <h3>Narrow the archive without building a filter form</h3>
-          <p>Combine correspondent and tag filters. Suggestions understand the same language in Search, Documents, Views, and MCP.</p>
+          <span class="step-kicker">{translate("demo.richQueryLanguage")}</span>
+          <h3>{translate("demo.narrowTheArchiveWithoutBuildingAFilter")}</h3>
+          <p>{translate("demo.combineCorrespondentAndTagFiltersSuggestionsUnderstand")}</p>
           <code>{northstarQuery}</code>
           <a class="btn primary tour-action" href={filingHref(`#/search?q=${encodeURIComponent(northstarQuery)}`)}>
-            Run the guided query <Icon name="chev" size={13} />
+            {translate("demo.runTheGuidedQuery")} <Icon name="chev" size={13} />
           </a>
-          <small>Notice the three related documents and the active filter tokens.</small>
+          <small>{translate("demo.noticeTheThreeRelatedDocumentsAndThe")}</small>
         </div>
       </article>
 
@@ -79,13 +80,13 @@
         <span class="step-number">02</span>
         <span class="step-icon"><Icon name="calendar" size={20} /></span>
         <div class="step-copy">
-          <span class="step-kicker">Document dates</span>
-          <h3>Find deadlines without opening every document</h3>
-          <p>See the Northstar renewal, quote expiry, and contract dates together—even across months and years. Open any entry to check the document text.</p>
+          <span class="step-kicker">{translate("demo.documentDates")}</span>
+          <h3>{translate("demo.findDeadlinesWithoutOpeningEveryDocument")}</h3>
+          <p>{translate("demo.seeTheNorthstarRenewalQuoteExpiryAnd")}</p>
           <a class="btn primary tour-action" href={filingHref("#/calendar")}>
-            Browse document dates <Icon name="chev" size={13} />
+            {translate("demo.browseDocumentDates")} <Icon name="chev" size={13} />
           </a>
-          <small>Read-only, curated examples. No live model is used in the public demo.</small>
+          <small>{translate("demo.readOnlyCuratedExamplesNoLiveModel")}</small>
         </div>
       </article>
 
@@ -93,14 +94,14 @@
         <span class="step-number">03</span>
         <span class="step-icon"><Icon name="docs" size={20} /></span>
         <div class="step-copy">
-          <span class="step-kicker">Versions and links</span>
-          <h3>Follow a contract's paper trail</h3>
-          <p>The renewal notice, quote and addendum each link to the Workspace agreement as its <b>Governing contract</b>. The quote was revised, so it keeps its earlier version.</p>
+          <span class="step-kicker">{translate("demo.versionsAndLinks")}</span>
+          <h3>{translate("demo.followAContractSPaperTrail")}</h3>
+          <p>{translate("demo.theRenewalNoticeQuoteAndAddendumEach")} <b>{translate("demo.governingContract")}</b>{translate("demo.theQuoteWasRevisedSoItKeeps")}</p>
           <code>{paperTrailQuery}</code>
           <a class="btn primary tour-action" href={filingHref(`#/search?q=${encodeURIComponent(paperTrailQuery)}`)}>
-            Trace the paper trail <Icon name="chev" size={13} />
+            {translate("demo.traceThePaperTrail")} <Icon name="chev" size={13} />
           </a>
-          <small>Open the agreement to see what links to it, or the quote to see its versions.</small>
+          <small>{translate("demo.openTheAgreementToSeeWhatLinks")}</small>
         </div>
       </article>
     </div>
@@ -109,8 +110,8 @@
   <section class="explore" aria-labelledby="explore-title">
     <div class="section-head compact">
       <div>
-        <span class="eyebrow">Explore more</span>
-        <h2 id="explore-title">The rest of the archive is yours</h2>
+        <span class="eyebrow">{translate("demo.exploreMore")}</span>
+        <h2 id="explore-title">{translate("demo.theRestOfTheArchiveIsYours")}</h2>
       </div>
     </div>
     <div class="grid">
@@ -127,17 +128,17 @@
     </div>
   </section>
 
-  <aside class="research-note" aria-label="Ask your documents on private installations">
+  <aside class="research-note" aria-label={translate("demo.askYourDocumentsOnPrivateInstallations")}>
     <Icon name="ask" size={20} />
     <div>
-      <b>Ask your documents · Available on your own installation</b>
-      <p>Ask questions and get answers with links to the documents used when you connect a model. Asking is disabled in this public demo.</p>
-      <a href="https://docs.suchi.page/archive-chat" target="_blank" rel="noopener">How Ask your documents works <Icon name="chev" size={13} /></a>
+      <b>{translate("demo.askYourDocumentsAvailableOnYourOwn")}</b>
+      <p>{translate("demo.askQuestionsAndGetAnswersWithLinks")}</p>
+      <a href="https://docs.suchi.page/archive-chat" target="_blank" rel="noopener">{translate("demo.howAskYourDocumentsWorks")} <Icon name="chev" size={13} /></a>
     </div>
   </aside>
 
   <footer>
-    <p>Want your own? See <a href="https://docs.suchi.page/getting-started" target="_blank" rel="noopener">install docs</a> — one binary or one container.</p>
+    <p>{translate("demo.wantYourOwnSee")} <a href="https://docs.suchi.page/getting-started" target="_blank" rel="noopener">{translate("demo.installDocs")}</a> {translate("demo.oneBinaryOrOneContainer")}</p>
   </footer>
 </div>
 

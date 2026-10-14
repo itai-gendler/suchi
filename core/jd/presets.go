@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 // Suchi Presets — the Archive Configuration filing-tree catalog. A Suchi Preset
-// is a preset following Suchi's Johnny.Decimal taxonomy: the starter
-// tree plus its seeded automations.
+// is a preset following Suchi's Johnny.Decimal taxonomy: a starter
+// filing tree. Presets carry no automations.
 //
 // The five built-ins live as `suchi-taxonomy/v1` files under
 // `core/jd/presets/*.toml`, embedded here via go:embed and parsed at
@@ -97,7 +97,7 @@ func loadPreset(slug string) (Preset, error) {
 
 // loadPresetFile returns the parsed PresetFile — the taxonomy-file
 // shape, before the jd.Preset bridge. Used by apply-preset so the
-// importer sees keywords + seeded automations directly.
+// importer sees the authored tree directly.
 func loadPresetFile(slug string) (*presetfile.PresetFile, error) {
 	raw, err := presetFS.ReadFile("presets/" + slug + ".toml")
 	if err != nil {
@@ -139,23 +139,17 @@ func bridge(pf *presetfile.PresetFile) Preset {
 }
 
 // ApplyPresetOpts selects an existing system and the authenticated actor.
-// ActorID zero is reserved for trusted local CLI use. Starter seeds are
-// included unless explicitly skipped.
+// ActorID zero is reserved for trusted local CLI use.
 type ApplyPresetOpts struct {
 	SystemID int64
 	ActorID  int64
-	// SkipSeeds drops the preset's starter keyword and explicit
-	// automations. Off by default so first-time operators get the
-	// "batteries included" experience; the filing-tree form exposes a toggle
-	// for operators who want to build their taxonomy from scratch.
-	SkipSeeds bool
 }
 
 // ApplyPreset previews and applies the reviewed transition contract for legacy
 // callers that intentionally selected one built-in preset.
 func ApplyPreset(ctx context.Context, d *db.DB, log *slog.Logger, id string, opts ApplyPresetOpts) error {
 	request := PresetChangeRequest{
-		PresetID: id, SkipSeeds: opts.SkipSeeds, ConfirmBlank: true,
+		PresetID: id, ConfirmBlank: true,
 		SystemID: opts.SystemID, ActorID: opts.ActorID,
 	}
 	preview, err := PreviewPresetChange(ctx, d, request)

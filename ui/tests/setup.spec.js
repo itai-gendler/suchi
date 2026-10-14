@@ -151,44 +151,38 @@ for (const switchAccount of [false, true]) {
       expect(uploadCredentials).toEqual(['cookie'])
       await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible()
     } else {
-      await expect(page.getByText('duplicate', { exact: true })).toBeVisible()
+      await expect(page.getByText(/^Already in the archive/)).toBeVisible()
       expect(uploadCredentials).toEqual(['cookie', 'cookie'])
       expect(await page.evaluate(() => localStorage.getItem('suchi.token'))).toBeNull()
     }
   })
 }
 
-for (const target of ['page', 'modal']) {
-  test(`uploads each ${target} drop once and refreshes the document list`, async ({ page }) => {
-    const options = { filingTreeChosen: true, documents: [] }
-    await mockAPI(page, options)
-    let uploads = 0
-    await page.route('**/api/documents/', async route => {
-      if (route.request().method() !== 'POST') return route.fallback()
-      uploads++
-      options.documents = [{ id: 41, title: 'Dropped receipt.pdf', created_at: 1780000000 }]
-      return route.fulfill({ json: { id: 41, deduplicated: true } })
-    })
-    await page.goto('/#/documents')
-    await expect(page.getByText('No documents match.', { exact: true })).toBeVisible()
-    if (target === 'modal') {
-      await page.getByRole('button', { name: 'Upload documents', exact: true }).click()
-      await expect(page.getByRole('dialog', { name: 'Upload documents' }).locator('.drop')).toBeVisible()
-    }
-    await page.evaluate(target => {
-      const transfer = new DataTransfer()
-      transfer.items.add(new File(['%PDF-test-one'], 'receipt.pdf', { type: 'application/pdf' }))
-      const dropTarget = target === 'modal' ? document.querySelector('.modal .drop') : window
-      dropTarget.dispatchEvent(new DragEvent('dragenter', { dataTransfer: transfer, bubbles: true, cancelable: true }))
-      dropTarget.dispatchEvent(new DragEvent('drop', { dataTransfer: transfer, bubbles: true, cancelable: true }))
-    }, target)
-    await expect(page.getByText('duplicate', { exact: true })).toBeVisible()
-    await expect(page.locator('.dropveil')).toHaveCount(0)
-    await page.getByRole('button', { name: 'Close upload' }).click()
-    await expect(page.getByRole('link', { name: /Dropped receipt.pdf/ })).toBeVisible()
-    expect(uploads).toBe(1)
+test('uploads a dropped file once on the upload page and refreshes the document list', async ({ page }) => {
+  const options = { filingTreeChosen: true, documents: [] }
+  await mockAPI(page, options)
+  let uploads = 0
+  await page.route('**/api/documents/', async route => {
+    if (route.request().method() !== 'POST') return route.fallback()
+    uploads++
+    options.documents = [{ id: 41, title: 'Dropped receipt.pdf', created_at: 1780000000 }]
+    return route.fulfill({ json: { id: 41, deduplicated: true } })
   })
-}
+  await page.goto('/#/documents')
+  await expect(page.getByText('No documents match.', { exact: true })).toBeVisible()
+  await page.evaluate(() => {
+    const transfer = new DataTransfer()
+    transfer.items.add(new File(['%PDF-test-one'], 'receipt.pdf', { type: 'application/pdf' }))
+    window.dispatchEvent(new DragEvent('dragenter', { dataTransfer: transfer, bubbles: true, cancelable: true }))
+    window.dispatchEvent(new DragEvent('drop', { dataTransfer: transfer, bubbles: true, cancelable: true }))
+  })
+  await expect(page).toHaveURL(/#\/upload$/)
+  await expect(page.getByText(/^Already in the archive/)).toBeVisible()
+  await expect(page.locator('.dropveil')).toHaveCount(0)
+  await page.goto('/#/documents')
+  await expect(page.getByRole('link', { name: /Dropped receipt.pdf/ })).toBeVisible()
+  expect(uploads).toBe(1)
+})
 
 for (const input of ['drop', 'picker']) {
   test('stops queued ' + input + ' uploads when the account changes', async ({ page }) => {
@@ -235,7 +229,6 @@ for (const input of ['drop', 'picker']) {
       })
     }
     await expect.poll(() => !!firstUpload).toBe(true)
-    if (input === 'drop') await page.getByRole('button', { name: 'Close upload' }).click()
     const navigation = page.getByRole('button', { name: 'Open navigation', exact: true })
     if (await navigation.isVisible()) await navigation.click()
     await page.getByRole('button', { name: 'Sign out', exact: true }).click()
@@ -293,11 +286,10 @@ function taxonomyPreview(overrides = {}) {
     name: 'Personal records', story: 'Keep identity paperwork together.',
     content_sha256: 'a'.repeat(64), state_hash: 'preview-state',
     mode: 'merge', areas_incoming: 1, categories_incoming: 1,
-    categories_to_add: [11], collisions: [], keywords_to_seed: 0, automations_to_seed: 1,
+    categories_to_add: [11], collisions: [],
     user_areas: [{ code: 10, name: 'Life admin', categories: [{ code: 11, name: 'Identity', description: 'Passports and identity cards.' }] }],
     generated_areas: [{ code: 40, name: 'System', categories: [{ code: 49, name: 'Inbox' }] }],
-    rules_to_add: ['File identity'], rules_preserved: [{ name: 'Local starter', enabled: false }],
-    rules_skipped: [], applied: false, index_refresh_pending: false,
+    applied: false, index_refresh_pending: false,
     ...overrides,
   }
 }
@@ -355,12 +347,11 @@ test('taxonomy import previews a named tree and refreshes setup and sidebar afte
   await expect(importer.getByText('Passports and identity cards.')).toBeVisible()
   await expect(importer.getByText('00–09 System index', { exact: true })).toBeVisible()
   await expect(importer.getByText('49 Inbox', { exact: true })).toBeVisible()
-  await expect(importer.getByText('Local starter — disabled (stays disabled)', { exact: true })).toBeVisible()
   await expect(page.locator('.setup-reminder-settings')).toBeVisible()
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
   await importer.getByRole('button', { name: 'Apply import', exact: true }).click()
   await expect(page.locator('.setup-reminder-settings')).toHaveCount(0)
-  expect(requests[0]).toMatchObject({ content: taxonomyContent, format: 'toml', apply: false, skip_seeds: false, remaps: {} })
+  expect(requests[0]).toMatchObject({ content: taxonomyContent, format: 'toml', apply: false, remaps: {} })
   expect(requests[1]).toMatchObject({ expected_state_hash: 'preview-state', apply: true, format: 'toml' })
   await page.goto('/#/dashboard')
   if ((page.viewportSize()?.width || 0) <= 860) await page.getByRole('button', { name: 'Open navigation' }).click()
@@ -396,8 +387,6 @@ test('taxonomy import requires explicit previewed collision choices and retains 
       return taxonomyPreview({
         collisions: [{ code: 11, existing: 'Old identity', incoming: 'Identity', proposed_code: 12, resolved }],
         categories_to_add: payload.remaps['11'] === 12 ? [12] : [],
-        rules_to_add: [],
-        rules_skipped: payload.remaps['11'] === 0 ? [{ name: 'File identity', reason: 'Depends on skipped category 11' }] : [],
         state_hash: `collision-${requests.length}`,
       })
     },
@@ -416,13 +405,10 @@ test('taxonomy import requires explicit previewed collision choices and retains 
   await expect(importer.getByRole('button', { name: 'Apply import', exact: true })).toBeEnabled()
   expect(requests[1].remaps).toEqual({ 11: 12 })
   await importer.getByLabel('Choice for 11').selectOption('0')
-  await importer.getByRole('button', { name: 'Preview', exact: true }).click()
-  await expect(importer.getByText('File identity — Depends on skipped category 11')).toBeVisible()
-  await importer.getByLabel('Include starter rules').uncheck()
   await expect(importer.getByLabel('Choice for 11')).toHaveValue('0')
   await expect(importer.getByRole('button', { name: 'Apply import', exact: true })).toBeDisabled()
   await importer.getByRole('button', { name: 'Preview', exact: true }).click()
-  expect(requests[3]).toMatchObject({ remaps: { 11: 0 }, skip_seeds: true })
+  expect(requests[2]).toMatchObject({ remaps: { 11: 0 } })
   await importer.getByRole('combobox', { name: 'File format', exact: true }).selectOption('huml')
   await expect(importer.getByRole('button', { name: 'Apply import', exact: true })).toBeDisabled()
   await importer.getByLabel('Paste content').fill(taxonomyContent + '\n')
@@ -463,7 +449,7 @@ test('taxonomy import confirms blank trees in a native modal before applying', a
   await mockAPI(page, {
     taxonomyImport: async payload => {
       requests.push(payload)
-      return taxonomyPreview({ categories_incoming: 0, categories_to_add: [], user_areas: [], rules_to_add: [] })
+      return taxonomyPreview({ categories_incoming: 0, categories_to_add: [], user_areas: [] })
     },
   })
   const importer = await openTaxonomyImport(page)
@@ -521,7 +507,6 @@ test('taxonomy import disables conflicting requests and discards a preview after
   await expect.poll(() => !!pending).toBe(true)
   await expect(importer.getByLabel('Paste content')).toBeDisabled()
   await expect(importer.getByRole('combobox', { name: 'File format', exact: true })).toBeDisabled()
-  await expect(importer.getByLabel('Include starter rules')).toBeDisabled()
   await expect(page.getByRole('button', { name: 'Close', exact: true })).toBeDisabled()
   await page.goto('/#/dashboard')
   await pending.fulfill({ json: taxonomyPreview() }).catch(() => {})
@@ -530,28 +515,20 @@ test('taxonomy import disables conflicting requests and discards a preview after
   await expect(nextImporter.getByRole('button', { name: 'Apply import', exact: true })).toBeDisabled()
 })
 
-test('taxonomy settings offers explicit starter and tree-only exports without silent fallback', async ({ page }) => {
+test('taxonomy settings exports the filing tree', async ({ page }) => {
   const exports = []
   await mockAPI(page, { filingTreeChosen: true })
   await page.route('**/api/admin/taxonomy/export?**', async route => {
-    const url = new URL(route.request().url())
-    exports.push(Object.fromEntries(url.searchParams))
-    if (url.searchParams.get('skip_seeds') === 'false') {
-      await route.fulfill({ status: 400, json: { error: 'Disabled starter cannot be exported. Use tree-only export.' } })
-    } else {
-      await route.fulfill({ contentType: 'text/plain', body: taxonomyContent })
-    }
+    exports.push(Object.fromEntries(new URL(route.request().url()).searchParams))
+    await route.fulfill({ contentType: 'text/plain', body: taxonomyContent })
   })
   await page.goto('/#/settings?tab=archive&section=filing-tree')
   await page.getByRole('button', { name: 'Import or export' }).click()
   await page.getByRole('combobox', { name: 'File format', exact: true }).selectOption('toml')
-  await page.getByRole('button', { name: 'Export with starter rules' }).click()
-  await expect(page.getByText('Disabled starter cannot be exported. Use tree-only export.', { exact: true })).toBeVisible()
-  expect(exports).toEqual([{ format: 'toml', skip_seeds: 'false' }])
   const download = page.waitForEvent('download')
-  await page.getByRole('button', { name: 'Export tree only' }).click()
-  expect((await download).suggestedFilename()).toBe('archive-tree.toml')
-  expect(exports[1]).toEqual({ format: 'toml', skip_seeds: 'true' })
+  await page.getByRole('button', { name: 'Export tree' }).click()
+  expect((await download).suggestedFilename()).toBe('archive.toml')
+  expect(exports).toEqual([{ format: 'toml' }])
   await page.getByRole('button', { name: 'Import file' }).click()
   await expect(page.getByRole('region', { name: 'Import taxonomy', exact: true })).toBeVisible()
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
@@ -639,20 +616,21 @@ async function mockAPI(page, options = {}) {
       return
     }
     if (path === '/api/jd/categories/' && options.taxonomyFailure) {
-      await route.fulfill({ status: 500, json: { error: 'taxonomy unavailable' } })
+      await route.fulfill({ status: 503, json: { error: 'taxonomy unavailable' } })
       return
     }
     if (path === '/api/admin/settings/llm' && request.method() === 'PATCH' &&
         (request.postDataJSON().auto_apply !== undefined ? options.applicationModeSaveFailure : options.researchContextSaveFailure)) {
       await route.fulfill({
-        status: 500,
+        status: 503,
         json: { code: 'save_failed', error: options.failureMessage || 'reading amount unavailable' },
       })
       return
     }
     if (options.failPaths?.includes(path)) {
       await route.fulfill({
-        status: options.failureStatus || 500,
+        // 500 and 502 bodies are generic; a 503 carries the server's reason.
+        status: options.failureStatus || 503,
         json: {
           code: options.failureCode,
           error: options.failureMessage || 'forced request failure',
@@ -1929,7 +1907,7 @@ test('creates, previews, and deletes Advanced folder layouts', async ({ page }) 
   await expect(saved.getByText('Imported folders', { exact: true })).toHaveCount(0)
 })
 
-test('centers custom automations ahead of collapsed filing-tree rules', async ({ page }) => {
+test('lists every automation in run order', async ({ page }) => {
   await mockAPI(page, {
     automations: [
       {
@@ -1938,7 +1916,7 @@ test('centers custom automations ahead of collapsed filing-tree rules', async ({
         actions: [{ id: 1, type: 'assign_tags', params: { tag_ids: [] } }],
       },
       {
-        id: 19, name: 'Built-in utility filing', enabled: true, order: 1, preset_slug: 'household',
+        id: 19, name: 'File utility bills', enabled: true, order: 1,
         triggers: [{ type: 2 }],
         actions: [{ id: 2, type: 'assign_tags', params: { tag_ids: [] } }],
       },
@@ -1948,18 +1926,7 @@ test('centers custom automations ahead of collapsed filing-tree rules', async ({
 
   await expect(page.getByRole('button', { name: 'New automation' })).toBeVisible()
   await expect(page.locator('.automations-card').getByRole('heading', { name: 'Automations', exact: true })).toBeVisible()
-  await expect(page.getByText('Route tax records', { exact: true })).toBeVisible()
-  await expect(page.locator('#automation-19')).toHaveCount(0)
-
-  const customPanel = page.locator('.automations-card')
-  const builtIns = page.locator('.builtins')
-  await expect.poll(async () => {
-    const [customBox, builtInBox] = await Promise.all([customPanel.boundingBox(), builtIns.boundingBox()])
-    return customBox && builtInBox ? builtInBox.y > customBox.y + customBox.height : false
-  }).toBe(true)
-
-  await page.getByRole('button', { name: /Built-in automations/ }).click()
-  await expect(page.locator('#automation-19 .rule-title').filter({ hasText: 'Built-in utility filing' })).toBeVisible()
+  await expect(page.locator('.automation-list .rule-title')).toHaveText(['Route tax records', 'File utility bills'])
 })
 
 test('opens the sentence builder from a starter pattern', async ({ page }) => {
@@ -2143,7 +2110,7 @@ test('requires review and a successful apply before Blank satisfies archive setu
   await (await openBlankReview()).click()
   await expect(page.getByText(options.failureMessage, { exact: true })).toBeVisible()
   await page.goto('/#/dashboard')
-  await expect(page.locator('.setup-reminder').filter({ visible: true })).toHaveCount(1)
+  await expect(page.getByText('Choose your filing tree', { exact: true })).toBeVisible()
 
   options.failPaths.length = 0
   await (await openBlankReview()).click()
@@ -2209,7 +2176,7 @@ test('keeps the filing index neutral until a preset is applied', async ({ page }
 test('uses the demo category database id in document links', async ({ page }) => {
   await mockAPI(page, {
     jdCategories: [{
-      id: 6, code: 22, name: 'Money and tax', area_code: 20, area_name: 'Money',
+      id: 6, code: 21, name: 'Bank & card statements', area_code: 20, area_name: 'Money',
     }],
   })
   await page.goto('/#/demo')
@@ -2945,7 +2912,7 @@ test('loads recent dashboard documents once per navigation', async ({ page }) =>
   })
   await mockAPI(page)
   await page.goto('/#/dashboard')
-  await expect(page.getByText('No recent documents.')).toBeVisible()
+  await expect(page.getByText('Nothing here yet.')).toBeVisible()
   await expect.poll(() => recentRequests).toBe(1)
   await page.waitForTimeout(150)
   expect(recentRequests).toBe(1)
@@ -4291,7 +4258,7 @@ test('saves the display name through supported profile fields and keeps email re
   await expect(profile.getByLabel('Display name', { exact: true })).toHaveValue('Updated name')
   await expect(profile.getByLabel('Email', { exact: true })).toHaveValue('admin@example.test')
   await expect(profile.getByLabel('Email', { exact: true })).toHaveAttribute('readonly', '')
-  expect(changes).toEqual([{ display_name: 'Updated name' }])
+  expect(changes).toEqual([{ display_name: 'Updated name', locale: '' }])
   expect(pageErrors).toEqual([])
 })
 
@@ -4435,8 +4402,9 @@ test('uses provider reauthentication for OIDC-managed email and consumes fixed n
   }
 
   await page.goto('/?account_notice=untrusted-detail#/settings')
+  // Wait for the app to consume the notice before checking no toast appeared.
+  await expect.poll(() => new URL(page.url()).searchParams.has('account_notice')).toBe(false)
   await expect(page.locator('.toast[role="status"]')).toHaveCount(0)
-  expect(new URL(page.url()).searchParams.has('account_notice')).toBe(false)
   expect(new URL(page.url()).hash).toBe('#/settings')
 })
 
@@ -5072,7 +5040,7 @@ test('shows affected document titles in rescan details', async ({ page }) => {
   await page.goto('/#/tasks')
 
   await page.getByText('Affected documents', { exact: true }).click()
-  await expect(page.getByText('Text extraction has improved. 5 documents can be updated.', { exact: true })).toBeVisible()
+  await expect(page.getByText('Document text has improved. 5 documents can be updated.', { exact: true })).toBeVisible()
   await expect(page.getByText(/can be updated to v\d/)).toHaveCount(0)
   await expect(page.getByText('Affected documents')).toBeVisible()
   await expect(page.getByRole('link', { name: 'SBI account statement August 2026.pdf' })).toHaveAttribute('href', '#/doc/18')
@@ -5532,7 +5500,8 @@ test('clearing an active document question invalidates it without restoring text
   await expect(page.getByText('Request canceled.')).toHaveCount(0)
 })
 
-test('shows the platform search shortcut and focuses the Omnibox', async ({ page }) => {
+test('shows the platform search shortcut and focuses the Omnibox', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name === 'mobile', 'desktop hint; the test resizes to check mobile hiding')
   await mockAPI(page, { filingTreeChosen: true })
   await page.goto('/#/dashboard')
 
@@ -5552,30 +5521,12 @@ test('shows the platform search shortcut and focuses the Omnibox', async ({ page
   await expect(hint).toBeHidden()
 })
 
-test('makes the upload modal inert, focused, trapped, and dismissible', async ({ page }) => {
+test('opens the upload page from the top bar', async ({ page }) => {
   await mockAPI(page, { filingTreeChosen: true })
   await page.goto('/#/dashboard')
-  const opener = page.getByRole('button', { name: 'Upload documents' })
-  await opener.focus()
-  await opener.click()
-  const dialog = page.getByRole('dialog', { name: 'Upload documents' })
-  await expect(dialog).toBeVisible()
-  await expect(dialog).toBeFocused()
-  await expect(page.locator('.shell')).toHaveAttribute('inert', '')
-  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+k' : 'Control+k')
-  await expect(page.getByLabel('Search or run a command')).not.toBeFocused()
-  const close = page.getByRole('button', { name: 'Close upload' })
-  const drop = dialog.getByRole('button', { name: 'Upload documents' })
-  await expect(drop).toBeVisible()
-  await close.focus()
-  await page.keyboard.press('Shift+Tab')
-  await expect(drop).toBeFocused()
-  await page.keyboard.press('Tab')
-  await expect(close).toBeFocused()
-  await page.keyboard.press('Escape')
-  await expect(dialog).toHaveCount(0)
-  await expect(opener).toBeFocused()
-  await expect(page.locator('.shell')).not.toHaveAttribute('inert', '')
+  await page.getByRole('button', { name: 'Upload documents', exact: true }).click()
+  await expect(page).toHaveURL(/#\/upload$/)
+  await expect(page.getByRole('button', { name: 'Add files', exact: true })).toBeVisible()
 })
 
 test('reviews dates in a responsive grid with visible actions', async ({ page }, testInfo) => {
@@ -7063,7 +7014,7 @@ test('Account subscription connects with device code and requires egress and mod
   await expect(testConnection).toBeEnabled()
   await expect(saveModel).toBeDisabled()
   await testConnection.click()
-  await expect(page.getByRole('status').filter({ hasText: 'Responded in 12 ms' })).toContainText('self-reported confidence 91%')
+  await expect(page.getByRole('status').filter({ hasText: 'Responded in 12 ms' })).toContainText('Model confidence 91% (self-reported)')
   await expect(saveModel).toBeEnabled()
   expect(llmTestRequests[0]).toMatchObject({ subscription_provider: 'openai_chatgpt', endpoint_url: '', model: 'subscription-model', api_key: '', clear_api_key: false, egress_ack: true })
   await page.getByRole('combobox', { name: 'Model', exact: true }).selectOption('other-model')

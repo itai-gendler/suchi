@@ -1,79 +1,81 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import { t } from './i18n.svelte.js'
+
 
 export const TAGS_SETTINGS_HASH = '#/settings?tab=archive&section=metadata&metadata=tags'
 export const CUSTOM_FIELDS_SETTINGS_HASH = '#/settings?tab=archive&section=metadata&metadata=custom_fields'
 
 export const FILING_TREE_SETTINGS_ITEM = {
-  name: 'filing-tree', label: 'Filing tree', icon: 'docs',
-  description: 'Choose, compose, review, import, or export the structure used to file documents.',
+  name: 'filing-tree', get label() { return t('configuration.filingTree.label') }, icon: 'docs',
+  get description() { return t('configuration.filingTree.description') },
   href: '#/settings?tab=archive&section=filing-tree',
 }
 
 export const ARCHIVE_SETTINGS_GROUPS = [
   {
     name: 'structure',
-    label: 'People and access',
-    description: 'Who can use the archive and how document metadata is managed.',
+    get label() { return t('configuration.structure.label') },
+    get description() { return t('configuration.structure.description') },
     items: [
       {
-        name: 'users', label: 'People', icon: 'shield',
-        description: 'Manage users, groups, roles, and archive access.',
+        name: 'users', get label() { return t('configuration.users.label') }, icon: 'shield',
+        get description() { return t('configuration.users.description') },
         href: '#/settings?tab=archive&section=users',
       },
       {
-        name: 'metadata', label: 'Metadata', icon: 'tag',
-        description: 'Manage document labels, correspondents, and custom fields.',
+        name: 'metadata', get label() { return t('configuration.metadata.label') }, icon: 'tag',
+        get description() { return t('configuration.metadata.description') },
         href: '#/settings?tab=archive&section=metadata',
       },
     ],
   },
   {
     name: 'intake',
-    label: 'Document intake',
-    description: 'Where new documents enter Suchi.',
+    get label() { return t('configuration.intake.label') },
+    get description() { return t('configuration.intake.description') },
     items: [
       {
-        name: 'sources', label: 'Watched folder', icon: 'upload',
-        description: 'Choose a server folder to watch and who owns its documents.',
+        name: 'sources', get label() { return t('configuration.sources.label') }, icon: 'upload',
+        get description() { return t('configuration.sources.description') },
         href: '#/settings?tab=archive&section=sources',
       },
       {
-        name: 'mail', label: 'Email intake', icon: 'mail',
-        description: 'Connect mailboxes and choose which messages become documents.',
+        name: 'mail', get label() { return t('configuration.mail.label') }, icon: 'mail',
+        get description() { return t('configuration.mail.description') },
         href: '#/settings?tab=archive&section=mail',
       },
     ],
   },
   {
     name: 'processing',
-    label: 'Processing',
-    description: 'How incoming documents are understood and filed.',
+    get label() { return t('configuration.processing.label') },
+    get description() { return t('configuration.processing.description') },
     items: [
       {
-        name: 'llm', label: 'Classification', icon: 'zap',
-        description: 'Configure archive learning and an optional document model.',
+        name: 'llm', get label() { return t('configuration.classification.label') }, icon: 'zap',
+        get description() { return t('configuration.classification.description') },
         href: '#/settings?tab=archive&section=llm',
       },
       {
-        name: 'automations', label: 'Automations', icon: 'zap',
-        description: 'Build rules that tag, title, and file incoming documents.',
+        name: 'automations', get label() { return t('configuration.automations.label') }, icon: 'zap',
+        get description() { return t('configuration.automations.description') },
         href: '#/settings?tab=archive&section=automations',
       },
     ],
   },
   {
     name: 'advanced',
-    label: 'Advanced',
-    description: 'Local filesystem output, OCR, and archive recovery settings.',
+    get label() { return t('configuration.advanced.label') },
+    get description() { return t('configuration.advanced.description') },
     items: [
       {
-        name: 'folder-layouts', label: 'Folder layouts', icon: 'docs',
-        description: 'Control how documents appear in the local rendered filesystem.',
+        name: 'folder-layouts', get label() { return t('configuration.folderLayouts.label') }, icon: 'docs',
+        get description() { return t('configuration.folderLayouts.description') },
         href: '#/settings?tab=archive&section=folder-layouts',
       },
       {
-        name: 'preferences', label: 'OCR and backups', icon: 'settings',
-        description: 'Set OCR languages and the automatic backup schedule.',
+        name: 'preferences', get label() { return t('configuration.preferences.label') }, icon: 'settings',
+        get description() { return t('configuration.preferences.description') },
         href: '#/settings?tab=archive&section=preferences',
       },
     ],

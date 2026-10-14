@@ -16,7 +16,6 @@ equal names/codes in S01 and S02 do not collide. Category assignment cannot tran
 a document. Owner assignment requires an active member/admin of that system.
 Actorless custom-field document-link actions may target only live same-system
 documents; authenticated API links require separate source/target authorization.
-Disabled originals and edited forks survive reimport independently in each system.
 
 ## Triggers
 
@@ -40,9 +39,8 @@ selected custom field's declared type. The API continues to persist their IDs.
 A layout that uses the previous archive number fails atomically for a document
 without that compatibility value.
 
-The screen keeps custom rules in the main centered list and places filing-tree
-rules in a separate collapsed **Built-in automations** section below it. The JSON
-view remains available for inspecting the complete automation.
+The screen lists every rule in run order. The JSON view remains available for
+inspecting the complete automation.
 
 The server exposes the current builder vocabulary and parameter schemas at
 `GET /api/automations/schema`. Actions run in order inside one transaction;
@@ -63,34 +61,81 @@ skips a title renamed or approved by a person. On the document screen, **Let
 Suchi rename this** releases that protection without immediately changing the
 text.
 
-Example:
-
-```json
-{
-  "name": "Acme invoices",
-  "order": 20,
-  "enabled": true,
-  "triggers": [
-    {
-      "type": 2,
-      "filter_has_correspondent": 12,
-      "filter_content_matching": "invoice|bill"
-    }
-  ],
-  "actions": [
-    { "type": "assign_tags", "params": { "tag_ids": [7] } },
-    {
-      "type": "assign_title",
-      "params": { "template": "Acme invoice {{date}}" }
-    }
-  ]
-}
-```
-
 Title templates support `{{title}}`, `{{correspondent}}`, `{{tags}}`, and
 `{{date}}`. Unknown placeholders remain visible so a typo does not silently
 erase text. The visual builder resolves names to IDs; direct JSON action
 parameters continue to use IDs.
+
+## Examples
+
+These build from one filter and one action up to a mail-intake rule. The
+[classifier examples](#ask-the-classifier) below add a model-answered question.
+IDs refer to your own tags, correspondents and categories. Title and content
+patterns are case-insensitive regular expressions; path, filename, sender and
+subject filters are globs.
+
+### File utility bills
+
+One content filter, one category.
+
+```json
+{
+  "name": "File utility bills",
+  "enabled": true,
+  "triggers": [
+    { "type": 2, "filter_content_matching": "electricity bill|water bill|gas bill" }
+  ],
+  "actions": [
+    { "type": "assign_jd_category", "params": { "jd_category_id": 51 } }
+  ]
+}
+```
+
+### Invoices in any language
+
+Patterns match the extracted text as written, so one rule can cover every
+language your documents arrive in. Japanese and Chinese have no spaces between
+words, so a term matches wherever it appears.
+
+```json
+{
+  "name": "Invoices in English, German and Japanese",
+  "enabled": true,
+  "triggers": [
+    { "type": 2, "filter_content_matching": "invoice|rechnung|請求書" }
+  ],
+  "actions": [
+    { "type": "assign_tags", "params": { "tag_ids": [7] } },
+    { "type": "assign_jd_category", "params": { "jd_category_id": 32 } }
+  ]
+}
+```
+
+### Supplier mail with attachments
+
+Mail filters are available while the source message is known, at consumption.
+Every filter on one trigger must match; actions run in order in one transaction.
+
+```json
+{
+  "name": "Acme invoices by mail",
+  "enabled": true,
+  "triggers": [
+    {
+      "type": 1,
+      "filter_email_from": "*@acme.example",
+      "filter_email_subject": "*Invoice*",
+      "filter_email_has_attachment": true
+    }
+  ],
+  "actions": [
+    { "type": "assign_correspondent", "params": { "correspondent_id": 12 } },
+    { "type": "assign_tags", "params": { "tag_ids": [7, 9] } },
+    { "type": "assign_title", "params": { "template": "Acme invoice {{date}}" } },
+    { "type": "assign_jd_category", "params": { "jd_category_id": 32 } }
+  ]
+}
+```
 
 ## Ask the classifier
 
@@ -266,28 +311,13 @@ Explicitly adopted or rule-assigned tags remain ordinary rule input. This does
 not introduce model-authored external actions or change explicitly configured
 internal automation behavior. See [LLM classifier](/llm-classifier).
 
-## Preset ownership
+## No built-in rules
 
-Filing-tree presets seed a small starter set of automations. Editing a
-preset-owned automation creates a user-owned copy and disables the original.
-Reapplying a preset preserves the copy and the disabled original. Existing rule
-names remain local; imports report preserved/skipped rows rather than replacing
-them. The Automations screen keeps preset-owned entries in a collapsed
-**Built-in automations** list so user-created rules remain easy to scan.
-
-Taxonomy v1 imports only its explicit portable action subset, not every runtime
-action. Category skips skip whole dependent starters. Default taxonomy exports
-preserve supported preset-owned rule identity/order as named explicit starters,
-including keyword-generated rules; disabled/unrepresentable behavior fails.
-Tree-only export omits all starters. User-owned rules/forks require a complete
-backup. See [Filing trees](/jd#optional-starters).
-
-Preset category keywords match case-insensitive whole words or phrases, not
-substrings: `lease` matches a lease document but not `please`. Migration `0002`
-repairs existing generated preset keyword rules. User-owned copies and other
-regex filters retain their explicit matching semantics. This correction does
-not refile previously processed documents. Review incorrect categories before relying on archive
-matching, which can otherwise reuse those documents as examples.
+Filing trees carry no automations; every rule belongs to the archive that
+created it. Upgrading removes the rules earlier presets installed. A built-in
+rule you edited was already saved as your own copy, so it stays. Taxonomy
+import and export cover the filing tree only; rules move with a
+[complete backup](/backup-restore).
 
 ## API
 

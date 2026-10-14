@@ -711,6 +711,8 @@ Respond with a JSON object:
   reasoning: one short sentence explaining low confidence, else empty
   language: dominant language as an ISO-639-1 code ("en","de","kn"),
             or a short CSV for mixed content ("de,en"); "" if unclear
+  Write title, correspondent, tags, and reasoning in the dominant document
+  language. Keep JSON field names, date roles, and category codes exactly as specified.
   dates: 0-3 important actionable or lifecycle dates. Each item has:
          role: issued|due|start|end|expiry|renewal|service|other
          value: normalized YYYY-MM-DD (use day 01 for month/year precision)

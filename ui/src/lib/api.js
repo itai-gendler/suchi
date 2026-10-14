@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 import { systems, captureScope, scopeCurrent, scopedURL, isScopedAPI, unavailableSystem } from './systems.svelte.js'
+import { t } from './i18n.svelte.js'
 
 // All browser credentials are HttpOnly cookies, including demo sessions.
 let sessionRevision = 0
@@ -14,7 +15,22 @@ function resetSessionRequests() {
 }
 
 class ApiError extends Error {
-  constructor(status, code, message, data) { super(message || code || `HTTP ${status}`); this.status = status; this.code = code; this.data = data }
+  constructor(status, code, data) {
+    const key = status === 401 ? 'apiError.unauthorized'
+      : status === 403 ? 'apiError.forbidden'
+        : status === 404 ? 'apiError.notFound'
+          : status === 409 ? 'apiError.conflict'
+            : status === 429 ? 'apiError.rateLimited'
+              : status >= 500 ? 'apiError.server'
+                : 'apiError.requestFailed'
+    // Server text is actionable (validation paths, 503 setup hints). For 500
+    // and 502 the server sends only generic text, so the localized
+    // status text replaces it.
+    super(status !== 500 && status !== 502 && (data?.error || data?.message) || t(key, { status }))
+    this.status = status
+    this.code = code
+    this.data = data
+  }
 }
 
 async function req(method, path, body, opts = {}) {
@@ -33,7 +49,7 @@ async function req(method, path, body, opts = {}) {
     ? await r.text()
     : await r.json().catch(() => null)
   if (revision !== sessionRevision || (!opts.keepScope && !scopeCurrent(scope))) {
-    throw new DOMException('The account or filing system changed', 'AbortError')
+    throw new DOMException(t('apiError.contextChanged'), 'AbortError')
   }
   if (data?.code === 'system_unavailable' && scoped && scopeCurrent(scope)) {
     // Continuing uploads and pairing cleanup may still target the previous system.
@@ -49,8 +65,7 @@ async function req(method, path, body, opts = {}) {
     }
   }
   if (r.status === 204) return null
-  if (!r.ok) throw new ApiError(r.status, data?.code,
-    data?.message || data?.detail || data?.error, data)
+  if (!r.ok) throw new ApiError(r.status, data?.code, data)
   return data
 }
 
@@ -145,8 +160,8 @@ export const resolveIntelligence = (body) => api.post('/api/intelligence/resolve
 
 // suchi-taxonomy/v1 admin import/export.
 export const importTaxonomy = (b, signal) => req('POST', '/api/admin/taxonomy/import', b, { signal })
-export const exportTaxonomy = (format = 'huml', skipSeeds = false) =>
-  req('GET', `/api/admin/taxonomy/export${qs({ format, skip_seeds: skipSeeds })}`,
+export const exportTaxonomy = (format = 'huml') =>
+  req('GET', `/api/admin/taxonomy/export${qs({ format })}`,
     undefined, { responseType: 'text' })
 
 export const listJDCategories = (params) => singleFlightGet(`/api/jd/categories/${qs({ page_size: 500, ...params })}`)

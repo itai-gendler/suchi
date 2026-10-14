@@ -1,5 +1,7 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script>
+  import { t as translate } from "../lib/i18n.svelte.js";
+  import { plural } from '../lib/format.js'
   import { onMount, tick } from 'svelte'
   import { captureScope } from '../lib/systems.svelte.js'
   import {
@@ -20,7 +22,6 @@
   let currentAreas = $state([])
   let selectedPresetID = $state('solo')
   let selectedSetIDs = $state([])
-  let includeSeeds = $state(true)
   let refile = $state(false)
   let confirmBlank = $state(false)
   let preview = $state(null)
@@ -77,7 +78,7 @@
       selectedSetIDs = [...currentSetIDs]
       currentAreas = groupCategories(categories?.results || categories || [])
     } catch (ex) {
-      error = ex.message || 'Could not load the filing tree.'
+      error = ex.message || translate("filingTreeSettings.couldNotLoadTheFilingTree")
     } finally {
       loading = false
     }
@@ -107,7 +108,6 @@
 
   function baseBody() {
     const body = {
-      include_seeds: includeSeeds,
       confirm_blank: confirmBlank,
       refile,
       replacements: {},
@@ -153,7 +153,7 @@
       reviewSection?.focus({ preventScroll: true })
       reviewRevealed = true
     } catch (ex) {
-      error = ex.message || 'Could not preview this filing-tree change.'
+      error = ex.message || translate("filingTreeSettings.couldNotPreviewThisFilingTreeChange")
     } finally {
       busy = false
     }
@@ -176,7 +176,7 @@
         preview = reviewed
         seedCollisionChoices(reviewed)
         reviewDirty = true
-        error = 'Choose how to handle every category conflict.'
+        error = translate("filingTreeSettings.chooseHowToHandleEveryCategoryConflict")
         return
       }
       preview = reviewed
@@ -187,11 +187,11 @@
       await Promise.all([loadCurrentTree(), onTaxonomyChanged?.()])
       currentPreset = result.preset_id
       currentSetIDs = result.set_ids || []
-      notify?.('Filing tree updated')
+      notify?.(translate("filingTreeSettings.filingTreeUpdated2"))
     } catch (ex) {
       error = ex.code === 'stale_preview'
-        ? 'The archive changed after the preview. Review the change again.'
-        : (ex.message || 'Could not update the filing tree.')
+        ? translate("filingTreeSettings.theArchiveChangedAfterThePreviewReviewThe")
+        : (ex.message || translate("filingTreeSettings.couldNotUpdateTheFilingTree"))
     } finally {
       busy = false
     }
@@ -206,20 +206,20 @@
     await Promise.all([load(), onTaxonomyChanged?.()])
   }
 
-  async function doExport(skipSeeds) {
+  async function doExport() {
     if (exportBusy || importBusy) return
     exportBusy = true
     try {
-      const text = await exportTaxonomy(exportFormat, skipSeeds)
+      const text = await exportTaxonomy(exportFormat)
       const a = document.createElement('a')
       a.href = URL.createObjectURL(new Blob([text], { type: 'text/plain' }))
       const code = captureScope().code
-      a.download = `${code ? `${code}.taxonomy` : `archive${skipSeeds ? '-tree' : ''}`}.${exportFormat}`
+      a.download = `${code ? `${code}.taxonomy` : 'archive'}.${exportFormat}`
       a.click()
       setTimeout(() => URL.revokeObjectURL(a.href), 10_000)
-      notify?.(`Exported ${a.download}`)
+      notify?.(translate("filingTreeSettings.exportedValue", { "download": a.download }))
     } catch (ex) {
-      notify?.(ex.message || 'Export failed')
+      notify?.(ex.message || translate("filingTreeSettings.exportFailed"))
     } finally {
       exportBusy = false
     }
@@ -229,44 +229,43 @@
 <section class="filing-workspace" aria-labelledby="filing-tree-heading">
   <header class="workspace-heading">
     <div>
-      <span class="eyebrow">Archive structure</span>
-      <h2 id="filing-tree-heading">Filing tree</h2>
-      <p>Choose a ready-made tree, combine focused sets, or use a taxonomy file. Every change is reviewed before it touches the archive.</p>
+      <span class="eyebrow">{translate("filingTreeSettings.archiveStructure")}</span>
+      <h2 id="filing-tree-heading">{translate("filingTreeSettings.filingTree")}</h2>
+      <p>{translate("filingTreeSettings.chooseAReadyMadeTreeCombineFocused")}</p>
     </div>
-    {#if currentPreset}<span class="current-chip">Current · {currentPreset.replaceAll('_', ' ')}</span>{/if}
+    {#if currentPreset}<span class="current-chip">{translate("filingTreeSettings.currentValue", { "_": currentPreset.replaceAll('_', ' ') })}</span>{/if}
   </header>
 
   {#if loading}
-    <div class="card loading" aria-label="Loading filing tree"><div class="skel"></div><div class="skel"></div><div class="skel"></div></div>
+    <div class="card loading" aria-label={translate("filingTreeSettings.loadingFilingTree")}><div class="skel"></div><div class="skel"></div><div class="skel"></div></div>
   {:else if error && !presets.length}
-    <div class="card"><div class="err">{error}</div><button class="btn sm" onclick={load}>Retry</button></div>
+    <div class="card"><div class="err">{error}</div><button class="btn sm" onclick={load}>{translate("common.retry")}</button></div>
   {:else}
-    <nav class="mode-tabs" aria-label="Filing tree methods">
-      <button class:on={mode === 'presets'} aria-pressed={mode === 'presets'} onclick={() => chooseMode('presets')}>Ready-made</button>
-      <button class:on={mode === 'build'} aria-pressed={mode === 'build'} onclick={() => chooseMode('build')}>Build your own</button>
-      <button class:on={mode === 'files'} aria-pressed={mode === 'files'} onclick={() => chooseMode('files')}>Import or export</button>
+    <nav class="mode-tabs" aria-label={translate("filingTreeSettings.filingTreeMethods")}>
+      <button class:on={mode === 'presets'} aria-pressed={mode === 'presets'} onclick={() => chooseMode('presets')}>{translate("filingTreeSettings.readyMade")}</button>
+      <button class:on={mode === 'build'} aria-pressed={mode === 'build'} onclick={() => chooseMode('build')}>{translate("filingTreeSettings.buildYourOwn")}</button>
+      <button class:on={mode === 'files'} aria-pressed={mode === 'files'} onclick={() => chooseMode('files')}>{translate("filingTreeSettings.importOrExport")}</button>
     </nav>
 
     {#if mode === 'files'}
       <div class="file-panels">
         <section class="card file-card" aria-labelledby="import-heading">
           <div class="file-heading">
-            <div><h3 id="import-heading">Import a taxonomy file</h3><p>Preview an advanced HuML or TOML tree before applying it.</p></div>
-            <button class="btn" disabled={exportBusy || importBusy} onclick={() => (importOpen = !importOpen)}><Icon name="upload" size={14} />{importOpen ? 'Close' : 'Import file'}</button>
+            <div><h3 id="import-heading">{translate("filingTreeSettings.importATaxonomyFile")}</h3><p>{translate("filingTreeSettings.previewAnAdvancedHumlOrTomlTree")}</p></div>
+            <button class="btn" disabled={exportBusy || importBusy} onclick={() => (importOpen = !importOpen)}><Icon name="upload" size={14} />{importOpen ? translate("common.close") : translate("filingTreeSettings.importFile")}</button>
           </div>
           {#if importOpen}<fieldset class="import-body" disabled={exportBusy}><TaxonomyImport {notify} bind:busy={importBusy} onApplied={importedTree} /></fieldset>{/if}
         </section>
         <section class="card file-card" aria-labelledby="export-heading">
-          <h3 id="export-heading">Export this filing tree</h3>
-          <p>Save the tree with supported starter rules, or the structure alone.</p>
-          <label class="field">File format
-            <select class="input" bind:value={exportFormat} disabled={exportBusy || importBusy}><option value="huml">HuML</option><option value="toml">TOML</option></select>
+          <h3 id="export-heading">{translate("filingTreeSettings.exportThisFilingTree")}</h3>
+          <p>{translate("filingTreeSettings.saveTheTreeStructure")}</p>
+          <label class="field">{translate("filingTreeSettings.fileFormat")}
+            <select class="input" bind:value={exportFormat} disabled={exportBusy || importBusy}><option value="huml">{translate("filingTreeSettings.huml")}</option><option value="toml">TOML</option></select>
           </label>
           <div class="toolbar">
-            <button class="btn" disabled={exportBusy || importBusy} onclick={() => doExport(false)}><Icon name="download" size={14} />Export with starter rules</button>
-            <button class="btn" disabled={exportBusy || importBusy} onclick={() => doExport(true)}>Export tree only</button>
+            <button class="btn" disabled={exportBusy || importBusy} onclick={doExport}><Icon name="download" size={14} />{translate("filingTreeSettings.exportTree")}</button>
           </div>
-          <p class="note">A filing-tree export is not an archive backup. Documents, permissions, user rules, and history are not included.</p>
+          <p class="note">{translate("filingTreeSettings.aFilingTreeExportIsNotAn")}</p>
         </section>
       </div>
     {:else}
@@ -287,11 +286,11 @@
               {/each}
             </div>
           {:else}
-            <p class="composer-intro">Choose at most one set in each numbered lane. Up to {maxSets} sets keep the tree compact.</p>
+            <p class="composer-intro">{translate("filingTreeSettings.chooseAtMostOneSetInEach", { "maxSets": maxSets })}</p>
             <div class="lane-groups">
               {#each lanes as lane}
                 <section class="lane-group">
-                  <header><b>{lane}–{lane + 9}</b><span>Choose one</span></header>
+                  <header><b>{lane}–{lane + 9}</b><span>{translate("filingTreeSettings.chooseOne")}</span></header>
                   <div class="lane-options">
                     {#each sets.filter((set) => set.lane === lane) as set (set.id)}
                       <button class:on={selectedSetIDs.includes(set.id)} aria-pressed={selectedSetIDs.includes(set.id)} onclick={() => chooseSet(set)}>
@@ -306,48 +305,47 @@
 
           <div class="change-options">
             {#if blankTarget}
-              <label class="warning-check"><input type="checkbox" bind:checked={confirmBlank} /> I understand that documents will remain in Inbox until I add categories.</label>
+              <label class="warning-check"><input type="checkbox" bind:checked={confirmBlank} /> {translate("filingTreeSettings.iUnderstandThatDocumentsWillRemainIn")}</label>
             {/if}
-            <label><input type="checkbox" bind:checked={includeSeeds} onchange={resetReview} /> Include starter filing rules</label>
-            <label><input type="checkbox" bind:checked={refile} /> Refile existing documents after the change</label>
-            <p>Refile runs the selected tree’s active rules and refreshes rendered paths. It does not migrate the taxonomy itself.</p>
+            <label><input type="checkbox" bind:checked={refile} /> {translate("filingTreeSettings.refileExistingDocumentsAfterTheChange")}</label>
+            <p>{translate("filingTreeSettings.refileRunsTheSelectedTreeSActive")}</p>
           </div>
           {#if error}<div class="err" role="alert">{error}</div>{/if}
-          <button class="btn primary review-button" disabled={busy || (blankTarget && !confirmBlank)} onclick={review}>{busy ? 'Working…' : 'Review change'}</button>
+          <button class="btn primary review-button" disabled={busy || (blankTarget && !confirmBlank)} onclick={review}>{busy ? translate("filingTreeSettings.working") : translate("filingTreeSettings.reviewChange")}</button>
         </div>
 
-        <aside class="current-tree" aria-label="Current filing tree">
-          <header><div><span class="current-label">In use now</span><h3>Current tree</h3></div><span>{currentAreas.length} lanes</span></header>
+        <aside class="current-tree" aria-label={translate("filingTreeSettings.currentFilingTree")}>
+          <header><div><span class="current-label">{translate("filingTreeSettings.inUseNow")}</span><h3>{translate("filingTreeSettings.currentTree")}</h3></div><span>{plural("filingTreeSettings.laneCount", currentAreas.length)}</span></header>
           {#each currentAreas as area (area.code)}
-            <div class="tree-area"><b>{area.code}–{area.code + 9} {area.name}</b><span>{area.categories.map((category) => `${category.code} ${category.name}`).join(' · ')}</span></div>
-          {:else}<p class="empty">No user categories yet.</p>{/each}
+            <div class="tree-area"><b>{area.code}–{area.code + 9} {area.name}</b><span>{area.categories.map((category) => translate("filingTreeSettings.valueValue", { "code": category.code, "name": category.name })).join(' · ')}</span></div>
+          {:else}<p class="empty">{translate("filingTreeSettings.noUserCategoriesYet")}</p>{/each}
         </aside>
       </div>
 
       {#if preview}
         <section class="review card" class:revealed={reviewRevealed} bind:this={reviewSection} tabindex="-1" aria-labelledby="review-heading">
           <header class="review-heading">
-            <div><span class="eyebrow">Review</span><h3 id="review-heading">{preview.name}</h3><p>{preview.story}</p></div>
+            <div><span class="eyebrow">{translate("filingTreeSettings.review")}</span><h3 id="review-heading">{preview.name}</h3><p>{preview.story}</p></div>
           </header>
           <div class="target-tree">
             {#each preview.user_areas || [] as area (area.code)}
               <section><h4>{area.code}–{area.code + 9} {area.name}</h4><ul>{#each area.categories || [] as category (category.code)}<li><code>{category.code}</code><span>{category.name}</span></li>{/each}</ul></section>
-            {:else}<p class="empty">Blank keeps only Suchi’s internal Inbox.</p>{/each}
+            {:else}<p class="empty">{translate("filingTreeSettings.blankKeepsOnlySuchiSInternalInbox")}</p>{/each}
           </div>
 
           {#if preview.collisions?.length}
             <div class="collisions">
-              <h4>Category mappings</h4>
+              <h4>{translate("filingTreeSettings.categoryMappings")}</h4>
               {#each preview.collisions as collision (collision.code)}
                 <fieldset class="collision" disabled={busy || collision.replace}>
                   <legend><code>{collision.code}</code> {collision.existing} → {collision.incoming}</legend>
-                  <p>{collision.live_documents || 0} live · {collision.trashed_documents || 0} in Trash</p>
+                  <p>{translate("filingTreeSettings.valueLiveValueInTrash", { "live_documents": collision.live_documents || 0, "trashed_documents": collision.trashed_documents || 0 })}</p>
                   {#if collision.replace}
-                    <span class="mapping automatic">Keep category and documents; update its label</span>
+                    <span class="mapping automatic">{translate("filingTreeSettings.keepCategoryAndDocumentsUpdateItsLabel")}</span>
                   {:else}
-                    <label><input type="radio" name={`collision-${collision.code}`} checked={collisionChoices[collision.code] === 'replace'} onchange={() => chooseCollision(collision.code, 'replace')} /> Replace meaning in place {collision.suggested_replace ? '· recommended' : ''}</label>
-                    {#if collision.proposed_code}<label><input type="radio" name={`collision-${collision.code}`} checked={collisionChoices[collision.code] === 'remap'} onchange={() => chooseCollision(collision.code, 'remap')} /> Add as {collision.proposed_code}; keep existing {collision.code}</label>{/if}
-                    <label><input type="radio" name={`collision-${collision.code}`} checked={collisionChoices[collision.code] === 'skip'} onchange={() => chooseCollision(collision.code, 'skip')} /> Skip incoming category</label>
+                    <label><input type="radio" name={`collision-${collision.code}`} checked={collisionChoices[collision.code] === 'replace'} onchange={() => chooseCollision(collision.code, 'replace')} /> {translate("filingTreeSettings.replaceMeaningInPlaceValue", { recommended: collision.suggested_replace ? translate("filingTreeSettings.recommendedSuffix") : '' })}</label>
+                    {#if collision.proposed_code}<label><input type="radio" name={`collision-${collision.code}`} checked={collisionChoices[collision.code] === 'remap'} onchange={() => chooseCollision(collision.code, 'remap')} /> {translate("filingTreeSettings.addAsValueKeepExistingValue", { "proposed_code": collision.proposed_code, "code": collision.code })}</label>{/if}
+                    <label><input type="radio" name={`collision-${collision.code}`} checked={collisionChoices[collision.code] === 'skip'} onchange={() => chooseCollision(collision.code, 'skip')} /> {translate("filingTreeSettings.skipIncomingCategory")}</label>
                   {/if}
                 </fieldset>
               {/each}
@@ -355,14 +353,12 @@
           {/if}
 
           <div class="review-summary">
-            <span>{preview.categories_to_add?.length || 0} categories added</span>
-            <span>{preview.rules_to_add?.length || 0} starter rules added</span>
-            <span>{preview.rules_preserved?.length || 0} rules preserved</span>
+            <span>{plural("filingTreeSettings.categoryAddedCount", preview.categories_to_add?.length || 0)}</span>
           </div>
           {#if applied}
-            <div class="success" role="status">Filing tree updated.{#if applied.refile} Refile checked {applied.refile.documents_scanned} documents and scheduled {applied.refile.renders_queued} folder updates.{/if}</div>
+            <div class="success" role="status">{translate("filingTreeSettings.filingTreeUpdated")}{#if applied.refile} {translate("filingTreeSettings.refileSummary", { documents: plural("filingTreeSettings.documentCount", applied.refile.documents_scanned), renders: plural("filingTreeSettings.renderCount", applied.refile.renders_queued) })}{/if}</div>
           {:else}
-            <button class="btn primary apply-button" disabled={busy || (blankTarget && !confirmBlank)} onclick={applyChange}>{busy ? 'Applying…' : 'Apply reviewed change'}</button>
+            <button class="btn primary apply-button" disabled={busy || (blankTarget && !confirmBlank)} onclick={applyChange}>{busy ? translate("filingTreeSettings.applying") : translate("filingTreeSettings.applyReviewedChange")}</button>
           {/if}
         </section>
       {/if}

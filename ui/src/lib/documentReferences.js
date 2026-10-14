@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import { t } from './i18n.svelte.js'
+
 
 // Returns an exact document ID, an error for an unsafe/invalid document URL,
 // or null when the input should be treated as ordinary search text.
@@ -7,7 +9,7 @@ export function parseDocumentReference(input, origin, appPath = '/') {
   if (!value) return null
   if (/^\d+$/.test(value)) {
     const id = Number(value)
-    return Number.isSafeInteger(id) && id > 0 ? { id } : { error: 'Enter a valid document ID.' }
+    return Number.isSafeInteger(id) && id > 0 ? { id } : { error: t('documentReferences.invalidID') }
   }
 
   const looksLikeURL = candidate =>
@@ -28,10 +30,10 @@ export function parseDocumentReference(input, origin, appPath = '/') {
     base = new URL(appPath, origin)
     url = new URL(candidate, base)
   } catch {
-    return { error: 'Enter a valid document URL.' }
+    return { error: t('documentReferences.invalidURL') }
   }
-  if (url.origin !== base.origin) return { error: 'Only links from this archive can be used.' }
-  if (url.username || url.password) return { error: 'Enter a valid document URL.' }
+  if (url.origin !== base.origin) return { error: t('documentReferences.remoteURL') }
+  if (url.username || url.password) return { error: t('documentReferences.invalidURL') }
 
   let pathname
   let basePathname
@@ -41,7 +43,7 @@ export function parseDocumentReference(input, origin, appPath = '/') {
     basePathname = decodeURIComponent(base.pathname)
     hash = decodeURIComponent(url.hash)
   } catch {
-    return { error: 'Enter a valid document URL.' }
+    return { error: t('documentReferences.invalidURL') }
   }
 
   let match = null
@@ -59,8 +61,8 @@ export function parseDocumentReference(input, origin, appPath = '/') {
   if (!match && !url.search && !hash) {
     match = pathname.match(/^\/api\/documents\/([1-9]\d*)$/)
   }
-  if (!match) return { error: 'That link does not identify a document.' }
+  if (!match) return { error: t('documentReferences.notDocument') }
 
   const id = Number(match[1])
-  return Number.isSafeInteger(id) ? { id } : { error: 'Enter a valid document ID.' }
+  return Number.isSafeInteger(id) ? { id } : { error: t('documentReferences.invalidID') }
 }

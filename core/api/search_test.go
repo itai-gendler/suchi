@@ -22,12 +22,9 @@ import (
 
 func TestSearchRanksBeforeBuildingSnippets(t *testing.T) {
 	s := newChatTestServer(t)
-	query := "EXPLAIN " + searchFTSPageSQL(
-		" WHERE documents_fts MATCH ? AND d.trashed_at IS NULL",
-		"bm25(documents_fts, ?, ?)",
-	)
+	query := "EXPLAIN " + searchFTSPageSQL(" WHERE d.trashed_at IS NULL", false)
 	rows, err := s.DB.Read.QueryContext(context.Background(), query,
-		bm25TitleWeight, bm25ContentWeight, "needle*", 25, 0, "needle*")
+		bm25TitleWeight, bm25ContentWeight, "needle*", recencyBoost, float64(recencyHalfLifeS), 25, 0, "needle*")
 	if err != nil {
 		t.Fatal(err)
 	}

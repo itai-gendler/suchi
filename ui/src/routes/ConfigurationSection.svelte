@@ -1,5 +1,6 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script>
+  import { t as translate } from "../lib/i18n.svelte.js";
   import { scopedHash as filingHref, systems } from '../lib/systems.svelte.js'
   import { tick, untrack, onDestroy } from 'svelte'
   import { adminListUsers,
@@ -11,18 +12,18 @@
 
   let { section, notify } = $props()
   const RESEARCH_CONTEXT_MODES = [
-    { id: 'focused', label: 'Focused', bound: '1 matching section · up to 1,600 characters', description: 'Less text for smaller local models and faster answers.' },
-    { id: 'balanced', label: 'Balanced', bound: '2 matching sections · up to 3,200 characters', description: 'Recommended for most archives and models.' },
-    { id: 'detailed', label: 'Detailed', bound: '3 matching sections · up to 4,800 characters', description: 'Checks more places in long documents; may be slower and send more text.' },
+    { id: 'focused', label: translate("configurationSection.focused"), bound: translate("configurationSection.1MatchingSectionUpTo1600Characters"), description: translate("configurationSection.lessTextForSmallerLocalModelsAndFaster") },
+    { id: 'balanced', label: translate("configurationSection.balanced"), bound: translate("configurationSection.2MatchingSectionsUpTo3200Characters"), description: translate("configurationSection.recommendedForMostArchivesAndModels") },
+    { id: 'detailed', label: translate("configurationSection.detailed"), bound: translate("configurationSection.3MatchingSectionsUpTo4800Characters"), description: translate("configurationSection.checksMorePlacesInLongDocumentsMayBe") },
   ]
   let loaded = $state(new Set())
   let loading = $state(new Set())
   let loadErrors = $state({})
   const LOAD_ERROR_MESSAGES = {
-    users: 'Could not load archive users.',
-    ingest: 'Could not load watched-folder settings.',
-    llm: 'Could not load classification settings.',
-    preferences: 'Could not load OCR and backup settings.',
+    users: translate("configurationSection.couldNotLoadArchiveUsers"),
+    ingest: translate("configurationSection.couldNotLoadWatchedFolderSettings"),
+    llm: translate("configurationSection.couldNotLoadClassificationSettings"),
+    preferences: translate("configurationSection.couldNotLoadOcrAndBackupSettings"),
   }
 
   function loadOnce(key, fn) {
@@ -33,7 +34,7 @@
       .then(fn)
       .then(() => { loaded = new Set([...loaded, key]) })
       .catch((ex) => {
-        loadErrors = { ...loadErrors, [key]: ex.message || LOAD_ERROR_MESSAGES[key] || 'Could not load this configuration.' }
+        loadErrors = { ...loadErrors, [key]: ex.message || LOAD_ERROR_MESSAGES[key] || translate("configurationSection.couldNotLoadThisConfiguration") }
       })
       .finally(() => {
         const next = new Set(loading)
@@ -104,7 +105,7 @@
         llm.model = subscriptionModels.some(model => model.id === saved) ? saved : subscriptionModels[0]?.id || ''
       }
     } catch (ex) {
-      if (!disposed && generation === modelsGeneration) { modelsError = ex.message || 'Could not load ChatGPT models.'; subscriptionModels = [] }
+      if (!disposed && generation === modelsGeneration) { modelsError = ex.message || translate("configurationSection.couldNotLoadChatgptModels"); subscriptionModels = [] }
     } finally { if (!disposed && generation === modelsGeneration) modelsLoading = false }
   }
 
@@ -117,9 +118,9 @@
       const result = await saveSubscriptionModel(subscriptionProvider, model)
       if (disposed) return
       llmStatus = { ...llmStatus, subscription_model: result.subscription_model }
-      notify?.('Model selection saved. Test and enable it to use this model.')
+      notify?.(translate("configurationSection.modelSelectionSavedTestAndEnableItTo"))
     } catch (ex) {
-      if (!disposed) modelSaveError = ex.message || 'Could not save model selection.'
+      if (!disposed) modelSaveError = ex.message || translate("configurationSection.couldNotSaveModelSelection")
     } finally { if (!disposed) modelSaving = false }
   }
 
@@ -147,7 +148,7 @@
         llmStatus = { ...llmStatus, subscription_connected: true }
         invalidateLLMTest()
         if (llmMode === 'subscription') void loadSubscriptionModels()
-        notify?.('ChatGPT connected. Test the model before enabling it.')
+        notify?.(translate("configurationSection.chatgptConnectedTestTheModelBeforeEnablingIt"))
       }
     } catch (ex) { if (!disposed && generation === loginGeneration) { loginError = ex.message; loginCode = null } }
   }
@@ -262,7 +263,7 @@
       const result = await fn()
       notify?.(typeof label === 'function' ? label(result) : label)
     }
-    catch (ex) { err = ex.message || 'The server rejected that.' }
+    catch (ex) { err = ex.message || translate("configurationSection.theServerRejectedThat") }
     finally { busy = false }
   }
 
@@ -371,31 +372,31 @@
       const result = await testLLMSettings(llmPayload(true))
       if (disposed || generation !== llmTestGeneration) return
       llmTestResult = result?.result || null
-      notify?.(result?.message || 'Model connection and response format checked')
+      notify?.(result?.message || translate("configurationSection.modelConnectionAndResponseFormatChecked"))
     } catch (ex) {
-      if (!disposed && generation === llmTestGeneration) llmTestError = ex.message || 'The document model did not return a valid response.'
+      if (!disposed && generation === llmTestGeneration) llmTestError = ex.message || translate("configurationSection.theDocumentModelDidNotReturnAValid")
     } finally { llmTesting = false }
   }
 
   function subscriptionTestHint() {
     if (!llmStatus?.subscription_connected) {
-      return 'Connect and acknowledge first. Sends one sample sentence, never your documents.'
+      return translate("configurationSection.connectAndAcknowledgeFirstSendsOneSampleSentence")
     }
-    if (modelsLoading) return 'Loading models from the connected account…'
-    if (modelsError) return 'Refresh the model list before testing.'
+    if (modelsLoading) return translate("configurationSection.loadingModelsFromTheConnectedAccount")
+    if (modelsError) return translate("configurationSection.refreshTheModelListBeforeTesting")
     if (!subscriptionModels.some((model) => model.id === llm.model)) {
-      return 'Choose an available model before testing.'
+      return translate("configurationSection.chooseAnAvailableModelBeforeTesting")
     }
     if (!llm.egress_ack) {
-      return 'Acknowledge document egress first. The test sends one sample sentence, never your documents.'
+      return translate("configurationSection.acknowledgeDocumentEgressFirstTheTestSendsOne")
     }
-    return 'Sends one sample sentence, never your documents.'
+    return translate("configurationSection.sendsOneSampleSentenceNeverYourDocuments")
   }
 
   function elapsedLabel(milliseconds) {
     const value = Number(milliseconds) || 0
-    if (value < 1000) return `${Math.round(value)} ms`
-    return `${(value / 1000).toFixed(1).replace(/\.0$/, '')} s`
+    if (value < 1000) return translate("configurationSection.valueMs", { "value": Math.round(value) })
+    return translate("configurationSection.valueS", { "$": (value / 1000).toFixed(1).replace(/\.0$/, '') })
   }
 
   const llmIsRemote = $derived(llmMode === 'subscription' || (!!llm.endpoint_url && !isLocalEndpoint(llm.endpoint_url)))
@@ -406,11 +407,11 @@
     <div class="configuration-load-error">
       <div class="err">{activeLoadFailure.message}</div>
       <div class="toolbar">
-        <button class="btn sm" onclick={() => retryLoad(activeLoadFailure.key)}>Retry</button>
+        <button class="btn sm" onclick={() => retryLoad(activeLoadFailure.key)}>{translate("common.retry")}</button>
       </div>
     </div>
   {:else if activeLoading}
-    <div class="configuration-loading" aria-label="Loading configuration">
+    <div class="configuration-loading" aria-label={translate("configurationSection.loadingConfiguration")}>
       <div class="skel" style="width:32%;height:16px"></div>
       <div class="skel" style="width:78%"></div>
       <div class="skel" style="width:62%"></div>
@@ -419,95 +420,95 @@
     {#if err}<div class="err">{err}</div>{/if}
 
     {#if section === 'sources'}
-      <h3>Watched folder</h3>
-      <p class="wiz-p">Suchi reads new files from this server folder without moving, renaming or deleting the source. {ingestRecursive ? 'Subfolders are included.' : 'Only files directly inside the folder are included because recursive discovery is disabled by server configuration.'} Browser uploads and connected apps work regardless.</p>
-      <div class="field"><label for="i-dir">Watched directory (on the server)</label>
-        <input id="i-dir" class="input mono" placeholder="/data/staging" bind:value={ingest.fs_watch_dir} /></div>
-      <p class="sub">The directory must already exist and be readable by the Suchi process. Hidden files, symbolic links and the legacy <span class="mono">errors/</span> directory are ignored.</p>
-      <div class="field"><label for="i-owner">Documents from it belong to</label>
+      <h3>{translate("configurationSection.watchedFolder")}</h3>
+      <p class="wiz-p">{translate("configurationSection.suchiReadsNewFilesFromThisServer", { configuration: translate(ingestRecursive ? "configurationSection.subfoldersIncluded" : "configurationSection.directFilesOnly") })}</p>
+      <div class="field"><label for="i-dir">{translate("configurationSection.watchedDirectoryOnTheServer")}</label>
+        <input id="i-dir" class="input mono" placeholder={translate("configurationSection.dataStaging")} bind:value={ingest.fs_watch_dir} /></div>
+      <p class="sub">{translate("configurationSection.theDirectoryMustAlreadyExistAndBe")} <span class="mono">{translate("configurationSection.errors")}</span> {translate("configurationSection.directoryAreIgnored")}</p>
+      <div class="field"><label for="i-owner">{translate("configurationSection.documentsFromItBelongTo")}</label>
         <select id="i-owner" class="input" bind:value={ingest.fs_watch_owner_email}>
-          <option value="">Select owner</option>
+          <option value="">{translate("configurationSection.selectOwner")}</option>
           {#each mailUsers.filter(u => !u.disabled) as u}
             <option value={u.email}>{u.display_name || u.email} · {u.email}</option>
           {/each}
         </select></div>
       {#if systems.introduced}
-        <div class="field"><label for="i-system">Watched folder filing system</label>
+        <div class="field"><label for="i-system">{translate("configurationSection.watchedFolderFilingSystem")}</label>
           <select id="i-system" class="input" bind:value={ingest.fs_watch_system}>
-            <option value="">Original archive (default)</option>
+            <option value="">{translate("configurationSection.originalArchiveDefault")}</option>
             {#each systems.results as system (system.code)}<option value={system.code}>{system.code} · {system.name}</option>{/each}
           </select>
-          <p class="sub">This is the server-wide watched-folder destination, not the system currently displayed. Its owner must be able to enter it.</p>
+          <p class="sub">{translate("configurationSection.thisIsTheServerWideWatchedFolder")}</p>
         </div>
       {/if}
       <div class="toolbar">
         <button class="btn primary sm" disabled={busy || !ingest.fs_watch_dir || !ingest.fs_watch_owner_email}
-                onclick={() => saveAnd(() => saveIngestSettings(ingest), 'Watched folder saved')}>Save folder</button>
+                onclick={() => saveAnd(() => saveIngestSettings(ingest), translate("configurationSection.watchedFolderSaved"))}>{translate("configurationSection.saveFolder")}</button>
       </div>
 
     {:else if section === 'mail'}
-      <h3>Email intake</h3>
-      <p class="wiz-p">Point suchi at one or more mailboxes and forwarded documents file themselves. Credentials stay server-side; the password field never reads back.</p>
+      <h3>{translate("configurationSection.emailIntake")}</h3>
+      <p class="wiz-p">{translate("configurationSection.pointSuchiAtOneOrMoreMailboxes")}</p>
       <EmailAccounts {notify} users={mailUsers} />
 
     {:else if section === 'llm'}
       <div class="cls-card">
-        <div class="cls-head"><h3>Suggestions</h3><p>How suggestions are made and applied.</p></div>
+        <div class="cls-head"><h3>{translate("configurationSection.suggestions")}</h3><p>{translate("configurationSection.howSuggestionsAreMadeAndApplied")}</p></div>
         <div class="cls-row">
-          <div class="apply-mode" role="radiogroup" aria-label="Suggestion application" aria-describedby="application-mode-help">
+          <div class="apply-mode" role="radiogroup" aria-label={translate("configurationSection.suggestionApplication")} aria-describedby="application-mode-help">
             <label class="apply-opt"><input type="radio" name="application-mode" value="review" checked={!autoApply} disabled={busy} onchange={() => (autoApply = false)} />
-              <span><b>Review first</b><small>Every suggestion waits in Approvals.</small></span></label>
+              <span><b>{translate("configurationSection.reviewFirst")}</b><small>{translate("configurationSection.everySuggestionWaitsInApprovals")}</small></span></label>
             <label class="apply-opt"><input type="radio" name="application-mode" value="auto" checked={autoApply} disabled={busy} onchange={() => (autoApply = true)} />
-              <span><b>Apply when confident</b><small>Suggestions at or above your threshold apply; the rest wait in Approvals.</small></span></label>
+              <span><b>{translate("configurationSection.applyWhenConfident")}</b><small>{translate("configurationSection.suggestionsAtOrAboveYourThresholdApply")}</small></span></label>
           </div>
-          <p class="cls-note" id="application-mode-help">Dates follow the same choice, into Calendar or Approvals.</p>
-          <button class="btn sm" disabled={busy} onclick={() => saveAnd(saveApplicationMode, 'Application mode saved')}>Save application mode</button>
+          <p class="cls-note" id="application-mode-help">{translate("configurationSection.datesFollowTheSameChoiceIntoCalendar")}</p>
+          <button class="btn sm" disabled={busy} onclick={() => saveAnd(saveApplicationMode, translate("configurationSection.applicationModeSaved"))}>{translate("configurationSection.saveApplicationMode")}</button>
         </div>
         <div class="cls-row">
           <button type="button" class="switch" role="switch" aria-checked={llm.archive_enabled}
-                  aria-label="Offer filing suggestions from similar documents"
+                  aria-label={translate("configurationSection.offerFilingSuggestionsFromSimilarDocuments")}
                   onclick={() => (llm.archive_enabled = !llm.archive_enabled)}></button>
-          <div class="cls-main"><b>Similar documents</b><small>Learns from what is already filed. Nothing leaves this machine.</small></div>
-          <div class="cls-right"><span class="mono-sum">review ≥ {Math.round(Number(llm.archive_review_threshold) * 100)}% · auto ≥ {Math.round(Number(llm.archive_auto_threshold) * 100)}%</span>
-            <button class="act-link" onclick={() => (thresholdsOpen = !thresholdsOpen)}>{thresholdsOpen ? 'Hide' : 'Adjust'}</button></div>
+          <div class="cls-main"><b>{translate("configurationSection.similarDocuments")}</b><small>{translate("configurationSection.learnsFromWhatIsAlreadyFiledNothing")}</small></div>
+          <div class="cls-right"><span class="mono-sum">{translate("configurationSection.reviewValueAutoValue", { "archive_review_threshold": Math.round(Number(llm.archive_review_threshold) * 100), "archive_auto_threshold": Math.round(Number(llm.archive_auto_threshold) * 100) })}</span>
+            <button class="act-link" onclick={() => (thresholdsOpen = !thresholdsOpen)}>{thresholdsOpen ? translate("configurationSection.hide") : translate("configurationSection.adjust")}</button></div>
         </div>
         {#if thresholdsOpen}
           <div class="cls-disc">
-            <div class="field"><label for="archive-review">Minimum similarity to suggest for review · {Math.round(Number(llm.archive_review_threshold) * 100)}%</label>
+            <div class="field"><label for="archive-review">{translate("configurationSection.minimumSimilarityToSuggestForReviewValue", { "archive_review_threshold": Math.round(Number(llm.archive_review_threshold) * 100) })}</label>
               <input id="archive-review" class="range" type="range" min="0.5" max="0.9" step="0.05" bind:value={llm.archive_review_threshold} /></div>
-            <div class="field"><label for="archive-auto">Minimum similarity to apply automatically · {Math.round(Number(llm.archive_auto_threshold) * 100)}%</label>
+            <div class="field"><label for="archive-auto">{translate("configurationSection.minimumSimilarityToApplyAutomaticallyValue", { "archive_auto_threshold": Math.round(Number(llm.archive_auto_threshold) * 100) })}</label>
               <input id="archive-auto" class="range" type="range" min="0.55" max="0.95" step="0.05" bind:value={llm.archive_auto_threshold} disabled={!autoApply} /></div>
-            <p class="cls-note">The automatic level must stay above the review level.</p>
-            {#if Number(llm.archive_review_threshold) >= Number(llm.archive_auto_threshold)}<p role="alert">The review level must be below the automatic level.</p>{/if}
+            <p class="cls-note">{translate("configurationSection.theAutomaticLevelMustStayAboveThe")}</p>
+            {#if Number(llm.archive_review_threshold) >= Number(llm.archive_auto_threshold)}<p role="alert">{translate("configurationSection.theReviewLevelMustBeBelowThe")}</p>{/if}
           </div>
         {/if}
         <div class="cls-row">
           <div class="cls-main">
-            <b>Document model{#if llmStatus?.active}<span class="mdot"></span><em>Active</em>{/if}</b>
-            {#if llmStatus?.active}<small><span class="mono">{llm.model}</span> · {llmMode === 'subscription' ? 'account subscription' : llmMode === 'hosted' ? 'hosted model' : 'local model'}</small>
-            {:else}<small>Document suggestions and questions. Off.</small>{/if}
+            <b>{translate("configurationSection.documentModel")}{#if llmStatus?.active}<span class="mdot"></span><em>{translate("configurationSection.active")}</em>{/if}</b>
+            {#if llmStatus?.active}<small><span class="mono">{llm.model}</span> · {llmMode === 'subscription' ? translate("configurationSection.accountSubscription2") : llmMode === 'hosted' ? translate("configurationSection.hostedModel2") : translate("configurationSection.localModel2")}</small>
+            {:else}<small>{translate("configurationSection.documentSuggestionsAndQuestionsOff")}</small>{/if}
           </div>
-          <div class="cls-right">{#if llmStatus?.active}<button class="act-link" onclick={() => (modelDialogOpen = true)}>Manage</button>
-            {:else}<button class="btn sm" onclick={() => (modelDialogOpen = true)}>Set up model</button>{/if}</div>
+          <div class="cls-right">{#if llmStatus?.active}<button class="act-link" onclick={() => (modelDialogOpen = true)}>{translate("configurationSection.manage")}</button>
+            {:else}<button class="btn sm" onclick={() => (modelDialogOpen = true)}>{translate("configurationSection.setUpModel")}</button>{/if}</div>
         </div>
-        <div class="cls-foot"><span class="cls-note">New documents only; use Rescan in Documents for older ones.</span>
+        <div class="cls-foot"><span class="cls-note">{translate("configurationSection.newDocumentsOnlyUseRescanInDocuments")}</span>
           <button class="btn primary sm" disabled={busy || Number(llm.archive_review_threshold) >= Number(llm.archive_auto_threshold)}
-                  onclick={() => saveAnd(saveMatching, 'Similar-document matching saved')}>Save matching options</button></div>
+                  onclick={() => saveAnd(saveMatching, translate("configurationSection.similarDocumentMatchingSaved"))}>{translate("configurationSection.saveMatchingOptions")}</button></div>
       </div>
-      <div class="cls-card" role="region" aria-label="Ask your documents settings">
-        <div class="cls-head"><h3 id="research-context-title">Ask your documents</h3><p>Answers questions from your documents.</p><span class="cls-when">Applies to the next question</span></div>
-        <div class="cls-row"><div class="cls-main"><b>Reading per document</b>
+      <div class="cls-card" role="region" aria-label={translate("configurationSection.askYourDocumentsSettings")}>
+        <div class="cls-head"><h3 id="research-context-title">{translate("configurationSection.askYourDocuments")}</h3><p>{translate("configurationSection.answersQuestionsFromYourDocuments")}</p><span class="cls-when">{translate("configurationSection.appliesToTheNextQuestion")}</span></div>
+        <div class="cls-row"><div class="cls-main"><b>{translate("configurationSection.readingPerDocument")}</b>
             {#if llmStatus?.active}<small style="text-transform:capitalize">{researchContextMode}</small>
-            {:else}<small>Needs the document model.</small>{/if}</div>
-          <div class="cls-right"><button class="act-link" onclick={toggleResearchOptions}>{researchOpen ? 'Hide' : 'Change'}</button></div></div>
-        {#if researchOpen}<div class="cls-disc" bind:this={researchOptions} tabindex="-1" aria-labelledby="research-context-title"><div class="context-presets" role="radiogroup" aria-label="How much to read">
+            {:else}<small>{translate("configurationSection.needsTheDocumentModel")}</small>{/if}</div>
+          <div class="cls-right"><button class="act-link" onclick={toggleResearchOptions}>{researchOpen ? translate("configurationSection.hide") : translate("configurationSection.change")}</button></div></div>
+        {#if researchOpen}<div class="cls-disc" bind:this={researchOptions} tabindex="-1" aria-labelledby="research-context-title"><div class="context-presets" role="radiogroup" aria-label={translate("configurationSection.howMuchToRead")}>
           {#each RESEARCH_CONTEXT_MODES as mode, index (mode.id)}
             <label class="context-preset" class:on={researchContextMode === mode.id}>
               <input type="radio" name="research-context-mode" bind:group={researchContextMode} value={mode.id} />
               <span class="context-copy">
                 <span class="context-label">
                   <b>{mode.label}</b>
-                  {#if mode.id === 'balanced'}<span class="recommended">Recommended</span>{/if}
+                  {#if mode.id === 'balanced'}<span class="recommended">{translate("configurationSection.recommended")}</span>{/if}
                 </span>
                 <span>{mode.description}</span>
                 <small>{mode.bound}</small>
@@ -520,113 +521,113 @@
         </div>
         <div class="toolbar option-save">
           <button class="btn primary sm" disabled={busy || llmTesting}
-                  onclick={() => saveAnd(saveResearchContext, 'Reading amount saved')}>Save reading amount</button>
+                  onclick={() => saveAnd(saveResearchContext, translate("configurationSection.readingAmountSaved"))}>{translate("configurationSection.saveReadingAmount")}</button>
         </div>
       </div>{/if}
       </div>
       {#if modelDialogOpen}
         <div class="mdl-dim" aria-hidden="true"></div>
-        <div class="mdl" role="dialog" aria-label="Set up document model">
-          <div class="mdl-head"><b>Set up document model</b><button class="act-link" style="color:var(--muted)" onclick={() => (modelDialogOpen = false)}>Cancel</button></div>
+        <div class="mdl" role="dialog" aria-label={translate("configurationSection.setUpDocumentModel")}>
+          <div class="mdl-head"><b>{translate("configurationSection.setUpDocumentModel")}</b><button class="act-link" style="color:var(--muted)" onclick={() => (modelDialogOpen = false)}>{translate("common.cancel")}</button></div>
           <div class="mdl-body">
       <span class="seg" style="margin-bottom:14px">
-        <button disabled={modelSaving || loginBusy} class:on={llmMode === 'local'} onclick={() => setLLMMode('local')}>Local model</button>
-        <button disabled={modelSaving || loginBusy} class:on={llmMode === 'hosted'} onclick={() => setLLMMode('hosted')}>Hosted model</button>
-        <button disabled={modelSaving || loginBusy} class:on={llmMode === 'subscription'} onclick={() => setLLMMode('subscription')}>Account subscription</button>
+        <button disabled={modelSaving || loginBusy} class:on={llmMode === 'local'} onclick={() => setLLMMode('local')}>{translate("configurationSection.localModel")}</button>
+        <button disabled={modelSaving || loginBusy} class:on={llmMode === 'hosted'} onclick={() => setLLMMode('hosted')}>{translate("configurationSection.hostedModel")}</button>
+        <button disabled={modelSaving || loginBusy} class:on={llmMode === 'subscription'} onclick={() => setLLMMode('subscription')}>{translate("configurationSection.accountSubscription")}</button>
       </span>
       {#if llmMode === 'subscription'}
-        <div class="subscription-maturity"><span class="experimental-tag">Experimental</span></div>
-        <div class="field subscription-provider"><label for="l-provider">Provider</label>
-          <select id="l-provider" class="input" bind:value={subscriptionProvider} disabled={loginBusy || modelSaving}><option value="openai_chatgpt">OpenAI ChatGPT (Codex)</option></select>
+        <div class="subscription-maturity"><span class="experimental-tag">{translate("configurationSection.experimental")}</span></div>
+        <div class="field subscription-provider"><label for="l-provider">{translate("configurationSection.provider")}</label>
+          <select id="l-provider" class="input" bind:value={subscriptionProvider} disabled={loginBusy || modelSaving}><option value="openai_chatgpt">{translate("configurationSection.openaiChatgptCodex")}</option></select>
         </div>
         <div class="subscription-account" class:connected={llmStatus?.subscription_connected}>
           <div class="subscription-account-copy">
             <span class="subscription-state-title">
               {#if llmStatus?.subscription_connected}<span class="subscription-state-dot" aria-hidden="true"></span>{/if}
-              <strong role="status">{llmStatus?.subscription_connected ? 'ChatGPT connected' : 'ChatGPT'}</strong>
+              <strong role="status">{llmStatus?.subscription_connected ? translate("configurationSection.chatgptConnected") : translate("configurationSection.chatgpt")}</strong>
             </span>
             <span>{llmStatus?.subscription_connected
-              ? 'Subscription limits apply to this archive.'
-              : 'Powers document suggestions and questions for this archive.'}</span>
+              ? translate("configurationSection.subscriptionLimitsApplyToThisArchive")
+              : translate("configurationSection.powersDocumentSuggestionsAndQuestionsForThisArchive")}</span>
           </div>
           <div class="subscription-account-actions">
             {#if llmStatus?.subscription_connected}
-              <button class="act-link subscription-disconnect" disabled={loginBusy} onclick={() => endSubscriptionLogin('disconnect')}>Disconnect ChatGPT</button>
+              <button class="act-link subscription-disconnect" disabled={loginBusy} onclick={() => endSubscriptionLogin('disconnect')}>{translate("configurationSection.disconnectChatgpt")}</button>
             {:else}
               <button class="btn sm" disabled={loginBusy || !!loginCode} onclick={startSubscriptionLogin}>
-                {loginBusy ? 'Connecting…' : 'Connect ChatGPT'}
+                {loginBusy ? translate("configurationSection.connecting") : translate("configurationSection.connectChatgpt")}
               </button>
             {/if}
           </div>
           {#if loginCode}
             <div class="subscription-login">
-              <p>Open <a href={loginCode.verification_url} target="_blank" rel="noopener noreferrer">ChatGPT device login</a> and enter <strong class="mono">{loginCode.user_code}</strong>. Waiting for sign-in…</p>
-              <button class="btn sm" onclick={() => endSubscriptionLogin('cancel')}>Cancel login</button>
+              <p>{translate("configurationSection.open")} <a href={loginCode.verification_url} target="_blank" rel="noopener noreferrer">{translate("configurationSection.chatgptDeviceLogin")}</a> {translate("configurationSection.andEnter")} <strong class="mono">{loginCode.user_code}</strong>{translate("configurationSection.waitingForSignIn")}</p>
+              <button class="btn sm" onclick={() => endSubscriptionLogin('cancel')}>{translate("configurationSection.cancelLogin")}</button>
             </div>
           {/if}
           {#if loginError}<p class="err subscription-account-error" role="alert">{loginError}</p>{/if}
         </div>
       {:else if llmMode === 'local'}
-        <p class="wiz-p sub" style="font-size:.8rem">The Docker Compose default reaches Ollama on the host. Edit the URL for a native install or another machine on your network.</p>
+        <p class="wiz-p sub" style="font-size:.8rem">{translate("configurationSection.theDockerComposeDefaultReachesOllamaOn")}</p>
       {:else}
-        <p class="wiz-p sub" style="font-size:.8rem">Use the OpenAI-compatible base URL from your provider. Suchi sends extracted text, never the original file.</p>
+        <p class="wiz-p sub" style="font-size:.8rem">{translate("configurationSection.useTheOpenaiCompatibleBaseUrlFrom")}</p>
       {/if}
       {#if llmMode !== 'subscription'}
-      <div class="field"><label for="l-url">Model service URL</label>
-        <input id="l-url" class="input mono" placeholder="http://host.suchi.local:11434/v1" bind:value={llm.endpoint_url} oninput={invalidateLLMTest} /></div>
+      <div class="field"><label for="l-url">{translate("configurationSection.modelServiceUrl")}</label>
+        <input id="l-url" class="input mono" placeholder={translate("configurationSection.httpHostSuchiLocal11434V1")} bind:value={llm.endpoint_url} oninput={invalidateLLMTest} /></div>
       {/if}
       <div class="field model-field">
         <div class="field-label-row">
-          <label for="l-model">Model</label>
+          <label for="l-model">{translate("configurationSection.model")}</label>
           {#if llmMode === 'subscription' && llmStatus?.subscription_connected}
-            <button class="act-link refresh-models" disabled={modelsLoading || modelSaving} onclick={loadSubscriptionModels}>Refresh models</button>
+            <button class="act-link refresh-models" disabled={modelsLoading || modelSaving} onclick={loadSubscriptionModels}>{translate("configurationSection.refreshModels")}</button>
           {/if}
         </div>
         {#if llmMode === 'subscription'}
           <select id="l-model" class="input" bind:value={llm.model} onchange={persistSubscriptionModel} disabled={!llmStatus?.subscription_connected || modelsLoading || modelSaving || !subscriptionModels.length}>
-            {#if !subscriptionModels.length}<option value="">{modelsLoading ? 'Loading models…' : llmStatus?.subscription_connected ? 'No models available' : 'Connect to choose a model'}</option>{/if}
+            {#if !subscriptionModels.length}<option value="">{modelsLoading ? translate("configurationSection.loadingModels") : llmStatus?.subscription_connected ? translate("configurationSection.noModelsAvailable") : translate("configurationSection.connectToChooseAModel")}</option>{/if}
             {#each subscriptionModels as model (model.id)}<option value={model.id}>{model.name} ({model.id})</option>{/each}
           </select>
         {:else}
-          <input id="l-model" class="input mono" placeholder="qwen2.5:7b" bind:value={llm.model} oninput={invalidateLLMTest} />
+          <input id="l-model" class="input mono" placeholder={translate("configurationSection.qwen257b")} bind:value={llm.model} oninput={invalidateLLMTest} />
         {/if}
       </div>
       {#if llmMode === 'subscription'}
         {#if modelsError}<p class="err subscription-model-status" role="alert">{modelsError}</p>{/if}
-        {#if modelSaving}<p class="sub subscription-model-status" role="status">Saving model selection…</p>{/if}
-        {#if modelSaveError}<p class="err subscription-model-status" role="alert">{modelSaveError}</p><button class="btn sm" onclick={persistSubscriptionModel}>Retry saving model</button>{/if}
+        {#if modelSaving}<p class="sub subscription-model-status" role="status">{translate("configurationSection.savingModelSelection")}</p>{/if}
+        {#if modelSaveError}<p class="err subscription-model-status" role="alert">{modelSaveError}</p><button class="btn sm" onclick={persistSubscriptionModel}>{translate("configurationSection.retrySavingModel")}</button>{/if}
       {:else}
-      <div class="field"><label for="l-key">API key (blank for local)</label>
+      <div class="field"><label for="l-key">{translate("configurationSection.apiKeyBlankForLocal")}</label>
         <input id="l-key" class="input mono" type="password" bind:value={llm.api_key} autocomplete="off"
                oninput={invalidateLLMTest}
                disabled={llm.clear_api_key}
-               placeholder={llmStatus?.has_api_key ? 'stored key — leave blank to keep' : ''} /></div>
+               placeholder={llmStatus?.has_api_key ? translate("configurationSection.storedKeyLeaveBlankToKeep") : ''} /></div>
       {#if llmStatus?.has_api_key}
         <label class="wiz-check"><input type="checkbox" checked={llm.clear_api_key} onchange={setClearAPIKey} />
-          Clear the saved API key when saving. Config-file and environment keys are unchanged.</label>
+          {translate("configurationSection.clearTheSavedApiKeyWhenSaving")}</label>
       {/if}
       {/if}
       {#if llmIsRemote}
         <label class="wiz-check attn" class:subscription-ack={llmMode === 'subscription'}><input type="checkbox" bind:checked={llm.egress_ack} onchange={invalidateLLMTest} />
-          This model runs outside this machine. I understand document text will be sent to it.</label>
+          {translate("configurationSection.thisModelRunsOutsideThisMachineI")}</label>
       {/if}
 
-      <div class="field model-confidence"><label for="l-confidence">Minimum model confidence to apply automatically · {Math.round(Number(llm.confidence_threshold) * 100)}%</label>
+      <div class="field model-confidence"><label for="l-confidence">{translate("configurationSection.minimumModelConfidenceToApplyAutomaticallyValue", { "confidence_threshold": Math.round(Number(llm.confidence_threshold) * 100) })}</label>
         <input id="l-confidence" class="range" type="range" min="0.5" max="0.95" step="0.05" bind:value={llm.confidence_threshold} disabled={!autoApply} oninput={invalidateLLMTest} /></div>
       {#if llmMode === 'subscription'}
         <div class="subscription-test" class:tested={!!llmTestResult}>
           <div class="subscription-test-main">
             <button class="btn sm" disabled={busy || llmTesting || modelSaving || !!modelSaveError || !llm.model || !llmStatus?.subscription_connected || modelsLoading || !subscriptionModels.some(model => model.id === llm.model) || !llm.egress_ack}
-                    onclick={testClassifier}>{llmTesting ? 'Testing…' : 'Test connection'}</button>
+                    onclick={testClassifier}>{llmTesting ? translate("configurationSection.testing") : translate("configurationSection.testConnection")}</button>
             {#if llmTestError}
               <span class="subscription-test-verdict failed" role="alert">
                 <span class="verdict-mark" aria-hidden="true">!</span>
-                Connection failed · {llmTestError}
+                {translate("configurationSection.connectionFailedValue", { "llmTestError": llmTestError })}
               </span>
             {:else if llmTestResult}
               <span class="subscription-test-verdict" role="status">
                 <span class="verdict-mark" aria-hidden="true">✓</span>
-                Responded in {elapsedLabel(llmTestResult.elapsed_ms)} · Model confidence {Math.round(Number(llmTestResult.confidence) * 100)}% (self-reported)
+                {translate("configurationSection.respondedInValueModelConfidenceValueSelf", { "elapsed_ms": elapsedLabel(llmTestResult.elapsed_ms), "confidence": Math.round(Number(llmTestResult.confidence) * 100) })}
               </span>
             {/if}
           </div>
@@ -635,53 +636,53 @@
       {:else}
         <div class="toolbar connection-actions">
           <button class="btn primary sm" disabled={busy || llmTesting || modelSaving || !!modelSaveError || !llm.endpoint_url || !llm.model || (llmIsRemote && !llm.egress_ack)}
-                  onclick={testClassifier}>{llmTesting ? 'Testing…' : 'Test connection'}</button>
+                  onclick={testClassifier}>{llmTesting ? translate("configurationSection.testing") : translate("configurationSection.testConnection")}</button>
         </div>
         {#if llmTestError}
           <div class="test-result failed">
-            <b>Connection failed</b>
+            <b>{translate("configurationSection.connectionFailed")}</b>
             <span>{llmTestError}</span>
           </div>
         {:else if llmTestResult}
           <div class="test-result">
-            <b>Connection responded in {llmTestResult.elapsed_ms} ms</b>
-            <span>{llmTestResult.title || 'No title'} · Model confidence {Math.round(Number(llmTestResult.confidence) * 100)}% (self-reported)</span>
-            {#if llmTestResult.tags?.length}<span class="sub">Tags: {llmTestResult.tags.join(', ')}</span>{/if}
+            <b>{translate("configurationSection.connectionRespondedInValueMs", { "elapsed_ms": llmTestResult.elapsed_ms })}</b>
+            <span>{translate("configurationSection.valueModelConfidenceValueSelfReported", { "title": llmTestResult.title || 'No title', "confidence": Math.round(Number(llmTestResult.confidence) * 100) })}</span>
+            {#if llmTestResult.tags?.length}<span class="sub">{translate("configurationSection.tagsValue", { "join": llmTestResult.tags.join(', ') })}</span>{/if}
           </div>
         {/if}
-        <p class="wiz-p sub" style="font-size:.8rem;margin-top:12px">Sends one sample sentence, never your documents.</p>
+        <p class="wiz-p sub" style="font-size:.8rem;margin-top:12px">{translate("configurationSection.sendsOneSampleSentenceNeverYourDocuments")}</p>
       {/if}
 
           </div>
-          <div class="mdl-foot"><span class="cls-note">Enabling starts suggestions for new documents.</span>
+          <div class="mdl-foot"><span class="cls-note">{translate("configurationSection.enablingStartsSuggestionsForNewDocuments")}</span>
             {#if llmStatus?.enabled}<button class="act-link" style="color:var(--muted)" disabled={busy || llmTesting}
-                onclick={() => saveAnd(() => saveClassifier(false), 'Model disabled; local matching settings unchanged').then(() => (modelDialogOpen = false))}>Disable model</button>{/if}
+                onclick={() => saveAnd(() => saveClassifier(false), 'Model disabled; local matching settings unchanged').then(() => (modelDialogOpen = false))}>{translate("configurationSection.disableModel")}</button>{/if}
             <button class="btn primary sm" disabled={busy || llmTesting || modelSaving || !!modelSaveError || !llmTestResult || (llmMode !== 'subscription' && !llm.endpoint_url) || !llm.model || (llmMode === 'subscription' && (!llmStatus?.subscription_connected || modelsLoading || !subscriptionModels.some(model => model.id === llm.model))) || (llmIsRemote && !llm.egress_ack)}
-                onclick={() => saveAnd(() => saveClassifier(true), 'Model enabled').then(() => (modelDialogOpen = false))}>Enable model</button></div>
+                onclick={() => saveAnd(() => saveClassifier(true), translate("configurationSection.modelEnabled")).then(() => (modelDialogOpen = false))}>{translate("configurationSection.enableModel")}</button></div>
         </div>
       {/if}
 
     {:else if section === 'automations'}
-      <h3>Automations</h3>
-      <p class="wiz-p">Your preset can install starter filing automations. Preset-owned automations show their filing-tree owner; editing one forks a user-owned copy, so re-picking the preset never overwrites your edits.</p>
-      <p class="wiz-p">Automations file documents by title, content, sender, tags, and other metadata.</p>
+      <h3>{translate("configurationSection.automations")}</h3>
+      <p class="wiz-p">{translate("configurationSection.yourPresetCanInstallStarterFilingAutomations")}</p>
+      <p class="wiz-p">{translate("configurationSection.automationsFileDocumentsByTitleContentSender")}</p>
       <div class="toolbar">
-        <a role="button" class="btn primary sm" href={filingHref("#/automations")}>Open automations</a>
+        <a role="button" class="btn primary sm" href={filingHref("#/automations")}>{translate("configurationSection.openAutomations")}</a>
       </div>
 
     {:else if section === 'preferences'}
-      <h3>OCR and backups</h3>
-      <div class="field"><label for="p-ocr">OCR languages (comma-separated tesseract codes)</label>
-        <input id="p-ocr" class="input mono" placeholder="eng,hin,nep" bind:value={prefs.ocr_languages} /></div>
-      <div class="field"><label for="p-bk">Database snapshot interval (hours, 0 disables)</label>
+      <h3>{translate("configurationSection.ocrAndBackups")}</h3>
+      <div class="field"><label for="p-ocr">{translate("configurationSection.ocrLanguagesCommaSeparatedTesseractCodes")}</label>
+        <input id="p-ocr" class="input mono" placeholder={translate("configurationSection.engHinNep")} bind:value={prefs.ocr_languages} /></div>
+      <div class="field"><label for="p-bk">{translate("configurationSection.databaseSnapshotIntervalHours0Disables")}</label>
         <input id="p-bk" class="input" type="number" min="0" bind:value={prefs.backup_interval_hours} /></div>
-      <p class="wiz-p sub" style="font-size:.8rem">Snapshots include only the database. A complete backup also needs document files, the credential key, and configuration.</p>
+      <p class="wiz-p sub" style="font-size:.8rem">{translate("configurationSection.snapshotsIncludeOnlyTheDatabaseAComplete")}</p>
       <div class="toolbar">
         <button class="btn primary sm" disabled={busy}
                 onclick={() => saveAnd(() => savePreferences({
                   backup_interval_hours: Number(prefs.backup_interval_hours) || 0,
                   ocr_languages: prefs.ocr_languages.split(',').map(x => x.trim()).filter(Boolean),
-                }), 'Preferences saved')}>Save preferences</button>
+                }), translate("configurationSection.preferencesSaved"))}>{translate("configurationSection.savePreferences")}</button>
       </div>
     {/if}
   {/if}

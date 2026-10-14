@@ -734,7 +734,7 @@ func TestChatFTSPlanRanksBeforeBuildingSnippets(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	query := "EXPLAIN " + chatFTSSourceSQL([]string{"d.trashed_at IS NULL"})
+	query := "EXPLAIN " + chatFTSSourceSQL([]string{"d.trashed_at IS NULL"}, false)
 	match := "needle*"
 	args := []any{
 		match, chatMaxSources,
@@ -784,7 +784,7 @@ func TestChatAdditionalPassagePlanBuildsOneSnippet(t *testing.T) {
 		t.Fatal(err)
 	}
 	rows, err := s.DB.Read.QueryContext(context.Background(),
-		"EXPLAIN "+chatAdditionalPassagesSQL(1),
+		"EXPLAIN "+chatAdditionalPassagesSQL(1, false),
 		markers.start, markers.end, "content : needle*", 1, markers.start)
 	if err != nil {
 		t.Fatal(err)

@@ -26,7 +26,7 @@ The first prefixed import, for example `system = "S01"`, offers two destinations
   A00) and create S01 for the incoming tree. The preserved archive keeps its name.
 
 Preview describes the destination and access changes. Apply commits introduction,
-tree, starters, provenance and projection jobs atomically; stale or failed Apply
+tree, provenance and projection jobs atomically; stale or failed Apply
 leaves no partially introduced system. Afterwards a prefixed file targets its
 code, creating a new system if needed. An unprefixed file uses the captured
 selected system; unqualified CLI/session collection calls use the original
@@ -121,10 +121,9 @@ Each document should have one obvious home:
 
 Every built-in category has a one-line description of what belongs there and
 where a near neighbour's documents go instead. The document model sees each
-category's area, name and description. Category keywords name one category each;
-a form word such as “receipt”, “invoice” or “statement” is never a keyword on its
-own. Every matching rule runs and the last category assignment wins: starter
-rules run first, then keyword rules in category-code order.
+category's area, name and description. Filing trees carry no automations; write
+your own rules in [Automations](/automations), in whatever language your
+documents use.
 
 Archives that applied an earlier version of a ready-made tree keep their
 categories until an administrator applies it again; the preview below shows
@@ -133,7 +132,7 @@ keep their documents.
 
 Ready-made and composed changes always preview first. After Preview completes,
 the workspace moves focus to the review and scrolls it into view. The review
-shows the complete target tree, starter-rule changes, every category-name
+shows the complete target tree, every category-name
 collision, and the number of live and recoverable documents using that category.
 A same-meaning built-in mapping updates the existing category row in place,
 preserving its ID and document references. Other mappings require a reviewed
@@ -142,17 +141,14 @@ free code in the same decade, or skip it. Apply is rejected if relevant state
 changed after Preview.
 
 Choose a `.huml` or `.toml` file, or paste content and select its **File
-format**. Custom files can contain starter automations and category-keyword
-filing rules; **Include starter rules from this file** applies only to those
-supplied by the file. A tree-only file adds no rules. Preview shows the name,
-story, version, user tree, generated structure, category/rule additions,
-preserved rules, skips, and collisions. Changing input, file format, seed choice,
-or remaps requires another preview. If relevant destination state changes before
+format**. Preview shows the name, story, version, user tree, generated
+structure, category additions and collisions. Changing input, file format or
+remaps requires another preview. If relevant destination state changes before
 Apply, Suchi preserves your input and asks you to preview again; unrelated
 system edits do not invalidate a preview.
 
 Validation checks supported structure, not domain suitability or reliable
-classification. Review imported keywords and rules against your documents.
+classification.
 Suchi never fetches remote taxonomy files or requires a catalog service.
 
 ## Safe import and reimport
@@ -164,17 +160,12 @@ an empty archive alone is not permission to reset a chosen tree.
 
 - Same category code and name preserves the row and local description.
 - Different names at one code need explicit skip or an unused same-decade remap.
-- Existing rule names are preserved, including disabled preset originals and
-  user-owned edited forks. Reimport does not restore disabled rules.
-- Skipping a category skips its entire dependent starter rule, not just one action.
-- System destination, tree, supported starters, last-import provenance and required
-  jobs commit together; unresolved references leave no partial import.
+- Imports never create, change or remove automations.
+- System destination, tree, last-import provenance and required jobs commit
+  together; a failure leaves no partial import.
 
 Built-in and composed transitions additionally support reviewed in-place
-replacement. Preset-owned rules from the previous tree are suspended before a
-Refile; identical surviving rules are transferred to the target and its rules are
-activated. Disabled choices stay disabled. User-owned rules and copy-on-write
-forks are never suspended by a preset change.
+replacement.
 
 Use [Refile](/refile) explicitly, or select it in the reviewed tree change, to
 run the target tree's active automations and rebuild paths after Apply. Refile is
@@ -185,7 +176,8 @@ current filing tree and is not a document-version operation.
 
 HuML and TOML are co-equal. YAML, unknown/duplicate keys, unsupported formats,
 wrong types and unsupported actions are errors. Validation is offline and
-bounded to 1 MiB. The entire file is checked even when seeds are skipped.
+bounded to 1 MiB. Files exported by v0.2 may still contain category `keywords`
+and `seeds.automations`; import ignores them and keeps the tree.
 
 ```toml
 format = "suchi-taxonomy/v1"
@@ -204,15 +196,13 @@ name = "Life admin"
 code = 11
 name = "Identity"
 description = "Passports, identity cards and related certificates."
-keywords = ["birth certificate"]
 ```
 
 Required header: `format`, `id`, positive integer `version`, nonempty `name`,
 `market`, `language`, `story`. Author IDs match `[a-z0-9][a-z0-9_-]*`. Optional
 `system` names exactly one filing system; optional metadata is `maintainer` and
 `license`. Importing or exporting never implicitly licenses your configuration.
-Names are at most 80 Unicode characters, story 500, descriptions 240;
-each category allows at most 20 literal keywords of at most 40 characters.
+Names are at most 80 Unicode characters, story 500, descriptions 240.
 
 Tree form requires explicit `areas`; `areas = []` is a blank tree. Flat authoring
 shorthand uses `flat = true` and 1–9 `categories` instead of areas. Codes are
@@ -228,32 +218,6 @@ raw validation. The optional top-level `system = "S01"` is distinct and valid.
 Both reserved decades are forbidden remap destinations. The index is not a
 category or a selectable filing destination.
 
-### Optional starters
-
-Only `seeds.automations` is supported. Existing trigger types and filters use
-the runtime's glob/regex validation; category keywords remain literal matching,
-not regex. Starters need unique names, nonempty actions and exact parameters:
-
-| Action                 | Portable parameters                                  |
-| ---------------------- | ---------------------------------------------------- |
-| `assign_title`         | `template`                                           |
-| `assign_tags`          | `tags` list or single `tag`, never both              |
-| `assign_correspondent` | `correspondent` name                                 |
-| `assign_jd_category`   | Integer `jd_category_code` declared in the user tree |
-
-Keyword-generated names include the authoring ID and effective category code/name.
-If two rules to be added have the same name, Preview rejects the proposal with the
-conflicting name. Rename the explicit starter or remove the category keywords
-before previewing again. Existing local rules still win, and skipped rules do not
-participate in this collision check. Metadata references resolve trimmed exact
-names first, then canonical slugs; Preview and Apply use the same normalization.
-
-No instance row IDs or arbitrary action parameters. Sensitivity defaults,
-`review_after_days`, custom fields, standalone tag/type/correspondent seeds,
-link vocabulary/endpoints, access grants, secrets and provider configuration are
-unsupported. New schema capabilities require a new format;
-adding a runtime action does not automatically make it portable in v1.
-
 ## Export and provenance
 
 ```sh
@@ -261,7 +225,6 @@ suchi taxonomy validate my-tree.toml
 suchi taxonomy import my-tree.toml                 # preview only
 suchi taxonomy import my-tree.toml --apply
 suchi taxonomy export --format huml > current-tree.huml
-suchi taxonomy export --format huml --skip-seeds > filing-tree.huml
 ```
 
 Use `--system S01` to select an existing system for unprefixed import or export.
@@ -274,13 +237,8 @@ identity, file version, byte SHA-256, schema version, source hash, and Suchi
 release version remain separate provenance. Equivalent HuML and TOML can have
 different hashes.
 
-Default export includes representable preset-owned starters, not all archive
-automations. Keyword-generated rules export as named explicit starters to retain
-their distinct identity and order, not collapsed category keywords. Disabled or
-otherwise unrepresentable starters cause an error, never silent loss or
-re-enabling. Choose tree-only export explicitly to omit both keywords and
-starters. User-owned forks, permissions, review history and documents need a
-[complete backup](/backup-restore).
+Export contains the filing tree only. Automations, permissions, review history
+and documents need a [complete backup](/backup-restore).
 
 Only validated generated System/49 is removed from raw output. Legacy custom
 reserved categories, renamed system rows or a different Inbox produce an
@@ -292,8 +250,8 @@ Before introduction the map is
 `rendered/00-09 System index/00.00 archive.huml`; afterwards each system has
 `rendered/<SYS>/00-09 System index/00.00 archive.huml`. It contains the current
 system code/name and tree/descriptions, with snapshot `id = "archive"` and
-`version = 1`, but no keywords/automations. Generated System/49 is implicit.
-It is a managed area/category map, not the original authoring starter file,
+`version = 1`. Generated System/49 is implicit.
+It is a managed area/category map, not the original authoring file,
 the upstream JD register of assigned ID folders, a document inventory or backup.
 Do not edit it in place.
 

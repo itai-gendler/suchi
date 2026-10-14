@@ -28,6 +28,7 @@ import (
 	"github.com/johnnybravo-xyz/suchi/core/blob"
 	suchicrypto "github.com/johnnybravo-xyz/suchi/core/crypto"
 	"github.com/johnnybravo-xyz/suchi/core/db"
+	"github.com/johnnybravo-xyz/suchi/core/i18n"
 	"github.com/johnnybravo-xyz/suchi/core/ingest/emailwatch/oauth"
 	"github.com/johnnybravo-xyz/suchi/core/jobs"
 	"github.com/johnnybravo-xyz/suchi/core/settings"
@@ -108,6 +109,7 @@ type Server struct {
 	Approvals      *approvals.Engine
 	DB             *db.DB
 	CAS            *blob.CAS
+	Catalogs       *i18n.Registry
 	Log            *slog.Logger
 	Jobs           *jobs.Dispatcher
 	trash          *trash.Service

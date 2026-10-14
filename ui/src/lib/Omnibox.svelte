@@ -1,5 +1,6 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script>
+  import { t as translate } from "./i18n.svelte.js";
   // Combined command palette and query entry point.
   import { go } from './router.svelte.js'
   import { resolveAddress } from './api.js'
@@ -14,8 +15,8 @@
   let queryVersion = 0
   let box, input
   const appleShortcut = typeof navigator !== 'undefined' && /Mac|iPhone|iPad|iPod/.test(navigator.platform)
-  const shortcutLabel = appleShortcut ? '⌘ K' : 'Ctrl K'
-  const shortcutKeys = appleShortcut ? 'Meta+K' : 'Control+K'
+  const shortcutLabel = appleShortcut ? translate("omnibox.k") : translate("omnibox.ctrlK")
+  const shortcutKeys = appleShortcut ? translate("omnibox.metaK") : translate("omnibox.controlK")
 
   function matches(label) {
     const s = q.trim().toLowerCase()
@@ -47,7 +48,7 @@
           if (!scopeCurrent(scope) || version !== queryVersion) return
           go(`#/doc/${value.split('.')[2]}?system=${document.system_code}`)
         } catch (ex) {
-          if (scopeCurrent(scope) && version === queryVersion) error = ex.message || 'Address unavailable'
+          if (scopeCurrent(scope) && version === queryVersion) error = ex.message || translate("omnibox.addressUnavailable")
           return
         }
       } else go(`#/search?q=${encodeURIComponent(value)}`)
@@ -93,9 +94,9 @@
 
 <div class="omni" bind:this={box}>
   <Icon name="search" size={15} />
-  <input bind:this={input} bind:value={q} type="search" placeholder="Search or run a command"
+  <input bind:this={input} bind:value={q} type="search" placeholder={translate("omnibox.searchOrRunACommand")}
          maxlength="2000"
-         autocomplete="off" spellcheck="false" aria-label="Search or run a command"
+         autocomplete="off" spellcheck="false" aria-label={translate("omnibox.searchOrRunACommand")}
          aria-keyshortcuts={shortcutKeys}
          onfocus={() => (open = true)} oninput={() => { open = true; idx = -1; error = ''; queryVersion++ }}
          onkeydown={onKey} />
@@ -103,9 +104,9 @@
   {#if !open && !q}<kbd class="omni-shortcut" aria-hidden="true">{shortcutLabel}</kbd>{/if}
 
   {#if canAsk}
-    <button type="button" class="omni-ask" aria-label="Ask your documents" title="Ask your documents"
+    <button type="button" class="omni-ask" aria-label={translate("omnibox.askYourDocuments")} title={translate("omnibox.askYourDocuments")}
             onmousedown={(e) => e.preventDefault()} onclick={ask}>
-      <Icon name="ask" size={14} /><span>Ask</span>
+      <Icon name="ask" size={14} /><span>{translate("omnibox.ask")}</span>
     </button>
   {/if}
 
@@ -113,7 +114,7 @@
     <div class="omni-drop" role="listbox">
       {#if error}<p class="err" role="alert">{error}</p>{/if}
       {#if commandHits.length}
-        <div class="omni-lbl">Commands</div>
+        <div class="omni-lbl">{translate("omnibox.commands")}</div>
         {#each commandHits as c, i}
           <button class="omni-row" class:hot={idx === i} role="option" aria-selected={idx === i}
                   onmousedown={(e) => { e.preventDefault(); activate(i) }}>
@@ -122,7 +123,7 @@
         {/each}
       {/if}
       {#if pageHits.length}
-        <div class="omni-lbl">Pages</div>
+        <div class="omni-lbl">{translate("omnibox.pages")}</div>
         {#each pageHits as p, j}
           <button class="omni-row" class:hot={idx === pagesBase + j} role="option" aria-selected={idx === pagesBase + j}
                   onmousedown={(e) => { e.preventDefault(); activate(pagesBase + j) }}>
@@ -133,7 +134,7 @@
       {#if q.trim()}
         <button class="omni-row all" class:hot={idx === -1}
                 onmousedown={(e) => { e.preventDefault(); activate(-1) }}>
-          <Icon name="search" size={13} /><span class="grow">Search everything for “{q.trim()}”</span>
+          <Icon name="search" size={13} /><span class="grow">{translate("omnibox.searchEverythingForValue", { "trim": q.trim() })}</span>
         </button>
       {/if}
     </div>

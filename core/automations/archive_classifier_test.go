@@ -67,6 +67,29 @@ func TestApplyFromArchiveReviewsUnanimousMatch(t *testing.T) {
 	}
 }
 
+// Japanese documents have no spaces between words; neighbours still come
+// from shared character windows, so local filing learns from them too.
+func TestApplyFromArchiveLearnsFromUnspacedScripts(t *testing.T) {
+	ctx := context.Background()
+	d, log := setup(t, ctx)
+	seedUser(t, ctx, d)
+	saveArchiveConfig(t, ctx, d, true)
+	must(t, settings.Set(ctx, d, settings.KeyClassificationAutoApply, false))
+
+	utility := seedCorrespondent(t, ctx, d, "東京電力")
+	for i := 0; i < 6; i++ {
+		seedDocWithCorr(t, ctx, d, "電気料金請求書"+strconv.Itoa(i),
+			strconv.Itoa(i+1)+"月分の電気料金請求書をお送りします。電気料金は口座振替です。", utility)
+	}
+	targetID := seedDoc(t, ctx, d, "電気料金請求書",
+		"今月の電気料金請求書です。電気料金は口座振替となります。")
+
+	if err := automations.ApplyFromArchive(ctx, d, log, targetID); err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+	assertArchiveProposals(t, d, targetID, "correspondent", utility, 1)
+}
+
 func TestApplyFromArchiveProposesOnlyInboxCategory(t *testing.T) {
 	ctx := context.Background()
 	d, log := setup(t, ctx)

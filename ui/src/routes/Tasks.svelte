@@ -1,9 +1,10 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script>
+  import { t as translate } from "../lib/i18n.svelte.js";
   import { scopedHash as filingHref } from '../lib/systems.svelte.js'
   import { listTasks, resolveApprovalTask, retryDeadJob, dismissDeadJob, thumbPath,
            listIntelligence, resolveIntelligence } from '../lib/api.js'
-  import { fmtDate } from '../lib/format.js'
+  import { fmtDate, formatNumber, plural } from '../lib/format.js'
   import { DATE_ROLES, formatIntelligenceValue, canReviewDate, reviewFailure } from '../lib/intelligence.js'
   import Icon from '../lib/Icon.svelte'
 
@@ -60,10 +61,10 @@
       tasks = tasks.filter(x => x.id !== t.id)
       onCount?.(tasks.length + jobs.length + intelligence.length)
       reviewNotice = choice === 'apply'
-        ? 'Decision recorded. The document and current value will be checked again before the change is applied.'
+        ? translate("tasks.decisionRecordedTheDocumentAndCurrentValueWill")
         : choice === 'reject' || choice === 'dismiss'
-          ? 'Suggestion dismissed.'
-          : 'Decision recorded. Any requested processing will continue shortly.'
+          ? translate("tasks.suggestionDismissed")
+          : translate("tasks.decisionRecordedAnyRequestedProcessingWillContinueShortly")
       notify?.(reviewNotice)
     } catch (ex) {
       taskErrors = { ...taskErrors, [t.id]: reviewFailure(ex) }
@@ -77,9 +78,9 @@
   function deadline(t) {
     if (!t.deadline_at) return null
     const hrs = (t.deadline_at * 1000 - Date.now()) / 36e5
-    if (hrs < 0) return { text: 'deadline passed', soon: true }
-    if (hrs < 24) return { text: `${Math.max(1, Math.round(hrs))}h left`, soon: true }
-    return { text: `due ${fmtDate(t.deadline_at)}`, soon: false }
+    if (hrs < 0) return { text: translate("tasks.deadlinePassed"), soon: true }
+    if (hrs < 24) return { text: translate("tasks.valueHLeft", { "hrs": Math.max(1, Math.round(hrs)) }), soon: true }
+    return { text: translate("tasks.dueValue", { "deadline_at": fmtDate(t.deadline_at) }), soon: false }
   }
 
   function taskChoices(t) {
@@ -100,53 +101,54 @@
   function choiceLabel(t, choice) {
     if (t.approval_name === 'rescan-proposal') {
       const count = Number(t.vars?.stale_count || 0)
-      if (choice === 'approve_all') return count ? `Rescan all ${count}` : 'Rescan all'
-      if (choice === 'approve_sample') return 'Try 20 first'
-      if (choice === 'dismiss') return 'Dismiss'
+      if (choice === 'approve_all') return count ? translate("tasks.rescanAllValue", { count: formatNumber(count) }) : translate("tasks.rescanAll")
+      if (choice === 'approve_sample') return translate("tasks.try20First")
+      if (choice === 'dismiss') return translate("tasks.dismiss")
     }
     if (t.approval_name === 'document-change') {
-      if (choice === 'reject') return 'Dismiss'
+      if (choice === 'reject') return translate("tasks.dismiss")
       if (choice === 'apply') {
         // Recording this choice schedules the existing asynchronous application.
         return {
-          jd_category: 'File document',
-          correspondent: 'Set correspondent',
-          tag: 'Add tag',
-          title: 'Change title',
-          language: 'Set language',
-          custom_field: 'Set custom field',
-        }[t.vars?.field] || 'Apply change'
+          jd_category: translate("tasks.fileDocument"),
+          correspondent: translate("tasks.setCorrespondent"),
+          tag: translate("tasks.addTag"),
+          title: translate("tasks.changeTitle"),
+          language: translate("tasks.setLanguage"),
+          custom_field: translate("tasks.setCustomField"),
+        }[t.vars?.field] || translate("tasks.applyChange")
       }
     }
-    const text = choice.replaceAll('_', ' ')
-    return text.charAt(0).toUpperCase() + text.slice(1)
+    return {
+      approve: translate("tasks.approve"),
+      reject: translate("tasks.reject"),
+    }[choice] || choice
   }
 
   function pipelineLabel(kind) {
-    return { llm: 'Document suggestions', ocr: 'Text recognition (OCR)', content: 'Document text' }[kind] || kind
+    return { llm: translate("tasks.documentSuggestions"), ocr: translate("tasks.textRecognitionOcr"), content: translate("tasks.documentText") }[kind] || kind
   }
 
   function producerLabel(producer) {
     return {
-      'llm-classifier': 'Document model',
-      'demo-corpus': 'Demo example',
-      legacy: 'Earlier Suchi version',
+      'llm-classifier': translate("tasks.documentModel"),
+      'demo-corpus': translate("tasks.demoExample"),
+      legacy: translate("tasks.earlierSuchiVersion"),
     }[producer] || String(producer || '').replace(/[-_:]+/g, ' ')
   }
 
   function jobKindLabel(kind) {
     const labels = {
-      'post-ingest': 'Read and file document',
-      'post-classify': 'Suggest document details',
-      render: 'Update filed copy',
-      'approval:advance': 'Apply approval',
-      'approval:timeout-sweep': 'Update expired approvals',
-      taxonomy_index: 'Update filing index',
-      retention: 'Empty expired Trash',
-      maintenance: 'Archive maintenance',
+      'post-ingest': translate("tasks.readAndFileDocument"),
+      'post-classify': translate("tasks.suggestDocumentDetails"),
+      render: translate("tasks.updateFiledCopy"),
+      'approval:advance': translate("tasks.applyApproval"),
+      'approval:timeout-sweep': translate("tasks.updateExpiredApprovals"),
+      taxonomy_index: translate("tasks.updateFilingIndex"),
+      retention: translate("tasks.emptyExpiredTrash"),
+      maintenance: translate("tasks.archiveMaintenance"),
     }
-    const plain = labels[kind] || String(kind || '').replace(/[-_:]+/g, ' ').trim()
-    return plain ? plain.charAt(0).toUpperCase() + plain.slice(1) : 'Processing step'
+    return labels[kind] || kind || translate("tasks.processingStep")
   }
 
   function rescanTargets(t) {
@@ -154,44 +156,51 @@
   }
 
   function suggestionValue(vars) {
-    return typeof vars?.proposed_value === 'string' ? vars.proposed_value : 'Unavailable'
+    return typeof vars?.proposed_value === 'string' ? vars.proposed_value : translate("tasks.unavailable")
   }
 
   function sourceLabel(source) {
     return {
-      archive: 'Archive match',
-      llm: 'Model suggestion',
-      'language-detector': 'Language detection',
+      archive: translate("tasks.archiveMatch"),
+      llm: translate("tasks.modelSuggestion"),
+      'language-detector': translate("tasks.languageDetection"),
     }[source] || source
   }
 
   function supportingContextLabel(vars) {
     const count = Array.isArray(vars?.sources) ? vars.sources.length : 0
-    return count ? `Similar documents (${count})` : 'Text behind this suggestion'
+    return count ? plural("tasks.similarDocumentCount", count) : translate("tasks.textBehindThisSuggestion")
   }
 
   function decisionPrompt(t) {
     if (t.approval_name !== 'document-change' || !t.vars) {
-      return t.prompt || t.title || `Task #${t.id}`
+      return t.prompt || t.title || translate("tasks.taskValue", { "id": t.id })
     }
     const value = suggestionValue(t.vars)
-    if (!['jd_category', 'correspondent', 'tag', 'title', 'language', 'custom_field'].includes(t.vars.field)) return 'Unsupported action · read-only'
+    if (!['jd_category', 'correspondent', 'tag', 'title', 'language', 'custom_field'].includes(t.vars.field)) return translate("tasks.unsupportedActionReadOnly")
     const action = {
-      jd_category: `filing under “${value}”`,
-      correspondent: `setting the correspondent to “${value}”`,
-      tag: `adding the “${value}” tag`,
-      title: `changing the title to “${value}”`,
-      language: `setting the language to “${value}”`,
-      custom_field: `setting “${t.vars.field_name || 'custom field'}” to “${value}”`,
+      jd_category: translate("tasks.filingUnderValue", { "value": value }),
+      correspondent: translate("tasks.settingTheCorrespondentToValue", { "value": value }),
+      tag: translate("tasks.addingTheValueTag", { "value": value }),
+      title: translate("tasks.changingTheTitleToValue", { "value": value }),
+      language: translate("tasks.settingTheLanguageToValue", { "value": value }),
+      custom_field: translate("tasks.settingValueToValue", { field: t.vars.field_name || translate("tasks.customField"), value }),
     }[t.vars.field]
-    if (t.vars.automation_name) return `${t.vars.automation_name} proposes ${action}.`
-    return action.charAt(0).toUpperCase() + action.slice(1) + '?'
+    if (t.vars.automation_name) return translate("tasks.valueProposesValue", { "automation_name": t.vars.automation_name, "action": action })
+    return {
+      jd_category: translate("tasks.fileUnderQuestion", { value }),
+      correspondent: translate("tasks.setCorrespondentQuestion", { value }),
+      tag: translate("tasks.addTagQuestion", { value }),
+      title: translate("tasks.changeTitleQuestion", { value }),
+      language: translate("tasks.setLanguageQuestion", { value }),
+      custom_field: translate("tasks.setCustomFieldQuestion", { field: t.vars.field_name || translate("tasks.customField"), value }),
+    }[t.vars.field]
   }
 
   function filingLabel(t) {
     if (!t.doc_jd_category_name) return ''
     return t.doc_jd_category_code
-      ? `${t.doc_jd_category_code} ${t.doc_jd_category_name}`
+      ? translate("tasks.valueValue", { "doc_jd_category_code": t.doc_jd_category_code, "doc_jd_category_name": t.doc_jd_category_name })
       : t.doc_jd_category_name
   }
 
@@ -218,7 +227,7 @@
   function groupContext(group) {
     const filed = filingLabel(group.document || {})
     if (!filed || !group.tasks.some(t => t.vars?.field !== 'jd_category')) return ''
-    return `Filed under ${filed}. Review the remaining metadata suggestions independently.`
+    return translate("tasks.filedUnderValueReviewTheRemainingMetadataSuggestions", { "filed": filed })
   }
 
   function intelligenceGroups() {
@@ -282,10 +291,10 @@
       onCount?.(tasks.length + jobs.length + intelligence.length)
       reviewNotice = resolved.size
         ? (decision === 'accepted'
-          ? `Added ${resolved.size} date${resolved.size === 1 ? '' : 's'} to Calendar.`
-          : `Rejected ${resolved.size} date${resolved.size === 1 ? '' : 's'}.`)
-        : 'No dates were changed.'
-      if (resolved.size < ids.length) reviewNotice += ' Some decisions could not be completed; check the messages below and refresh.'
+          ? plural("tasks.addedDateCountToCalendar", resolved.size)
+          : plural("tasks.rejectedDateCount", resolved.size))
+        : translate("tasks.noDatesWereChanged")
+      if (resolved.size < ids.length) reviewNotice += translate("tasks.someDecisionsCouldNotBeCompletedCheckThe")
       notify?.(reviewNotice)
     } catch (ex) {
       const failures = { ...dateErrors }
@@ -299,7 +308,7 @@
 
   function retryLabel(job) {
     const count = Number(job.attempts || 0)
-    return count === 0 ? 'Not retried' : `${count} ${count === 1 ? 'retry' : 'retries'}`
+    return count === 0 ? translate("tasks.notRetried") : plural("tasks.retryCount", count)
   }
 
   async function actOnDeadJob(job, action) {
@@ -307,10 +316,10 @@
     try {
       if (action === 'retry') await retryDeadJob(job.id)
       else await dismissDeadJob(job.id)
-      notify?.(action === 'retry' ? 'Processing started again' : 'Processing issue dismissed')
+      notify?.(action === 'retry' ? translate("tasks.processingStartedAgain") : translate("tasks.processingIssueDismissed"))
       await load()
     } catch (ex) {
-      notify?.(ex.message || `Could not ${action} this processing item`)
+      notify?.(ex.message || translate("tasks.couldNotValueThisProcessingItem", { "action": action }))
     } finally {
       const next = new Set(busyJobs)
       next.delete(job.id)
@@ -334,12 +343,12 @@
 <svelte:window onkeydown={onKey} />
 
 {#if err}<div class="err">{err}</div>{/if}
-<div class="toolbar review-toolbar" role="group" aria-label="Approval options">
+<div class="toolbar review-toolbar" role="group" aria-label={translate("tasks.approvalOptions")}>
   <button class="btn sm"
           disabled={loading || intelligenceBusy || busyTasks.size > 0} onclick={load}>
-    <Icon name="refresh" size={13} /> Refresh
+    <Icon name="refresh" size={13} /> {translate("tasks.refresh")}
   </button>
-  {#if !loading}<span class="pill">{tasks.length + jobs.length + intelligence.length} pending</span>{/if}
+  {#if !loading}<span class="pill">{translate("tasks.valuePending", { "length": tasks.length + jobs.length + intelligence.length })}</span>{/if}
   <p role="status">{reviewNotice}</p>
 </div>
 
@@ -352,24 +361,24 @@
     <section class="intelligence-review" aria-labelledby="intelligence-review-title">
       <header class="intelligence-head">
         <div>
-          <span class="eyebrow">Dates needing review</span>
-          <h2 id="intelligence-review-title">Check dates before they reach Calendar</h2>
-          <p>{intelligence.length} date{intelligence.length === 1 ? '' : 's'} from {reviewGroups.length} document{reviewGroups.length === 1 ? '' : 's'} are waiting for your decision.</p>
+          <span class="eyebrow">{translate("tasks.datesNeedingReview")}</span>
+          <h2 id="intelligence-review-title">{translate("tasks.checkDatesBeforeTheyReachCalendar")}</h2>
+          <p>{translate("tasks.dateReviewSummary", { dates: plural("tasks.dateCount", intelligence.length), documents: plural("tasks.documentCount", reviewGroups.length) })}</p>
         </div>
         <label class="select-all">
           <input type="checkbox" disabled={intelligenceBusy || !allIntelligence.available} checked={allIntelligence.all} use:indeterminate={allIntelligence.some}
                  onchange={(event) => toggleAllIntelligence(event.currentTarget.checked)} />
-          Select all dates
+          {translate("tasks.selectAllDates")}
         </label>
       </header>
 
-      <div class="intelligence-actions" role="group" aria-label="Review selected dates">
-        <span><b>{intelligenceSelection.size}</b> of {intelligence.length} date{intelligence.length === 1 ? '' : 's'} selected</span>
+      <div class="intelligence-actions" role="group" aria-label={translate("tasks.reviewSelectedDates")}>
+        <span><b>{formatNumber(intelligenceSelection.size)}</b> {translate("tasks.ofDateCountSelected", { dates: plural("tasks.dateCount", intelligence.length) })}</span>
         <button class="btn sm" disabled={!intelligenceSelection.size || intelligenceBusy}
-                onclick={() => resolveSelectedIntelligence('rejected')}>Reject {intelligenceSelection.size}</button>
+                onclick={() => resolveSelectedIntelligence('rejected')}>{translate("tasks.rejectValue", { "size": intelligenceSelection.size })}</button>
         <button class="btn primary sm" disabled={!intelligenceSelection.size || intelligenceBusy}
                 onclick={() => resolveSelectedIntelligence('accepted')}>
-          <Icon name="check" size={13} /> {intelligenceBusy ? 'Saving…' : `Add ${intelligenceSelection.size} to Calendar`}
+          <Icon name="check" size={13} /> {intelligenceBusy ? translate("common.saving") : translate("tasks.addValueToCalendar", { "size": intelligenceSelection.size })}
         </button>
       </div>
 
@@ -378,11 +387,11 @@
           {@const groupSelection = selectionState(group.candidates)}
           <article class="approval-card intelligence-card">
             <header class="approval-card-header intelligence-document">
-              <input type="checkbox" aria-label={`Select every suggested date from ${group.title || `document ${group.documentID}`}`}
+              <input type="checkbox" aria-label={translate("tasks.selectEverySuggestedDateFromValue", { "documentID": group.title || `document ${group.documentID}` })}
                      disabled={intelligenceBusy || !groupSelection.available} checked={groupSelection.all} use:indeterminate={groupSelection.some}
                      onchange={(event) => setCandidateSelection(group.candidates.map(candidate => candidate.id), event.currentTarget.checked)} />
               <a class="task-thumb intelligence-thumb" class:placeholder={!group.thumbnail}
-                 href={filingHref(`#/doc/${group.documentID}`)} aria-label={`Open ${group.title || `document ${group.documentID}`}`}>
+                 href={filingHref(`#/doc/${group.documentID}`)} aria-label={translate("tasks.openValue", { "documentID": group.title || `document ${group.documentID}` })}>
                 {#if group.thumbnail}
                   <img src={thumbPath(group.documentID)} alt="" loading="lazy" />
                 {:else}
@@ -390,40 +399,40 @@
                 {/if}
               </a>
               <div>
-                <a href={filingHref(`#/doc/${group.documentID}`)}>{group.title || `Document #${group.documentID}`}</a>
-                <small>{group.candidates.length} date{group.candidates.length === 1 ? '' : 's'} to check</small>
+                <a href={filingHref(`#/doc/${group.documentID}`)}>{group.title || translate("tasks.documentValue2", { "documentID": group.documentID })}</a>
+                <small>{plural("tasks.dateCountToCheck", group.candidates.length)}</small>
               </div>
             </header>
             <div class="approval-card-body intelligence-candidates">
               {#each group.candidates as candidate (candidate.id)}
                 <div class="intelligence-candidate">
-                  <input type="checkbox" aria-label={`Select suggested ${formatIntelligenceValue(candidate)}`}
+                  <input type="checkbox" aria-label={translate("tasks.selectSuggestedValue", { "candidate": formatIntelligenceValue(candidate) })}
                          checked={intelligenceSelection.has(candidate.id)}
                          disabled={intelligenceBusy || !canReviewDate(candidate) || !!dateErrors[candidate.id]}
                          onchange={(event) => setCandidateSelection([candidate.id], event.currentTarget.checked)} />
                   <div class="intelligence-copy">
                     <div class="intelligence-value">
-                      <strong>Suggested: {formatIntelligenceValue(candidate)}</strong>
-                      <span class="pill">{candidate.type === 'date' ? 'Date' : 'Read-only'}</span>
+                      <strong>{translate("tasks.suggestedValue", { "candidate": formatIntelligenceValue(candidate) })}</strong>
+                      <span class="pill">{candidate.type === 'date' ? translate("tasks.date") : translate("tasks.readOnly")}</span>
                     </div>
-                    {#if candidate.source_current === false}<span class="pill warn">Document changed</span>{/if}
+                    {#if candidate.source_current === false}<span class="pill warn">{translate("tasks.documentChanged")}</span>{/if}
                     {#if candidate.evidence_text}
                       <blockquote class="intelligence-evidence">“{candidate.evidence_text}”</blockquote>
-                      <small>{candidate.source_current === true ? 'Exact text from the linked document' : 'This saved quote no longer matches the document.'}</small>
+                      <small>{candidate.source_current === true ? translate("tasks.exactTextFromTheLinkedDocument") : translate("tasks.thisSavedQuoteNoLongerMatchesTheDocument")}</small>
                     {:else}
-                      <small>The matching text is not shown here. Open the document to reveal sensitive text.</small>
+                      <small>{translate("tasks.theMatchingTextIsNotShownHere")}</small>
                     {/if}
                     {#if typeof candidate.confidence === 'number'}
                       <details class="task-details">
-                        <summary>How this was suggested</summary>
-                        <p>Model confidence: {Math.round(candidate.confidence * 100)}%</p>
-                        {#if candidate.extractor}<p>Suggested by: {producerLabel(candidate.extractor)}</p>{/if}
+                        <summary>{translate("tasks.howThisWasSuggested")}</summary>
+                        <p>{translate("tasks.modelConfidenceValue", { "confidence": Math.round(candidate.confidence * 100) })}</p>
+                        {#if candidate.extractor}<p>{translate("tasks.suggestedByValue", { "extractor": producerLabel(candidate.extractor) })}</p>{/if}
                       </details>
                     {/if}
                     {#if dateErrors[candidate.id]}<p class="review-error" role="alert">{dateErrors[candidate.id]}</p>{/if}
                     {#if candidate.type === 'date' && DATE_ROLES.includes(candidate.role) && candidate.status === 'pending' && candidate.source_current === false}
                       <button class="btn sm" disabled={intelligenceBusy}
-                              onclick={() => resolveSelectedIntelligence('rejected', [candidate.id])}>Reject this suggestion</button>
+                              onclick={() => resolveSelectedIntelligence('rejected', [candidate.id])}>{translate("tasks.rejectThisSuggestion")}</button>
                     {/if}
                   </div>
                 </div>
@@ -436,7 +445,7 @@
     </section>
   {/if}
   {#if tasks.length === 0 && jobs.length === 0 && intelligence.length === 0}
-    <div class="empty"><Icon name="tasks" size={56} /><b>Nothing needs you.</b><span>The archive is running itself.</span></div>
+    <div class="empty"><Icon name="tasks" size={56} /><b>{translate("tasks.nothingNeedsYou")}</b><span>{translate("tasks.theArchiveIsRunningItself")}</span></div>
   {:else if tasks.length > 0}
     {@const workflowGroups = approvalGroups(tasks)}
     <div class="approval-grid workflow-approval-grid" class:approval-grid-many={workflowGroups.length > 2} data-approval-kind="workflow">
@@ -446,7 +455,7 @@
             <header class="approval-card-header document-header">
               <a class="task-thumb" class:placeholder={!group.document.doc_has_thumbnail}
                  href={filingHref(`#/doc/${group.document.doc_id}`)}
-                 aria-label={`Open ${group.document.doc_title || `document ${group.document.doc_id}`}`}>
+                 aria-label={translate("tasks.openValue2", { "doc_id": group.document.doc_title || `document ${group.document.doc_id}` })}>
                 {#if group.document.doc_has_thumbnail}
                   <img src={thumbPath(group.document.doc_id)} alt="" loading="lazy" />
                 {:else}
@@ -455,12 +464,12 @@
               </a>
               <div class="document-identity">
                 <a href={filingHref(`#/doc/${group.document.doc_id}`)}>
-                  {group.document.doc_title || `Document #${group.document.doc_id}`}
+                  {group.document.doc_title || translate("tasks.documentValue", { "doc_id": group.document.doc_id })}
                 </a>
                 <div class="document-meta">
                   <span>#{group.document.doc_id}</span>
                   {#if filingLabel(group.document)}<span class="pill">{filingLabel(group.document)}</span>{/if}
-                  {#if group.tasks.length > 1}<span>{group.tasks.length} suggestions</span>{/if}
+                  {#if group.tasks.length > 1}<span>{plural("tasks.suggestionCount", group.tasks.length)}</span>{/if}
                 </div>
               </div>
             </header>
@@ -468,7 +477,7 @@
           {:else}
             <header class="approval-card-header operation-header">
               <span class="operation-mark"><Icon name="refresh" size={17} /></span>
-              <span><small>Archive operation</small><b>{group.tasks[0]?.approval_name === 'rescan-proposal' ? 'Processing update' : 'Approval request'}</b></span>
+              <span><small>{translate("tasks.archiveOperation")}</small><b>{group.tasks[0]?.approval_name === 'rescan-proposal' ? translate("tasks.processingUpdate") : translate("tasks.approvalRequest")}</b></span>
             </header>
           {/if}
           <div class="approval-card-body decision-list">
@@ -479,21 +488,20 @@
                 <div class="prompt decision">{decisionPrompt(t)}</div>
               {#if t.approval_name === 'rescan-proposal' && t.vars}
                 <div class="rescan-context">
-                  <b>{pipelineLabel(t.vars.kind)}</b> has improved.
-                  {t.vars.stale_count} document{t.vars.stale_count === 1 ? '' : 's'} can be updated.
+                  <b>{pipelineLabel(t.vars.kind)}</b> {plural("tasks.improvedDocumentCount", t.vars.stale_count)}
                 </div>
               {/if}
               {#if t.approval_name === 'document-change' && t.vars}
                 <div class="metadata-transition"
-                     aria-label={`Current ${typeof t.vars.current_value === 'string' ? (t.vars.current_value || 'Not set') : 'Unavailable'}; suggested ${suggestionValue(t.vars)}`}>
-                  <span>{typeof t.vars.current_value === 'string' ? (t.vars.current_value || 'Not set') : 'Unavailable'}</span>
+                     aria-label={`Current ${typeof t.vars.current_value === 'string' ? (t.vars.current_value || translate("tasks.notSet")) : translate("tasks.unavailable")}; suggested ${suggestionValue(t.vars)}`}>
+                  <span>{typeof t.vars.current_value === 'string' ? (t.vars.current_value || translate("tasks.notSet")) : translate("tasks.unavailable")}</span>
                   <span class="transition-arrow" aria-hidden="true">→</span>
                   <strong>{suggestionValue(t.vars)}</strong>
                 </div>
                 {#if t.vars.source}
                   <div class="suggestion-source">
-                    <span>Why this was suggested</span>
-                    <strong>{t.vars.automation_name ? `Automation · ${t.vars.automation_name}` : sourceLabel(t.vars.source)}</strong>
+                    <span>{translate("tasks.whyThisWasSuggested")}</span>
+                    <strong>{t.vars.automation_name ? translate("tasks.automationValue", { "automation_name": t.vars.automation_name }) : sourceLabel(t.vars.source)}</strong>
                   </div>
                 {/if}
                 {#if t.vars.evidence_text || t.vars.sources?.length}
@@ -503,7 +511,7 @@
                     {#if t.vars.sources?.length}
                       <ul class="review-sources">
                         {#each t.vars.sources as source}
-                          <li><a href={filingHref(`#/doc/${source.document_id}`)}>{source.title || 'Open document'}</a></li>
+                          <li><a href={filingHref(`#/doc/${source.document_id}`)}>{source.title || translate("tasks.openDocument")}</a></li>
                         {/each}
                       </ul>
                     {/if}
@@ -522,15 +530,15 @@
               {#if dl}<div class="meta" class:deadline-soon={dl.soon}>{dl.text}</div>{/if}
               {#if targets.length}
                 <details class="task-details">
-                  <summary>Affected documents</summary>
+                  <summary>{translate("tasks.affectedDocuments")}</summary>
                   <div class="rescan-targets">
                     <ul>
                       {#each targets as target (target.id)}
-                        <li><a href={filingHref(`#/doc/${target.id}`)}>{target.title || `Document #${target.id}`}</a></li>
+                        <li><a href={filingHref(`#/doc/${target.id}`)}>{target.title || translate("tasks.documentValue3", { "id": target.id })}</a></li>
                       {/each}
                     </ul>
                     {#if Number(t.vars?.stale_count || 0) > targets.length}
-                      <span>and {Number(t.vars.stale_count) - targets.length} more</span>
+                      <span>{translate("tasks.andValueMore", { "length": Number(t.vars.stale_count) - targets.length })}</span>
                     {/if}
                   </div>
                 </details>
@@ -544,27 +552,27 @@
   {/if}
 
   {#if canManageJobs && jobs.length}
-    <h3 style="font-size:.9rem;color:var(--muted);margin:0 0 8px">Processing issues</h3>
+    <h3 style="font-size:.9rem;color:var(--muted);margin:0 0 8px">{translate("tasks.processingIssues")}</h3>
     <div class="index">
       {#each jobs as j (j.id)}
         <div class="irow processing-issue">
           <span class="dot danger"></span>
           <div class="grow processing-issue-copy">
             <span class="title" style="display:block;font-size:.8rem">{jobKindLabel(j.kind)}</span>
-            <span class="sub">Processing stopped before this step completed.</span>
+            <span class="sub">{translate("tasks.processingStoppedBeforeThisStepCompleted")}</span>
             <details class="processing-details">
-              <summary>Technical details</summary>
+              <summary>{translate("tasks.technicalDetails")}</summary>
               <code>{j.kind}</code>
               {#if j.last_error}<pre>{j.last_error}</pre>{/if}
             </details>
           </div>
           <span class="sub">{retryLabel(j)}</span>
-          {#if j.doc_id}<a class="btn sm" href={filingHref(`#/doc/${j.doc_id}`)}>Document #{j.doc_id}</a>{/if}
-          <button class="btn sm" disabled={busyJobs.has(j.id)} onclick={() => actOnDeadJob(j, 'retry')} title="Try this processing step again">
-            <Icon name="refresh" size={13} /> Retry
+          {#if j.doc_id}<a class="btn sm" href={filingHref(`#/doc/${j.doc_id}`)}>{translate("tasks.documentValue", { "doc_id": j.doc_id })}</a>{/if}
+          <button class="btn sm" disabled={busyJobs.has(j.id)} onclick={() => actOnDeadJob(j, 'retry')} title={translate("tasks.tryThisProcessingStepAgain")}>
+            <Icon name="refresh" size={13} /> {translate("common.retry")}
           </button>
-          <button class="btn sm" disabled={busyJobs.has(j.id)} onclick={() => actOnDeadJob(j, 'dismiss')} title="Remove this issue without retrying">
-            <Icon name="x" size={13} /> Dismiss
+          <button class="btn sm" disabled={busyJobs.has(j.id)} onclick={() => actOnDeadJob(j, 'dismiss')} title={translate("tasks.removeThisIssueWithoutRetrying")}>
+            <Icon name="x" size={13} /> {translate("tasks.dismiss")}
           </button>
         </div>
       {/each}

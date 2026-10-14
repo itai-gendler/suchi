@@ -176,12 +176,12 @@ func TestListStyleRichTextQueryIsFTSDriven(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	where, args := appendFTSDrivenQueryPredicates(
+	where, args := appendQueryPredicates(
 		[]string{"d.trashed_at IS NULL"}, nil, plan)
 	rows, err := s.DB.Read.QueryContext(context.Background(), `
 		EXPLAIN QUERY PLAN
 		SELECT d.id
-		FROM documents d`+queryDocumentFTSJoin(plan)+`
+		FROM documents d
 		WHERE `+strings.Join(where, " AND "), args...)
 	if err != nil {
 		t.Fatal(err)

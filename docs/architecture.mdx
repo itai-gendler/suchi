@@ -19,6 +19,7 @@ browser composition; linked feature guides own detailed user and wire behavior.
 | Lifecycle and wiring | `distro/cmd/suchi/main.go` parses configuration/signals; `distro/app/app.go: Run` and `serve_*.go` assemble services and HTTP policy |
 | JSON contracts | `core/api/api.go: Server.Register`; feature handlers in `core/api/` |
 | Browser/blob delivery | `core/ui/ui.go`, `core/ui/spa.go`; `core/uiassets` verifies generated browser builds; `distro/app` wires API preview/download mirrors |
+| Localization | `core/i18n` validates server catalogs and negotiates request locales; account preference is stored on `users`, exposed by `core/api/users.go`, and shared with `core/ui` server-rendered pages |
 | Identity/access | `core/auth/`, `core/authz/`, `core/httpx/`; credentials in `plugins/local-auth/`, `plugins/oidc/` |
 | Durable state/work | `core/db/db.go`, `core/db/migrations/`, `core/blob/cas.go`, `core/jobs/jobs.go` |
 | Capture/processing | `core/api/documents.go: UploadDocument`, `core/ingest/`, `core/importer/bundle/`, `core/pipeline/postingest/` |
@@ -646,7 +647,9 @@ Logs/metrics use matched route patterns, propagated outward through request copi
 ## Retrieval, filing, and human review
 
 `core/searchquery` parses bounded flat clauses, resolves names at the API boundary
-and compiles parameterized SQL/FTS. `core/api/search_query.go` keeps ranked Search,
+and compiles parameterized SQL/FTS. Each text clause matches the porter word index
+(`documents_fts`) or the substring trigram index (`documents_trigram`), so search
+does not depend on the documents' language. `core/api/search_query.go` keeps ranked Search,
 sortable Documents and saved views on the same document-set contract while
 preserving response shapes. See [Search](/search).
 `core/api/document_scope.go` also owns the no-correspondent predicate used by
@@ -727,12 +730,9 @@ filing-tree choice. The browser reads it through `GET /api/admin/setup/state`.
 `POST /api/admin/setup/preset/preview` produces the bound review and
 `POST /api/admin/setup/preset/apply` consumes its `expected_state_hash`.
 
-`core/taxonomy/exporter` exports consistent `archive` revision-1 snapshots. Tree-only omits
-keywords/starters; seeded export rejects unrepresentable/disabled behavior and
-preserves rule identity/order. Import provenance is neither installed-pack state
-nor whole-archive attribution. Preset keywords use literal word/phrase patterns;
-published migration 0002 repaired generated rules without altering user copies or
-categories, leaving no runtime compatibility layer. [JD](/jd) and
+`core/taxonomy/exporter` exports consistent `archive` revision-1 tree snapshots.
+Filing trees carry no automations; every rule is archive-owned. Import provenance
+is neither installed-pack state nor whole-archive attribution. [JD](/jd) and
 [Automations](/automations) own authoring/operator details.
 
 `core/intelligence` validates facts; API source visibility/fact filters precede

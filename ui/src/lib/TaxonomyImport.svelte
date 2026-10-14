@@ -1,5 +1,7 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script>
+  import { t as translate } from "./i18n.svelte.js";
+  import { plural } from './format.js'
   import { onDestroy } from 'svelte'
   import { importTaxonomy } from './api.js'
   import { systems, captureScope, scopeCurrent, selectSystem } from './systems.svelte.js'
@@ -14,7 +16,6 @@
   let collisions = $state([])
   let err = $state('')
   let reading = $state(false)
-  let skipSeeds = $state(false)
   let remaps = $state({})
   let confirmBlank = $state(false)
   let firstDestination = $state(false)
@@ -52,7 +53,7 @@
     content = ''
     const extension = file.name.split('.').pop()?.toLowerCase()
     if (!['huml', 'toml'].includes(extension)) {
-      err = 'Choose a .huml or .toml file, or paste content and select its file format.'
+      err = translate("taxonomyImport.chooseAHumlOrTomlFileOrPaste")
       return
     }
     format = extension
@@ -68,7 +69,7 @@
     }
     nextReader.onerror = () => {
       if (version !== generation) return
-      err = `Could not read ${file.name}. Choose the file again or paste its content.`
+      err = translate("taxonomyImport.couldNotReadValueChooseTheFileAgain", { "name": file.name })
       reading = false
       reader = null
     }
@@ -79,7 +80,7 @@
   async function run(apply) {
     if (busy || reading || !content.trim() || (apply && !canApply)) return
     const version = ++generation
-    const body = { content, format, apply, skip_seeds: skipSeeds, remaps: { ...remaps } }
+    const body = { content, format, apply, remaps: { ...remaps } }
     if (separate && firstDestination) body.existing_system_code = existingCode
     if (apply) body.expected_state_hash = diff.state_hash
     busy = true
@@ -93,21 +94,21 @@
       collisions = result.collisions || []
       if (apply && result.applied) {
         confirmBlank = false
-        notify?.(`Imported ${result.name}: version ${result.preset_version}.`)
+        notify?.(translate("taxonomyImport.importedValueVersionValue", { "name": result.name, "preset_version": result.preset_version }))
         try {
           if (!result.system_code) await onApplied?.(result)
           if (!scopeCurrent(scope)) return
           await refreshSystems()
           if (scopeCurrent(scope) && result.system_code) selectSystem(result.system_code)
-        } catch { err = 'Import succeeded, but refreshing the archive failed. Reload this page to see the current filing tree.' }
+        } catch { err = translate("taxonomyImport.importSucceededButRefreshingTheArchiveFailedReload") }
       }
     } catch (ex) {
       if (version !== generation) return
       diff = null
       confirmBlank = false
       err = ex.status === 409
-        ? 'The preview is no longer current. Your input and choices are preserved. Preview again before applying.'
-        : (ex.message || 'Could not validate the file. Try Preview again.')
+        ? translate("taxonomyImport.thePreviewIsNoLongerCurrentYourInput")
+        : (ex.message || translate("taxonomyImport.couldNotValidateTheFileTryPreviewAgain"))
     } finally {
       if (version === generation) busy = false
     }
@@ -127,96 +128,90 @@
   })
 </script>
 
-<section class="taximp" aria-label="Import taxonomy">
-  <h3>Import taxonomy</h3>
+<section class="taximp" aria-label={translate("taxonomyImport.importTaxonomy")}>
+  <h3>{translate("taxonomyImport.importTaxonomy")}</h3>
   <div class="toolbar">
     <label class="btn sm">
-      Choose .huml / .toml
-      <input type="file" aria-label="Choose taxonomy file" accept=".huml,.toml" disabled={busy} onchange={pick} />
+      {translate("taxonomyImport.chooseHumlToml")}
+      <input type="file" aria-label={translate("taxonomyImport.chooseTaxonomyFile")} accept=".huml,.toml" disabled={busy} onchange={pick} />
     </label>
     {#if fileName}<span class="file-name sub">{fileName}</span>{/if}
-    <label class="serialization">File format
+    <label class="serialization">{translate("taxonomyImport.fileFormat")}
       <select class="input" bind:value={format} disabled={busy} onchange={() => invalidate()}>
-        <option value="huml">HuML</option><option value="toml">TOML</option>
+        <option value="huml">{translate("taxonomyImport.huml")}</option><option value="toml">TOML</option>
       </select>
     </label>
   </div>
-  <label class="content-label" for="taxonomy-content">Paste content</label>
+  <label class="content-label" for="taxonomy-content">{translate("taxonomyImport.pasteContent")}</label>
   <textarea id="taxonomy-content" class="input mono" rows="7" bind:value={content} disabled={busy}
-            oninput={() => { fileName = ''; invalidate(true) }} placeholder="Paste a suchi-taxonomy/v1 file"></textarea>
-  {#if reading}<p class="sub" role="status">Reading file…</p>{/if}
-  <label class="wiz-check"><input type="checkbox" checked={!skipSeeds} disabled={busy}
-    onchange={(event) => { skipSeeds = !event.currentTarget.checked; invalidate() }} /> Include starter rules from this file</label>
-  <p class="sub">Validation checks supported structure, not domain correctness or whether starter automations are trustworthy. Review the tree and rules before applying.</p>
+            oninput={() => { fileName = ''; invalidate(true) }} placeholder={translate("taxonomyImport.pasteASuchiTaxonomyV1File")}></textarea>
+  {#if reading}<p class="sub" role="status">{translate("taxonomyImport.readingFile")}</p>{/if}
+  <p class="sub">{translate("taxonomyImport.validationChecksSupportedStructureNotDomainCorrectness")}</p>
   {#if firstDestination && !diff?.applied}
     <fieldset disabled={busy} style="margin:12px 0;padding:12px;border:1px solid var(--line)">
-      <legend>First system import destination</legend>
+      <legend>{translate("taxonomyImport.firstSystemImportDestination")}</legend>
       <label><input type="radio" name="first-destination" checked={!separate}
-        onchange={() => { separate = false; invalidate() }} /> Use this archive: name its existing documents and filing tree with the imported code</label>
+        onchange={() => { separate = false; invalidate() }} /> {translate("taxonomyImport.useThisArchiveNameItsExistingDocuments")}</label>
       <label style="display:block;margin-top:8px"><input type="radio" name="first-destination" checked={separate}
-        onchange={() => { separate = true; invalidate() }} /> Create separately: preserve this archive under another code</label>
+        onchange={() => { separate = true; invalidate() }} /> {translate("taxonomyImport.createSeparatelyPreserveThisArchiveUnderAnother")}</label>
       {#if separate}
-        <label>Existing archive code <input class="input mono" bind:value={existingCode} maxlength="3"
+        <label>{translate("taxonomyImport.existingArchiveCode")} <input class="input mono" bind:value={existingCode} maxlength="3"
           pattern="[A-Z][0-9]{2}" required oninput={() => invalidate()} /></label>
       {/if}
-      <p class="sub">Preview again after changing the destination. System codes are permanent once applied.</p>
+      <p class="sub">{translate("taxonomyImport.previewAgainAfterChangingTheDestinationSystem")}</p>
     </fieldset>
   {/if}
 
   {#if err}<div class="err" role="alert">{err}</div>{/if}
 
   {#if diff}
-    <div class="card preview" aria-label="Taxonomy preview">
-      <h4>{diff.name} · {diff.preset_id} · version {diff.preset_version}</h4>
+    <div class="card preview" aria-label={translate("taxonomyImport.taxonomyPreview")}>
+      <h4>{translate("taxonomyImport.valueValueVersionValue", { "name": diff.name, "preset_id": diff.preset_id, "preset_version": diff.preset_version })}</h4>
       <p>{diff.story}</p>
-      <p class="sub">{diff.format} · {diff.mode === 'replace' ? 'Replace the initial filing tree' : 'Add to the current filing tree'}</p>
+      <p class="sub">{diff.format} · {diff.mode === 'replace' ? translate("taxonomyImport.replaceTheInitialFilingTree") : translate("taxonomyImport.addToTheCurrentFilingTree")}</p>
       {#if diff.system_code}
-        <p><b>{diff.system_code} · {diff.system_name}</b> — {diff.system_created ? 'Create a new filing system' : 'Import into the existing archive'}.</p>
+        <p><b>{diff.system_code} · {diff.system_name}</b> — {diff.system_created ? translate("taxonomyImport.createANewFilingSystem") : translate("taxonomyImport.importIntoTheExistingArchive")}.</p>
         {#if diff.systems_introduced}
-          <p>{diff.existing_system_code ? `Existing documents, memberships and permissions stay in ${diff.existing_system_code}.` : `Existing documents keep their IDs, memberships and permissions in ${diff.system_code}.`} Full filing addresses and system-rooted rendered paths are introduced by this Apply.</p>
+          <p>{translate("taxonomyImport.valueFullFilingAddressesAndSystemRooted", { "system_code": diff.existing_system_code ? `Existing documents, memberships and permissions stay in ${diff.existing_system_code}.` : `Existing documents keep their IDs, memberships and permissions in ${diff.system_code}.` })}</p>
         {/if}
-        {#if diff.system_created}<p>Initially, only server administrators can open the new filing system. Add members in Settings after import.</p>{/if}
-        <p class="sub">Suchi will update the filing index and local folders in the background. It will not reread or reclassify existing documents.</p>
+        {#if diff.system_created}<p>{translate("taxonomyImport.initiallyOnlyServerAdministratorsCanOpenThe")}</p>{/if}
+        <p class="sub">{translate("taxonomyImport.suchiWillUpdateTheFilingIndexAnd")}</p>
       {/if}
       <div class="trees">
         <div>
-          <h4>User areas and categories</h4>
+          <h4>{translate("taxonomyImport.userAreasAndCategories")}</h4>
           {#each diff.user_areas || [] as area (area.code)}
             <p><b>{area.code}–{area.code + 9} {area.name}</b></p>
             <ul>{#each area.categories || [] as category (category.code)}
               <li>{category.code} {category.name}{#if category.description}<span class="sub description">{category.description}</span>{/if}</li>
             {/each}</ul>
-          {:else}<p>No user categories (blank tree).</p>{/each}
+          {:else}<p>{translate("taxonomyImport.noUserCategoriesBlankTree")}</p>{/each}
         </div>
         <div>
-          <h4>Generated by Suchi</h4>
-          <p><b>00–09 System index</b><span class="sub description">00.00 archive.huml is an on-disk filing map, not a filing destination or automation backup.</span></p>
+          <h4>{translate("taxonomyImport.generatedBySuchi")}</h4>
+          <p><b>{translate("taxonomyImport.0009SystemIndex")}</b><span class="sub description">{translate("taxonomyImport.0000ArchiveHumlIsAnOn")}</span></p>
           {#each diff.generated_areas || [] as area (area.code)}
             <p><b>{area.code}–{area.code + 9} {area.name}</b></p>
             <ul>{#each area.categories || [] as category (category.code)}<li>{category.code} {category.name}</li>{/each}</ul>
           {/each}
         </div>
       </div>
-      <h4>{diff.applied ? 'Applied' : 'Planned changes'}</h4>
-      <p>{diff.applied ? 'Added' : 'Adds'} {diff.categories_to_add?.length || 0} categories and {diff.rules_to_add?.length || 0} rules.</p>
-      {#if diff.categories_to_add?.length}<p class="sub">Category codes: {diff.categories_to_add.join(', ')}</p>{/if}
-      {#if diff.rules_to_add?.length}<h4>Rules to add</h4><ul>{#each diff.rules_to_add as name}<li>{name}</li>{/each}</ul>{/if}
-      {#if diff.rules_preserved?.length}<h4>Existing rules preserved</h4><ul>{#each diff.rules_preserved as rule}<li>{rule.name} — {rule.enabled ? 'enabled' : 'disabled (stays disabled)'}</li>{/each}</ul>{/if}
-      {#if diff.rules_skipped?.length}<h4>Rules skipped</h4><ul>{#each diff.rules_skipped as rule}<li>{rule.name} — {rule.reason}</li>{/each}</ul>{/if}
-      <p class="sub">{skipSeeds ? 'Starter rules excluded.' : `Starter additions: ${diff.keywords_to_seed} keyword phrases · ${diff.automations_to_seed} explicit automations.`}</p>
-      <p class="sub hash">File fingerprint (SHA-256): <code>{diff.content_sha256}</code></p>
-      {#if diff.applied && diff.index_refresh_pending}<p role="status">The filing map will update in the archive folder shortly.</p>{/if}
+      <h4>{diff.applied ? translate("taxonomyImport.applied") : translate("taxonomyImport.plannedChanges")}</h4>
+      <p>{translate(diff.applied ? "taxonomyImport.addedCounts" : "taxonomyImport.addsCounts", { categories: plural("taxonomyImport.categoryCount", diff.categories_to_add?.length || 0) })}</p>
+      {#if diff.categories_to_add?.length}<p class="sub">{translate("taxonomyImport.categoryCodesValue", { "join": diff.categories_to_add.join(', ') })}</p>{/if}
+      <p class="sub hash">{translate("taxonomyImport.fileFingerprintSha256")} <code>{diff.content_sha256}</code></p>
+      {#if diff.applied && diff.index_refresh_pending}<p role="status">{translate("taxonomyImport.theFilingMapWillUpdateInThe")}</p>{/if}
     </div>
   {/if}
 
   {#if collisions.length && !diff?.applied}
-    <div class="collisions" aria-label="Category collisions">
-      <h4>Category collisions</h4>
-      <p class="sub">Keep each existing category. Explicitly skip the incoming category or move it to an unused code in the same area. Skipping also skips dependent starter rules. Preview every changed choice.</p>
+    <div class="collisions" aria-label={translate("taxonomyImport.categoryCollisions")}>
+      <h4>{translate("taxonomyImport.categoryCollisions")}</h4>
+      <p class="sub">{translate("taxonomyImport.keepEachExistingCategoryExplicitlySkipThe")}</p>
       {#each collisions as collision (collision.code)}
         <div class="collision">
-          <p><b>{collision.code}</b> — existing: “{collision.existing}” · incoming: “{collision.incoming}”</p>
-          <label>Choice for {collision.code}
+          <p><b>{collision.code}</b> {translate("taxonomyImport.existingValueIncomingValue", { "existing": collision.existing, "incoming": collision.incoming })}</p>
+          <label>{translate("taxonomyImport.choiceForValue", { "code": collision.code })}
             <select class="input" disabled={busy} value={remaps[collision.code] ?? ''}
               onchange={(event) => {
                 const next = { ...remaps }
@@ -225,9 +220,9 @@
                 remaps = next
                 invalidate()
               }}>
-              <option value="">Choose a resolution</option>
-              {#if collision.proposed_code}<option value={collision.proposed_code}>Move to {collision.proposed_code}</option>{/if}
-              <option value={0}>Skip incoming</option>
+              <option value="">{translate("taxonomyImport.chooseAResolution")}</option>
+              {#if collision.proposed_code}<option value={collision.proposed_code}>{translate("taxonomyImport.moveToValue", { "proposed_code": collision.proposed_code })}</option>{/if}
+              <option value={0}>{translate("taxonomyImport.skipIncoming")}</option>
             </select>
           </label>
         </div>
@@ -235,16 +230,16 @@
     </div>
   {/if}
   <div class="toolbar">
-    <button class="btn primary sm" disabled={busy || reading || !content.trim()} onclick={() => run(false)}>{busy && !confirmBlank ? 'Working…' : 'Preview'}</button>
-    <button class="btn sm" disabled={busy || !canApply} onclick={applyImport}>Apply import</button>
-    {#if !diff && collisions.length}<span class="sub">Choices changed. Preview again to review their effects.</span>{/if}
+    <button class="btn primary sm" disabled={busy || reading || !content.trim()} onclick={() => run(false)}>{busy && !confirmBlank ? translate("taxonomyImport.working") : translate("taxonomyImport.preview")}</button>
+    <button class="btn sm" disabled={busy || !canApply} onclick={applyImport}>{translate("taxonomyImport.applyImport")}</button>
+    {#if !diff && collisions.length}<span class="sub">{translate("taxonomyImport.choicesChangedPreviewAgainToReviewTheir")}</span>{/if}
   </div>
 </section>
 
 {#if confirmBlank}
-  <ConfirmDialog title="Import a blank filing tree?"
-    message="This file has no user categories. Documents remain in Suchi’s Inbox until you build categories. A merge keeps existing categories; it does not reset your archive."
-    confirmLabel="Apply blank import" busyLabel="Applying…" {busy} onConfirm={() => run(true)} onCancel={() => { confirmBlank = false }} />
+  <ConfirmDialog title={translate("taxonomyImport.importABlankFilingTree")}
+    message={translate("taxonomyImport.thisFileHasNoUserCategoriesDocuments")}
+    confirmLabel={translate("taxonomyImport.applyBlankImport")} busyLabel={translate("taxonomyImport.applying")} {busy} onConfirm={() => run(true)} onCancel={() => { confirmBlank = false }} />
 {/if}
 
 <style>

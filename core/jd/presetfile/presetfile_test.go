@@ -66,9 +66,7 @@ func TestRawShapeCannotDisappearDuringNormalization(t *testing.T) {
 		"duplicate area":       "areas = [{code=10,name='A',categories=[]},{code=10,name='B',categories=[]}]",
 		"duplicate category":   "areas = [{code=10,name='A',categories=[{code=11,name='B'},{code=11,name='C'}]}]",
 		"unsupported category": "areas = [{code=10,name='A',categories=[{code=11,name='B',sensitivity='public'}]}]",
-		"unsupported seeds":    "areas = []\n[seeds]\ntags = ['a']",
 		"fractional code":      "areas = [{code=10.0,name='A',categories=[]}]",
-		"typed keyword":        "areas = [{code=10,name='A',categories=[{code=11,name='B',keywords=[42]}]}]",
 	}
 	for name, body := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -107,11 +105,8 @@ func TestStrictHuMLAndFormatFirst(t *testing.T) {
 		valid + "inbox: 49\n",
 		valid + "system: null\n",
 		strings.Replace(valid, "code: 11", "code: 11\n        code: 12", 1),
-		strings.Replace(valid, "tag: \"certificate\"", "tag: \"certificate\"\n            tag: \"invoice\"", 1),
-		strings.Replace(valid, "tag: \"certificate\"", "owner_id: 1", 1),
 		strings.Replace(valid, "version: 1", "version: 1.5", 1),
 		strings.Replace(valid, "name: \"UK landlord\"", "name: null", 1),
-		strings.Replace(valid, "filter_content_matching: \"gas safety\"", "filter_future: \"gas safety\"", 1),
 	} {
 		if _, err := Parse([]byte(input), FormatHuML); err == nil {
 			t.Fatalf("accepted invalid HuML: %s", input)
@@ -129,50 +124,30 @@ func TestStrictHuMLAndFormatFirst(t *testing.T) {
 	}
 }
 
-func TestPortableActionsAreExactAndTyped(t *testing.T) {
-	base := header + "areas = [{code=10,name='A',categories=[{code=11,name='B'}]}]\n[[seeds.automations]]\nname='Rule'\ntrigger={type=2,filter_title_matching='Invoice',filter_filename='*.pdf',filter_has_tag='incoming',filter_email_has_attachment=false}\nactions=["
-	good := []string{
-		"{kind='assign_title',params={template='Invoice'}}",
-		"{kind='assign_tags',params={tags=['a','b']}}",
-		"{kind='assign_tags',params={tag='a'}}",
-		"{kind='assign_correspondent',params={correspondent='Example'}}",
-		"{kind='assign_jd_category',params={jd_category_code=11}}",
+func TestLegacyRulesAreDropped(t *testing.T) {
+	legacy := header + `[[areas]]
+code = 10
+name = "A"
+  [[areas.categories]]
+  code = 11
+  name = "B"
+  keywords = ["invoice"]
+
+[[seeds.automations]]
+name = "Rule"
+trigger = {type = 2}
+actions = [{kind = "assign_title", params = {template = "Invoice"}}]
+`
+	pf, err := Parse([]byte(legacy), FormatTOML)
+	if err != nil {
+		t.Fatal(err)
 	}
-	for _, action := range good {
-		pf, err := Parse([]byte(base+action+"]"), FormatTOML)
-		if err != nil {
-			t.Fatal(err)
-		}
-		for _, f := range []SerFormat{FormatHuML, FormatTOML} {
-			if _, err := Marshal(pf, f); err != nil {
-				t.Fatal(err)
-			}
-		}
+	data, err := Marshal(pf, FormatTOML)
+	if err != nil {
+		t.Fatal(err)
 	}
-	bad := []string{
-		"{kind='assign_title',params={template='Title',owner_id=1}}",
-		"{kind='assign_tags',params={tag='a',tags=['b']}}",
-		"{kind='assign_tags',params={tags=['a',1]}}",
-		"{kind='assign_tags',params={tags=[]}}",
-		"{kind='assign_jd_category',params={jd_category_code=11.5}}",
-		"{kind='assign_jd_category',params={jd_category_code=49}}",
-		"{kind='assign_jd_category',params={jd_category_code=12}}",
-		"{kind='assign_jd_category',params={jd_category_code=11,system='S02'}}",
-		"{kind='assign_jd_category',params={jd_category_code=11,system_id=2}}",
-		"{kind='assign_owner',params={owner_id=1}}",
-		"{kind='assign_document_type',params={document_type='Invoice'}}",
-		"{kind='assign_title',params={template=' '}}",
-	}
-	for _, action := range bad {
-		if _, err := Parse([]byte(base+action+"]"), FormatTOML); err == nil {
-			t.Fatalf("accepted %s", action)
-		}
-	}
-	valid := base + good[0] + "]"
-	for _, input := range []string{strings.Replace(valid, "type=2", "type=4", 1), strings.Replace(valid, "filter_title_matching='Invoice'", "filter_title_matching='['", 1), strings.Replace(valid, "filter_filename='*.pdf'", "filter_filename='['", 1), base + "]", valid + "\n[[seeds.automations]]\nname='Rule'\ntrigger={type=2}\nactions=[" + good[0] + "]"} {
-		if _, err := Parse([]byte(input), FormatTOML); err == nil {
-			t.Fatal("invalid starter accepted")
-		}
+	if strings.Contains(string(data), "keywords") || strings.Contains(string(data), "seeds") {
+		t.Fatalf("legacy rules survived: %s", data)
 	}
 }
 

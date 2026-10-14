@@ -13,7 +13,24 @@ Notable user-visible changes to Suchi are recorded here.
   and reuses unambiguous catalog entries instead of creating near-duplicates.
   Automation actions also accept correspondent and tag IDs decoded from JSON
   numbers.
-
+- Money values written in local formats (`1.234,56 €`, `€1,234.56`,
+  `1'234.50`, `EUR1234.56`) are read as amounts in custom-field writes,
+  `field:` queries and imports. Imported money values are now stored as
+  numbers instead of text.
+- Similar documents and local automatic filing now find neighbours in Chinese,
+  Japanese, Korean and Thai documents, which have no spaces between words.
+- Suggested dates written in other languages and scripts are no longer
+  discarded: month names in 17 languages, CJK and Korean date markers, Japanese
+  era years, Buddhist-era years and non-Latin digits now match the extracted
+  date.
+- Search, Documents, Calendar and Ask your documents also match text inside
+  words: German compounds (`Versicherung` finds `Krankenversicherung`) and
+  Chinese, Japanese, Korean and Thai text written without spaces. English
+  stemming is unchanged. The upgrade builds a second search index, which adds
+  storage and some write time; see the search guide.
+- Add account-level language preference, locale negotiation, validated deferred
+  browser catalogs, localized server-rendered pages, locale-aware formatting and
+  plural rules, with English fallback and automatic text direction.
 - Upload is now one full-page queue. All selected files appear immediately in
   order with aggregate progress, plain processing states, safe retries and
   persistent completion actions; global drops navigate to the same surface
@@ -62,6 +79,14 @@ Notable user-visible changes to Suchi are recorded here.
   overflows, symlink escapes and unreliable network-mount notifications.
   `INGEST_FS_RECURSIVE=off` restores top-level-only discovery; durable
   observations skip unchanged files, and failures remain at their source path.
+
+### Removed
+
+- Filing trees no longer install automations, and taxonomy files no longer
+  carry category keywords or starter rules. Upgrading deletes the rules earlier
+  presets installed; built-in rules you edited were already saved as your own
+  copies and stay. Older taxonomy files still import their tree. The
+  `--skip-seeds` flag and `skip_seeds`/`include_seeds` request fields are gone.
 
 ## [0.2.1] - 2026-10-10
 

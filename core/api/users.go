@@ -20,6 +20,7 @@ import (
 	"github.com/johnnybravo-xyz/suchi/core/auth"
 	"github.com/johnnybravo-xyz/suchi/core/authz"
 	"github.com/johnnybravo-xyz/suchi/core/emailaccounts"
+	"github.com/johnnybravo-xyz/suchi/core/i18n"
 	"github.com/johnnybravo-xyz/suchi/core/jd/systems"
 )
 
@@ -60,6 +61,7 @@ type UserSelf struct {
 	UserID               int64    `json:"user_id"`
 	Email                string   `json:"email"`
 	DisplayName          string   `json:"display_name,omitempty"`
+	Locale               string   `json:"locale,omitempty"`
 	InstanceHost         string   `json:"instance_host,omitempty"`
 	BuildVersion         string   `json:"build_version,omitempty"`
 	BuildRevision        string   `json:"build_revision,omitempty"`
@@ -94,11 +96,9 @@ func (s *Server) Whoami(w http.ResponseWriter, r *http.Request) {
 	s.writeJSON(w, http.StatusOK, self)
 }
 
-// PatchSelf serves PATCH /api/users/me. Body:
-//
-//	{ "display_name": "Ritesh S." }
-//
-// Any other field is rejected by the strict JSON decoder.
+// PatchSelf serves PATCH /api/users/me. Display name and locale are sparse,
+// independently updateable profile fields. An empty locale restores browser
+// negotiation.
 func (s *Server) PatchSelf(w http.ResponseWriter, r *http.Request) {
 	p := auth.FromContext(r.Context())
 	if p == nil {
@@ -108,54 +108,97 @@ func (s *Server) PatchSelf(w http.ResponseWriter, r *http.Request) {
 
 	var body struct {
 		DisplayName *string `json:"display_name,omitempty"`
+		Locale      *string `json:"locale,omitempty"`
 	}
 	if err := decodeJSON(r, &body); err != nil {
 		s.writeError(w, http.StatusBadRequest, "bad_json", err.Error())
 		return
 	}
-	if body.DisplayName == nil {
-		s.writeError(w, http.StatusBadRequest, "no_fields",
-			"body has no updateable fields")
+	if body.DisplayName == nil && body.Locale == nil {
+		s.writeError(w, http.StatusBadRequest, "no_fields", "body has no updateable fields")
 		return
 	}
 
-	name := strings.TrimSpace(*body.DisplayName)
-	if name == "" {
-		s.writeError(w, http.StatusBadRequest, "empty_display_name",
-			"display_name cannot be empty")
-		return
-	}
-	if len(name) > 120 {
-		s.writeError(w, http.StatusBadRequest, "display_name_too_long",
-			"display_name must be 120 characters or fewer")
-		return
+	var name string
+	if body.DisplayName != nil {
+		name = strings.TrimSpace(*body.DisplayName)
+		if name == "" {
+			s.writeError(w, http.StatusBadRequest, "empty_display_name", "display_name cannot be empty")
+			return
+		}
+		if len(name) > 120 {
+			s.writeError(w, http.StatusBadRequest, "display_name_too_long", "display_name must be 120 characters or fewer")
+			return
+		}
 	}
 
-	// Snapshot the old name so the audit event carries the delta.
-	var oldName sql.NullString
+	var locale string
+	if body.Locale != nil {
+		requested := strings.TrimSpace(*body.Locale)
+		if requested != "" && requested != "auto" {
+			if s.Catalogs == nil || !s.Catalogs.Supports(requested) {
+				s.writeError(w, http.StatusBadRequest, "unsupported_locale", "locale is not available")
+				return
+			}
+			locale = s.Catalogs.Resolve(requested).Locale
+		}
+	}
+
+	var oldName, oldLocale string
 	if err := s.DB.Read.QueryRowContext(r.Context(),
-		"SELECT display_name FROM users WHERE id = ?", p.UserID).Scan(&oldName); err != nil {
+		"SELECT display_name, locale FROM users WHERE id = ?", p.UserID).Scan(&oldName, &oldLocale); err != nil {
 		s.serverErr(w, "patchself.snapshot", err)
 		return
 	}
 
 	err := s.DB.WriteTx(r.Context(), func(tx *sql.Tx) error {
-		_, err := tx.ExecContext(r.Context(),
-			"UPDATE users SET display_name = ?, updated_at = ? WHERE id = ?",
-			name, time.Now().Unix(), p.UserID)
-		return err
+		switch {
+		case body.DisplayName != nil && body.Locale != nil:
+			_, err := tx.ExecContext(r.Context(),
+				"UPDATE users SET display_name = ?, locale = ?, updated_at = ? WHERE id = ?",
+				name, locale, time.Now().Unix(), p.UserID)
+			return err
+		case body.DisplayName != nil:
+			_, err := tx.ExecContext(r.Context(),
+				"UPDATE users SET display_name = ?, updated_at = ? WHERE id = ?",
+				name, time.Now().Unix(), p.UserID)
+			return err
+		default:
+			_, err := tx.ExecContext(r.Context(),
+				"UPDATE users SET locale = ?, updated_at = ? WHERE id = ?",
+				locale, time.Now().Unix(), p.UserID)
+			return err
+		}
 	})
 	if err != nil {
 		s.serverErr(w, "patchself.write", err)
 		return
 	}
 
-	audit.Log(r.Context(), s.DB, s.Log, audit.Event{
-		Actor: p, Action: "user.display_name_changed",
-		ObjectKind: "user", ObjectID: p.UserID,
-		Before: map[string]any{"display_name": oldName.String},
-		After:  map[string]any{"display_name": name},
-	})
+	if body.DisplayName != nil {
+		audit.Log(r.Context(), s.DB, s.Log, audit.Event{
+			Actor: p, Action: "user.display_name_changed",
+			ObjectKind: "user", ObjectID: p.UserID,
+			Before: map[string]any{"display_name": oldName},
+			After:  map[string]any{"display_name": name},
+		})
+	}
+	if body.Locale != nil {
+		audit.Log(r.Context(), s.DB, s.Log, audit.Event{
+			Actor: p, Action: "user.locale_changed",
+			ObjectKind: "user", ObjectID: p.UserID,
+			Before: map[string]any{"locale": oldLocale},
+			After:  map[string]any{"locale": locale},
+		})
+		cookie := &http.Cookie{
+			Name: i18n.CookieName, Value: locale, Path: "/", SameSite: http.SameSiteLaxMode,
+			Secure: r.TLS != nil, MaxAge: 31536000,
+		}
+		if locale == "" {
+			cookie.MaxAge = -1
+		}
+		http.SetCookie(w, cookie)
+	}
 
 	self, err := s.loadSelf(r.Context(), p)
 	if err != nil {
@@ -565,13 +608,14 @@ func (s *Server) loadSelf(ctx context.Context, p *pluginapi.Principal) (UserSelf
 		email       string
 		role        string
 		displayName sql.NullString
+		locale      string
 		avatarSha   sql.NullString
 		capsRaw     string
 	)
 	err := s.DB.Read.QueryRowContext(ctx, `
-		SELECT email, role, display_name, avatar_sha, COALESCE(capabilities, '[]')
+		SELECT email, role, display_name, locale, avatar_sha, COALESCE(capabilities, '[]')
 		FROM users WHERE id = ?
-	`, p.UserID).Scan(&email, &role, &displayName, &avatarSha, &capsRaw)
+	`, p.UserID).Scan(&email, &role, &displayName, &locale, &avatarSha, &capsRaw)
 	if errors.Is(err, sql.ErrNoRows) {
 		if p.Kind != PrincipalKindDemoAnon {
 			return UserSelf{}, err
@@ -585,6 +629,7 @@ func (s *Server) loadSelf(ctx context.Context, p *pluginapi.Principal) (UserSelf
 	self.Email = email
 	self.Role = role
 	self.DisplayName = ""
+	self.Locale = locale
 	canonical := *p
 	canonical.Email = email
 	canonical.Role = role

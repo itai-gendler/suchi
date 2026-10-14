@@ -37,7 +37,8 @@ test('production chunks group document controls without pulling lazy screens int
 
   const initialFiles = dependencies(entry)
   const initialGzip = [...initialFiles].reduce((total, name) => total + gzipSync(byName.get(name).code).length, 0)
-  assert.ok(initialGzip <= 35 * 1024, `Initial JavaScript is ${initialGzip} gzip bytes; budget is 35 KiB`)
+  // The English-only shell fit 35 KiB; 1 KiB covers the localization runtime.
+  assert.ok(initialGzip <= 36 * 1024, `Initial JavaScript is ${initialGzip} gzip bytes; budget is 36 KiB`)
   const controls = owner('/lib/ConfirmDialog.svelte')
   assert.ok(controls)
   assert.equal(owner('/lib/clipboard.js'), controls)

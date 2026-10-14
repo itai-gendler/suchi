@@ -127,7 +127,7 @@ func TestEnsureBootstrapTreePreservesExistingTaxonomy(t *testing.T) {
 	defer d.Close()
 	ctx := context.Background()
 
-	if err := jd.ApplyPreset(ctx, d, log, "solo", jd.ApplyPresetOpts{SystemID: 1, SkipSeeds: true}); err != nil {
+	if err := jd.ApplyPreset(ctx, d, log, "solo", jd.ApplyPresetOpts{SystemID: 1}); err != nil {
 		t.Fatalf("apply solo: %v", err)
 	}
 	var before int

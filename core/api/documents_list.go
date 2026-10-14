@@ -136,8 +136,7 @@ func (s *Server) ListDocuments(w http.ResponseWriter, r *http.Request) {
 
 	where, args = appendDocumentScopePredicates(r.Context(), where, args, scope, p)
 
-	// Positive text starts from FTS; metadata filters remain additive.
-	where, args = appendFTSDrivenQueryPredicates(where, args, queryPlan)
+	where, args = appendQueryPredicates(where, args, queryPlan)
 	if v := q.Get("split_origin_id"); v != "" {
 		id, err := strconv.ParseInt(v, 10, 64)
 		if err != nil || id <= 0 {
@@ -173,7 +172,7 @@ func (s *Server) ListDocuments(w http.ResponseWriter, r *http.Request) {
 
 	// COUNT — envelope carries the total pre-limit.
 	var total int
-	fromSQL := "documents d" + queryDocumentFTSJoin(queryPlan)
+	fromSQL := "documents d"
 	countSQL := "SELECT COUNT(*) FROM " + fromSQL + " WHERE " + whereSQL
 	if err := s.DB.Read.QueryRowContext(r.Context(), countSQL, args...).Scan(&total); err != nil {
 		s.serverErr(w, "docs.list.count", err)

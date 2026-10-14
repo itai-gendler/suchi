@@ -108,14 +108,15 @@ focus. Reads are bounded, abortable, ordered, and checked against their original
 account+system generation; either change clears the list, and unmount stops polling.
 Revocation reloads the list so an earlier poll cannot restore a disconnected app.
 Keep the shell at or
-below 35 KiB gzip and remeasure the actual route dependency set after UI changes.
+below 36 KiB gzip (35 KiB for the English-only shell plus the localization
+runtime) and remeasure the actual route dependency set after UI changes.
 
 Measure the current production graph rather than assuming historical route sizes.
 Settings, research, and QR code generation remain deferred. Filing context lives
 in the shell; the system membership editor loads with archive configuration.
 Static assets are shared normally by the browser, not by an application cache.
 `ui/src/bundle.test.js` builds the production graph in memory and checks the
-35 KiB initial budget, document request count, deferred features, and static
+36 KiB initial budget, document request count, deferred features, and static
 dependency cycles. Production browser tests use
 `PLAYWRIGHT_PRODUCTION=1 bun run e2e`; preview serves its built assets locally
 and proxies only backend routes.
@@ -505,6 +506,35 @@ without token, vault, mailbox or pairing controls or requests.
 
 Import shared values instead of duplicating them. Update the owning feature guide,
 [Web app](/web-app) and relevant browser regression when labels/behavior change.
+
+### Localization
+
+Browser messages live in `ui/src/i18n/locales/<locale>.json`; server-rendered
+bootstrap, sign-in, setup, and share-page messages live in
+`core/i18n/strings/<locale>.yaml`. `core/i18n.Registry` negotiates persisted user
+preference, `suchi_locale`, and `Accept-Language` for server pages. The SPA uses
+the same persisted preference, then the locale cookie and browser languages.
+An unsupported locale falls back to English. A missing translated browser
+message falls back to its English entry, then to the stable message key.
+
+Keys use `<feature>.<lowerCamelName>`. Keep an existing key stable when English
+wording changes. Count-sensitive messages add CLDR category suffixes such as
+`.one` and `.other`; locale-only `.zero`, `.two`, `.few`, and `.many` entries
+are allowed when that language requires them. Placeholders are named, not
+positional, and every locale must preserve the English placeholder set.
+
+`lib/i18n.svelte.js` owns reactive locale state and interpolation.
+`lib/locale-runtime.js` discovers and validates deferred catalogs.
+`lib/format.js` owns `Intl` date, number, list, collation, and plural helpers.
+Catalog metadata supplies `ltr` or `rtl`; applying a locale updates both
+`<html lang>` and `<html dir>`. Do not assemble sentences with translated
+fragments, lowercase translated labels to make grammar fit, or choose English
+plural suffixes in components.
+
+Adding a locale requires a complete browser catalog and matching server catalog.
+Run `bun test src/lib/i18n.test.js` for catalog parity, placeholder, fallback,
+plural, and locale-format checks; use a real browser smoke run to verify the
+profile selector and document root attributes.
 
 ## State and interaction
 

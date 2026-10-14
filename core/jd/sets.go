@@ -137,7 +137,6 @@ func ComposePreset(setIDs []string) (*presetfile.PresetFile, error) {
 		return loadPresetFile("blank")
 	}
 	areas := make([]presetfile.Area, 0, len(ids)+1)
-	seeds := []presetfile.SeedAutomation{}
 	for _, id := range ids {
 		spec := filingSetSpecs[id]
 		source, err := loadPresetFile(spec.SourcePreset)
@@ -149,13 +148,6 @@ func ComposePreset(setIDs []string) (*presetfile.PresetFile, error) {
 			return nil, fmt.Errorf("filing set %q source area %d is missing", id, spec.Lane)
 		}
 		areas = append(areas, area)
-		if source.Seeds != nil {
-			for _, seed := range source.Seeds.Automations {
-				if seedTargetsLane(seed, spec.Lane) {
-					seeds = append(seeds, seed)
-				}
-			}
-		}
 	}
 	generated, err := loadPresetFile("blank")
 	if err != nil {
@@ -167,9 +159,6 @@ func ComposePreset(setIDs []string) (*presetfile.PresetFile, error) {
 		Format: presetfile.Format, ID: "composed-v1-" + hex.EncodeToString(digest[:8]), Version: 1,
 		Name: "Custom filing tree", License: "CC0-1.0", Market: "global", Language: "en",
 		Story: "A filing tree composed from Suchi's built-in sets.", Inbox: 49, Areas: areas,
-	}
-	if len(seeds) > 0 {
-		pf.Seeds = &presetfile.Seeds{Automations: seeds}
 	}
 	if err := presetfile.ValidateNormalized(pf); err != nil {
 		return nil, err
@@ -243,26 +232,4 @@ func presetArea(pf *presetfile.PresetFile, code int) (presetfile.Area, bool) {
 		}
 	}
 	return presetfile.Area{}, false
-}
-
-func seedTargetsLane(seed presetfile.SeedAutomation, lane int) bool {
-	for _, action := range seed.Actions {
-		value, ok := action.Params["jd_category_code"]
-		if !ok {
-			continue
-		}
-		var code int
-		switch typed := value.(type) {
-		case int:
-			code = typed
-		case int64:
-			code = int(typed)
-		case float64:
-			code = int(typed)
-		}
-		if code/10 == lane/10 {
-			return true
-		}
-	}
-	return false
 }

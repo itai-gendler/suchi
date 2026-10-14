@@ -47,7 +47,7 @@ func openHandlerDocument(t *testing.T, title, content string) (*db.DB, int64) {
 	if err := db.Migrate(ctx, d, migs, silentLog()); err != nil {
 		t.Fatal(err)
 	}
-	if err := jd.ApplyPreset(ctx, d, silentLog(), "household", jd.ApplyPresetOpts{SystemID: 1, SkipSeeds: true}); err != nil {
+	if err := jd.ApplyPreset(ctx, d, silentLog(), "household", jd.ApplyPresetOpts{SystemID: 1}); err != nil {
 		t.Fatal(err)
 	}
 	res, err := d.Write.ExecContext(ctx, `

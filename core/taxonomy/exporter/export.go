@@ -7,16 +7,14 @@ import (
 	"database/sql"
 	"fmt"
 
-	"github.com/johnnybravo-xyz/suchi/core/automations"
 	"github.com/johnnybravo-xyz/suchi/core/db"
 	"github.com/johnnybravo-xyz/suchi/core/jd/presetfile"
 	"github.com/johnnybravo-xyz/suchi/core/jd/systems"
-	"github.com/johnnybravo-xyz/suchi/core/taxonomy"
 )
 
-// BuildExport reads one archive snapshot. Tree-only export intentionally excludes
-// all behavior; seeded export covers preset-owned rules, not user rules or forks.
-func BuildExport(ctx context.Context, d *db.DB, systemID int64, skipSeeds bool) (*presetfile.PresetFile, error) {
+// BuildExport reads one archive's filing tree. Automations are archive behavior
+// and travel only in a complete backup.
+func BuildExport(ctx context.Context, d *db.DB, systemID int64) (*presetfile.PresetFile, error) {
 	tx, err := d.Read.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
 	if err != nil {
 		return nil, err
@@ -25,11 +23,6 @@ func BuildExport(ctx context.Context, d *db.DB, systemID int64, skipSeeds bool) 
 	pf, err := ReadTree(ctx, tx, systemID)
 	if err != nil {
 		return nil, err
-	}
-	if !skipSeeds {
-		if err := appendExportAutomations(ctx, tx, systemID, pf); err != nil {
-			return nil, err
-		}
 	}
 	if err := presetfile.ValidateNormalized(pf); err != nil {
 		return nil, fmt.Errorf("archive cannot be exported as v1: %w", err)
@@ -120,122 +113,4 @@ func ReadTree(ctx context.Context, tx *sql.Tx, systemID int64) (*presetfile.Pres
 		return nil, fmt.Errorf("legacy filing tree is incompatible with v1; review it explicitly: %w", err)
 	}
 	return pf, nil
-}
-
-func appendExportAutomations(ctx context.Context, tx *sql.Tx, systemID int64, pf *presetfile.PresetFile) error {
-	rules, err := automations.ListTx(ctx, tx, systemID)
-	if err != nil {
-		return err
-	}
-	for _, rule := range rules {
-		if rule.PresetSlug == "" {
-			continue
-		}
-		if !rule.Enabled {
-			return fmt.Errorf("preset rule %q is disabled; use tree-only export (--skip-seeds) or a full backup to preserve its state", rule.Name)
-		}
-		if len(rule.Triggers) != 1 || len(rule.Actions) == 0 {
-			return fmt.Errorf("preset rule %q requires exactly one trigger and nonempty actions for v1 export; use --skip-seeds", rule.Name)
-		}
-		t := rule.Triggers[0]
-		if t.FilterMailRuleID != 0 {
-			return fmt.Errorf("preset rule %q has unsupported trigger filters; use --skip-seeds", rule.Name)
-		}
-		seed := presetfile.SeedAutomation{Name: rule.Name, Trigger: presetfile.Trigger{
-			Type: automations.TriggerToCode(t.Type), FilterPath: t.FilterPath, FilterFilename: t.FilterFilename,
-			FilterTitleMatching: t.FilterTitleRE, FilterContentMatching: t.FilterContentRE,
-			FilterEmailFrom: t.FilterEmailFrom, FilterEmailSubject: t.FilterEmailSubject,
-			FilterEmailFolder: t.FilterEmailFolder, FilterEmailHasAttachment: t.FilterEmailHasAttachment,
-		}}
-		for _, ref := range []struct {
-			id    int64
-			table string
-			dst   *string
-		}{
-			{t.FilterTagID, "tags", &seed.Trigger.FilterTag},
-			{t.FilterCorrID, "correspondents", &seed.Trigger.FilterCorrespondent},
-		} {
-			if ref.id == 0 {
-				continue
-			}
-			if err := tx.QueryRowContext(ctx, "SELECT name FROM "+ref.table+" WHERE system_id=? AND id=?", systemID, ref.id).Scan(ref.dst); err != nil {
-				return fmt.Errorf("preset rule %q has an unresolved %s filter: %w", rule.Name, ref.table, err)
-			}
-		}
-		for _, action := range rule.Actions {
-			params, err := exportActionParams(ctx, tx, systemID, action)
-			if err != nil {
-				return fmt.Errorf("preset rule %q: %w; use --skip-seeds for tree-only export", rule.Name, err)
-			}
-			seed.Actions = append(seed.Actions, presetfile.Action{Kind: action.Kind, Params: params})
-		}
-		// Keep keyword rules as explicit starters: collapsing them into category
-		// keywords would rename rules and could merge distinct ordered behavior.
-		if pf.Seeds == nil {
-			pf.Seeds = &presetfile.Seeds{}
-		}
-		pf.Seeds.Automations = append(pf.Seeds.Automations, seed)
-	}
-	return nil
-}
-
-func exportActionParams(ctx context.Context, tx *sql.Tx, systemID int64, action automations.Action) (map[string]any, error) {
-	out := make(map[string]any, len(action.Params))
-	for key, value := range action.Params {
-		out[key] = value
-	}
-	if _, ok := out["_preset_keywords"]; ok && action.Kind == "assign_jd_category" {
-		delete(out, "_preset_keywords") // provenance only, not an executable parameter
-	}
-	if value, exists := out["jd_category_id"]; exists {
-		id, ok := taxonomy.NumericID(value)
-		if !ok {
-			return nil, fmt.Errorf("invalid category ID")
-		}
-		var code int
-		if err := tx.QueryRowContext(ctx, `SELECT code FROM jd_categories WHERE system_id=? AND id=?`, systemID, id).Scan(&code); err != nil {
-			return nil, err
-		}
-		delete(out, "jd_category_id")
-		out["jd_category_code"] = code
-	}
-	if value, exists := out["tag_ids"]; exists {
-		ids, ok := value.([]any)
-		if !ok {
-			return nil, fmt.Errorf("invalid tag IDs")
-		}
-		names := make([]string, 0, len(ids))
-		for _, value := range ids {
-			id, ok := taxonomy.NumericID(value)
-			if !ok {
-				return nil, fmt.Errorf("invalid tag ID")
-			}
-			var name string
-			if err := tx.QueryRowContext(ctx, `SELECT name FROM tags WHERE system_id=? AND id=?`, systemID, id).Scan(&name); err != nil {
-				return nil, err
-			}
-			names = append(names, name)
-		}
-		delete(out, "tag_ids")
-		out["tags"] = names
-	}
-	for _, ref := range []struct{ key, name, table string }{
-		{"correspondent_id", "correspondent", "correspondents"},
-	} {
-		value, exists := out[ref.key]
-		if !exists {
-			continue
-		}
-		id, ok := taxonomy.NumericID(value)
-		if !ok {
-			return nil, fmt.Errorf("invalid %s", ref.key)
-		}
-		var name string
-		if err := tx.QueryRowContext(ctx, "SELECT name FROM "+ref.table+" WHERE system_id=? AND id=?", systemID, id).Scan(&name); err != nil {
-			return nil, err
-		}
-		delete(out, ref.key)
-		out[ref.name] = name
-	}
-	return out, nil
 }

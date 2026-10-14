@@ -1,10 +1,10 @@
 {{define "login"}}<!doctype html>
-<html lang="en">
+<html lang="{{.Locale}}" dir="{{.Direction}}">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="color-scheme" content="light dark" />
-  <title>{{msg "auth.login.title"}} · suchi{{ if .DemoMode }} · Demo{{ end }}</title>
+  <title>{{msg "auth.login.title"}} · suchi{{ if .DemoMode }} · {{msg "auth.demo"}}{{ end }}</title>
   <link rel="icon" type="image/svg+xml" href="/assets/brand/favicon.svg">
   <link rel="alternate icon" type="image/x-icon" href="/assets/brand/favicon.ico">
   <link rel="apple-touch-icon" href="/assets/brand/favicon.ico">

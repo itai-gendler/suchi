@@ -1,12 +1,16 @@
 # English strings for the server-rendered authentication pages.
 # The main application is the Svelte SPA; keep this catalog limited to
 # templates under core/ui/templates.
+meta.direction: ltr
+
 
 auth.login.title: Sign in
 auth.login.subtitle: to continue to suchi.
 auth.login.email: Email
 auth.login.password: Password
 auth.login.submit: Sign in
+auth.demo: Demo
+
 
 auth.setup.title: Set up suchi
 auth.setup.body: First-boot admin. The one-time token is in your server log as
@@ -18,3 +22,23 @@ auth.setup.display_name: Display name
 auth.setup.optional: (optional)
 auth.setup.password: Password
 auth.setup.submit: Create admin
+
+share.page_suffix: share
+share.link_expired: Link expired
+share.invalid_full: This share link is invalid, expired, or was revoked. Ask the sender for a fresh link.
+share.invalid_short: This share link is invalid, expired, or was revoked.
+share.wrong_password: Wrong password. Try again.
+share.password: Password
+share.unlock: Unlock
+share.document_number: "Document #%d"
+share.unknown_type: unknown type
+share.by_name_host_html: "Shared by <strong>%s</strong> <span aria-hidden=\"true\">·</span> %s"
+share.by_name_html: "Shared by <strong>%s</strong>"
+share.from_host_html: "Shared from <strong>%s</strong>"
+share.shared_document: Shared document
+share.available_until: "Available until %s UTC"
+share.size_gb: "%.1f GB"
+share.size_mb: "%.1f MB"
+share.size_kb: "%.1f KB"
+share.size_b: "%d B"
+share.powered_by: Powered by

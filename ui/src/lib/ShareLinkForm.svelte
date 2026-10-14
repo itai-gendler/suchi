@@ -1,21 +1,22 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script>
+  import { t as translate } from "./i18n.svelte.js";
   let {
     value = $bindable({ visibility: 'network', expiry: '0', password: '' }),
     publicAvailable = false,
     highSensitivity = false,
     busy = false,
-    submitLabel = 'Create & copy',
+    submitLabel = translate("shareLinkForm.createCopy"),
     onSubmit,
   } = $props()
 
   const NETWORK_EXPIRIES = [
-    ['0', 'Never expires'],
-    ['86400', '1 day'],
-    ['604800', '7 days'],
-    ['2592000', '30 days'],
-    ['7776000', '90 days'],
-    ['31536000', '365 days'],
+    ['0', translate("shareLinkForm.neverExpires")],
+    ['86400', translate("shareLinkForm.1Day")],
+    ['604800', translate("shareLinkForm.7Days")],
+    ['2592000', translate("shareLinkForm.30Days")],
+    ['7776000', translate("shareLinkForm.90Days")],
+    ['31536000', translate("shareLinkForm.365Days")],
   ]
   const PUBLIC_EXPIRIES = NETWORK_EXPIRIES.slice(1)
   const expiries = $derived(value.visibility === 'public' ? PUBLIC_EXPIRIES : NETWORK_EXPIRIES)
@@ -36,41 +37,41 @@
 
 <form class="share-form" onsubmit={submit}>
   <fieldset class="share-surfaces" disabled={busy}>
-    <legend>Who can use this link?</legend>
+    <legend>{translate("shareLinkForm.whoCanUseThisLink")}</legend>
     <label class:chosen={value.visibility === 'network'}>
       <input type="radio" name="share-visibility" value="network"
              checked={value.visibility === 'network'} onchange={() => chooseVisibility('network')} />
-      <span><strong>Private network</strong><small>Uses your normal Suchi address. It is private only if that address is private.</small></span>
+      <span><strong>{translate("shareLinkForm.privateNetwork")}</strong><small>{translate("shareLinkForm.usesYourNormalSuchiAddressItIs")}</small></span>
     </label>
     {#if publicAvailable}
       <label class:chosen={value.visibility === 'public'}>
         <input type="radio" name="share-visibility" value="public"
                checked={value.visibility === 'public'} onchange={() => chooseVisibility('public')} />
-        <span><strong>Public internet</strong><small>Anyone with the link can download from the internet until it expires.</small></span>
+        <span><strong>{translate("shareLinkForm.publicInternet")}</strong><small>{translate("shareLinkForm.anyoneWithTheLinkCanDownloadFrom")}</small></span>
       </label>
     {/if}
   </fieldset>
 
   <div class="share-fields">
     <label>
-      <span>Expiry</span>
-      <select class="input" bind:value={value.expiry} aria-label="Link expiry" disabled={busy}>
+      <span>{translate("shareLinkForm.expiry")}</span>
+      <select class="input" bind:value={value.expiry} aria-label={translate("shareLinkForm.linkExpiry")} disabled={busy}>
         {#each expiries as [seconds, label]}<option value={seconds}>{label}</option>{/each}
       </select>
     </label>
     <label class="password-field">
-      <span>Password <small>optional</small></span>
+      <span>{translate("shareLinkForm.password")} <small>{translate("shareLinkForm.optional")}</small></span>
       <input class="input" type="password" bind:value={value.password}
-             aria-label="Share password" autocomplete="new-password" disabled={busy} />
+             aria-label={translate("shareLinkForm.sharePassword")} autocomplete="new-password" disabled={busy} />
     </label>
   </div>
 
   {#if highSensitivity}
-    <p class="share-advice">Add a password for confidential or restricted documents, and send it separately.</p>
+    <p class="share-advice">{translate("shareLinkForm.addAPasswordForConfidentialOrRestricted")}</p>
   {/if}
 
   <button class="btn primary sm" type="submit" disabled={busy}>
-    {busy ? 'Creating…' : submitLabel}
+    {busy ? translate("shareLinkForm.creating") : submitLabel}
   </button>
 </form>
 

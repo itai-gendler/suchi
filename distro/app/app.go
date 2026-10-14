@@ -28,6 +28,7 @@ import (
 	"github.com/johnnybravo-xyz/suchi/core/db"
 	migrations "github.com/johnnybravo-xyz/suchi/core/db/migrations"
 	"github.com/johnnybravo-xyz/suchi/core/httpx"
+	"github.com/johnnybravo-xyz/suchi/core/i18n"
 	"github.com/johnnybravo-xyz/suchi/core/ingest/emailwatch"
 	"github.com/johnnybravo-xyz/suchi/core/ingest/emailwatch/oauth"
 	"github.com/johnnybravo-xyz/suchi/core/ingest/fswatch"
@@ -508,9 +509,13 @@ func Run(ctx context.Context, opts Options) error {
 	}, d, cas, disp, decryptKey, msalManager, log)
 
 	m := httpx.NewMetrics()
+	catalogs, err := i18n.NewRegistry(log)
+	if err != nil {
+		return fmt.Errorf("load i18n: %w", err)
+	}
 
 	mux := http.NewServeMux()
-	if err := registerBaseRoutes(mux, cfg, d, cas, m, la, oa, targetSchemaVersion, log); err != nil {
+	if err := registerBaseRoutes(mux, cfg, d, cas, m, la, oa, catalogs, targetSchemaVersion, log); err != nil {
 		log.Error("main.routes", "err", err.Error())
 		return fmt.Errorf("main.routes: %w", err)
 	}
@@ -521,6 +526,7 @@ func Run(ctx context.Context, opts Options) error {
 		return fmt.Errorf("main.api.new: %w", err)
 	}
 	apiSrv.PublicURL = cfg.PublicURL
+	apiSrv.Catalogs = catalogs
 	apiSrv.SharePublicURL = cfg.SharePublicURL
 	apiSrv.BuildVersion, apiSrv.BuildRevision = opts.BuildVersion, opts.BuildRevision
 	apiSrv.Approvals = apvEngine

@@ -10,9 +10,14 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
+	"unicode"
 	"unicode/utf8"
+
+	"golang.org/x/text/unicode/norm"
 )
 
 const (
@@ -174,27 +179,161 @@ func EvidenceStart(content string, candidate Candidate) (int64, bool) {
 }
 
 // A quote's presence alone does not ground a contradictory normalized date.
-// Unsupported date spellings fail closed rather than authorizing a guessed fact.
+// dateTextMatches reads the numbers and month words in the quote, in any
+// order and script, and requires exactly the parts the precision names.
+// Extra numbers or a contradicting month word fail closed.
 func dateTextMatches(raw string, value DateValue) bool {
-	raw = strings.TrimSpace(raw)
-	layouts := []string{
-		"2006-01-02", "2006/01/02", "2006.01.02", "2006-1-2", "2006/1/2",
-		"02/01/2006", "01/02/2006", "2/1/2006", "1/2/2006",
-		"02-01-2006", "01-02-2006", "2-1-2006", "1-2-2006",
-		"02.01.2006", "2.1.2006", "2 January 2006", "02 January 2006",
-		"January 2, 2006", "January 02, 2006", "January 2 2006",
-		"2 Jan 2006", "02 Jan 2006", "Jan 2, 2006", "Jan 2 2006",
+	parsed, err := time.Parse("2006-01-02", value.Date)
+	if err != nil {
+		return false
+	}
+	numbers, months := dateTokens(raw)
+	if len(months) > 1 || len(months) == 1 && months[0] != int(parsed.Month()) {
+		return false
+	}
+	isYear := func(n string) bool {
+		v, _ := strconv.Atoi(n)
+		return len(n) == 4 && (v == parsed.Year() || v == parsed.Year()+543) ||
+			len(n) == 2 && v == parsed.Year()%100
+	}
+	isMonth := func(n string) bool {
+		v, _ := strconv.Atoi(n)
+		return len(n) <= 2 && v == int(parsed.Month())
+	}
+	isDay := func(n string) bool {
+		v, _ := strconv.Atoi(n)
+		return len(n) <= 2 && v == parsed.Day()
 	}
 	switch value.Precision {
-	case "month":
-		layouts = []string{"2006-01", "2006/01", "01/2006", "January 2006", "Jan 2006"}
 	case "year":
-		layouts = []string{"2006"}
+		return len(months) == 0 && len(numbers) == 1 && isYear(numbers[0])
+	case "month":
+		if len(months) == 1 {
+			return len(numbers) == 1 && isYear(numbers[0])
+		}
+		return assignable(numbers, isYear, isMonth)
+	default:
+		if len(months) == 1 {
+			return assignable(numbers, isYear, isDay)
+		}
+		return assignable(numbers, isYear, isMonth, isDay)
 	}
-	for _, layout := range layouts {
-		if parsed, err := time.Parse(layout, raw); err == nil && parsed.Format("2006-01-02") == value.Date {
+}
+
+// assignable reports whether each number fills exactly one distinct role.
+func assignable(numbers []string, roles ...func(string) bool) bool {
+	if len(numbers) != len(roles) {
+		return false
+	}
+	used := make([]bool, len(numbers))
+	var fill func(int) bool
+	fill = func(role int) bool {
+		if role == len(roles) {
 			return true
 		}
+		for i, n := range numbers {
+			if !used[i] && roles[role](n) {
+				used[i] = true
+				if fill(role + 1) {
+					return true
+				}
+				used[i] = false
+			}
+		}
+		return false
 	}
-	return false
+	return fill(0)
 }
+
+var japaneseEra = regexp.MustCompile(`(令和|平成|昭和)([0-9]+|元)年`)
+
+var japaneseEraStart = map[string]int{"令和": 2018, "平成": 1988, "昭和": 1925}
+
+// Zero code points of decimal digit blocks that NFKC leaves as they are.
+var digitZeros = []rune{0x0660, 0x06F0, 0x0966, 0x09E6, 0x0E50}
+
+// dateTokens returns the quote's ASCII number runs and the months named by
+// its letter runs. Letter runs that are not month spellings are separators.
+func dateTokens(raw string) (numbers []string, months []int) {
+	text := []rune(norm.NFKC.String(raw))
+	for i, r := range text {
+		for _, zero := range digitZeros {
+			if r >= zero && r <= zero+9 {
+				text[i] = '0' + (r - zero)
+			}
+		}
+	}
+	normalized := japaneseEra.ReplaceAllStringFunc(string(text), func(era string) string {
+		parts := japaneseEra.FindStringSubmatch(era)
+		year := 1
+		if parts[2] != "元" {
+			year, _ = strconv.Atoi(parts[2])
+		}
+		return strconv.Itoa(japaneseEraStart[parts[1]]+year) + "年"
+	})
+	var number, word strings.Builder
+	flush := func() {
+		if number.Len() > 0 {
+			numbers = append(numbers, number.String())
+			number.Reset()
+		}
+		if word.Len() > 0 {
+			if month, ok := monthLookup[foldWord(word.String())]; ok {
+				months = append(months, month)
+			}
+			word.Reset()
+		}
+	}
+	for _, r := range normalized {
+		switch {
+		case r >= '0' && r <= '9':
+			if word.Len() > 0 {
+				flush()
+			}
+			number.WriteRune(r)
+		case unicode.IsLetter(r) || unicode.IsMark(r):
+			if number.Len() > 0 {
+				flush()
+			}
+			word.WriteRune(r)
+		default:
+			flush()
+		}
+	}
+	flush()
+	return numbers, months
+}
+
+// foldWord lowercases and drops combining marks, so "März", "MÄRZ" and
+// "Marz" compare equal.
+func foldWord(word string) string {
+	var out strings.Builder
+	for _, r := range norm.NFD.String(strings.ToLower(word)) {
+		if !unicode.Is(unicode.Mn, r) {
+			out.WriteRune(r)
+		}
+	}
+	return out.String()
+}
+
+// monthLookup maps folded month spellings to 1–12. A spelling that names
+// different months in different languages is left out, never guessed.
+var monthLookup = func() map[string]int {
+	lookup := map[string]int{}
+	conflicts := map[string]bool{}
+	for _, months := range monthWords {
+		for i, spellings := range months {
+			for _, spelling := range spellings {
+				key := foldWord(spelling)
+				if existing, ok := lookup[key]; ok && existing != i+1 {
+					conflicts[key] = true
+				}
+				lookup[key] = i + 1
+			}
+		}
+	}
+	for key := range conflicts {
+		delete(lookup, key)
+	}
+	return lookup
+}()

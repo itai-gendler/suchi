@@ -31,9 +31,9 @@ Whole canonical addresses such as `S01.13.147` in Search/Omnibox use
 to broad text search. `jd:13` remains a category filter within the current system.
 The final address component is an existing installation-global document ID.
 
-## FTS5 index
+## FTS5 indexes
 
-SQLite owns an external-content FTS5 table with two columns:
+SQLite owns two external-content FTS5 tables over the same title and content:
 
 ```sql
 CREATE VIRTUAL TABLE documents_fts USING fts5 (
@@ -42,6 +42,14 @@ CREATE VIRTUAL TABLE documents_fts USING fts5 (
   content='documents',
   content_rowid='id',
   tokenize='porter unicode61 remove_diacritics 2'
+);
+
+CREATE VIRTUAL TABLE documents_trigram USING fts5 (
+  title,
+  content,
+  content='documents',
+  content_rowid='id',
+  tokenize='trigram remove_diacritics 1'
 );
 ```
 
@@ -57,8 +65,12 @@ physical search/storage separation.
 - `remove_diacritics 2` makes diacritic-insensitive matching consistent for the
   supported scripts where SQLite can fold it.
 - `porter` supplies stemming for applicable terms.
+- `trigram` matches any substring of three or more characters, case- and
+  diacritic-insensitive. It finds words inside German compounds
+  (`Versicherung` in `Krankenversicherung`) and in Chinese, Japanese, Korean and
+  Thai text, which has no spaces for `unicode61` to split on.
 
-Insert, delete, and title/content update triggers keep the FTS row synchronized
+Insert, delete, and title/content update triggers keep both FTS rows synchronized
 with `documents`. The index stores searchable text, not original file bytes.
 
 Suchi currently has no vector index or embedding queue. “Semantic” behavior in
@@ -71,8 +83,12 @@ search.
 `GET /api/search/?q=...` compiles the [rich query language](/query-language)
 into:
 
-1. one positive FTS5 `MATCH` expression for text clauses;
-2. fixed SQL predicates for negation and metadata filters;
+1. one membership predicate per text clause: the word index, or the trigram
+   index for terms of three or more characters, or a substring scan of title and
+   content for shorter terms in scripts written without spaces (`東京`). Each
+   clause may match through a different index, and negation excludes matches in
+   any of them;
+2. fixed SQL predicates for metadata filters;
 3. typed custom-field value predicates plus presence predicates, with target
    ACL/liveness inside a `documentlink` `EXISTS`;
 4. numeric/null predicates for read-only previous archive numbers;
@@ -80,9 +96,10 @@ into:
 6. the caller-relative version currentness predicate; and
 7. live-document exclusion unless `is:trash` controls trash state.
 
-Text results include a content snippet with `<mark>` around the matching span.
-The snippet window is 20 FTS tokens. Filter-only queries do not join FTS; they
-return an empty snippet and use newest-first ordering.
+Text results include a content snippet with `<mark>` around the matching span:
+a 20-token word-index snippet when the word index matched, otherwise a
+240-character window of the trigram highlight. Filter-only queries do not join
+FTS; they return an empty snippet and use newest-first ordering.
 
 Currentness is evaluated inside the candidate query before count, ranking, and
 pagination. A version family contributes its greatest live document ID visible
@@ -105,12 +122,12 @@ compare `value_date`, and booleans compare `value_bool`. `asn:` compares the
 nullable compatibility column on the document row. These predicates stay inside
 the same visible/current candidate query used for counts and pages.
 
-Default recency-ranked searches first materialize only the requested page of
-document IDs and scores. A row-ID-restricted FTS pass then builds one snippet
-for each page result, so broad matches do not build display text for the whole
-candidate set. Raw `recency=off` searches stay in one FTS scan because a second
-bounded MATCH costs more than it saves for plain BM25. Both paths use score and
-document ID as a stable order. See [SQLite WITH-clause materialization](https://www.sqlite.org/lang_with.html#materialization_hints).
+Searches first materialize only the requested page of document IDs and scores.
+Row-ID-restricted FTS passes then build one snippet for each page result, so
+broad matches do not build display text for the whole candidate set. Word-index
+matches rank first, then documents found only by the trigram index, then
+documents found only by the short-term scan. Tier, score and document ID form a
+stable order; `recency=off` drops the recency term. See [SQLite WITH-clause materialization](https://www.sqlite.org/lang_with.html#materialization_hints).
 
 ### BM25 weighting
 
@@ -123,7 +140,8 @@ bm25(documents_fts, 3.0, 1.0)
 The first weight applies to `title`, the second to `content`. A title match is
 therefore three times as strong as the corresponding body-text contribution.
 SQLite's BM25 rank is ordered ascending: a more negative value is a stronger
-match.
+match. Documents found only by the trigram index rank by
+`bm25(documents_trigram, 3.0, 1.0)` after every word-index match.
 
 ### Recency decay
 
@@ -168,10 +186,10 @@ as newest, oldest, updated, and title because the screen is also a bulk-action
 workspace. Legacy URL filters remain additive while older links and imported
 Views migrate to normalized queries.
 
-When a rich query contains positive text, Documents starts with the FTS match
-and joins the resulting row IDs to document metadata. Calendar's source-document
-filter uses the same shape. This avoids scanning every document and running a
-correlated FTS probe for each row. Filter-only document lists stay on ordinary
+When a rich query contains positive text, Documents starts from the row IDs the
+text indexes return and looks up document metadata by ID. Calendar's
+source-document filter uses the same shape. This avoids scanning every document
+and running a correlated FTS probe for each row. Filter-only document lists stay on ordinary
 tables; the default live newest-first page uses a partial
 `(created_at DESC, id DESC)` index. Every supported list order includes ID as a
 deterministic tie-breaker, so equal timestamps or titles cannot move between
@@ -205,11 +223,16 @@ suggestions at 20 by default and 50 explicitly.
 `GET /api/documents/{id}/similar` uses FTS5 as a local “more like this” reader:
 
 1. Read the source title plus at most the first 4,096 content bytes.
-2. Extract alphanumeric tokens of length four or more.
+2. Extract alphanumeric tokens of length four or more. Runs in Chinese,
+   Japanese, Korean, Thai and other scripts written without spaces yield
+   overlapping three-character windows instead; windows of Hiragana alone are
+   grammar and are dropped.
 3. Remove a deterministic set of low-information function, question and email
    boilerplate words.
 4. Select at most ten tokens by frequency, then alphabetically for ties.
-5. OR-join each token as a quoted FTS term.
+5. OR-join each token as a quoted FTS term: in the trigram index when any
+   token is a character window, otherwise in the word index. One index per
+   source keeps neighbour scores comparable.
 6. Exclude the source document and trash.
 7. Apply the caller's visibility predicate.
 8. Rank with title `3.0`, content `1.0`, and no recency term.
@@ -250,8 +273,10 @@ For each question Suchi:
 1. Normalizes up to 64 unique Unicode terms.
 2. Drops common question/document words when useful terms exist.
 3. Keeps at most 12 useful terms.
-4. Converts them to FTS prefixes and OR-joins them for recall.
-5. Ranks title `3.0`, content `1.0`, without recency.
+4. Converts them to FTS prefixes and OR-joins them for recall; terms of three or
+   more characters also OR-join as trigram substrings.
+5. Ranks title `3.0`, content `1.0`, without recency; word-index matches come
+   before trigram-only matches.
 6. Selects at most six document IDs, keeping documents linked from the previous
    answer first and current BM25 results after them.
 7. Reloads up to three linked documents directly in requested order, with fresh
@@ -316,6 +341,11 @@ bypasses object authorization.
 ## Performance and safety bounds
 
 - FTS content stays in SQLite; no network search service is required.
+- The trigram index is about 1.6 times the size of the extracted text it covers,
+  against about 0.3 times for the word index, and indexing a document costs
+  roughly three times as much. `go test ./core/api -run '^$' -bench
+  'IndexCorpus|SearchLanguages' -benchtime 1x` measures both on a fixed
+  20,000-document English, German and Japanese corpus.
 - Queries are limited to 1 KiB, 64 tokens, and 256 bytes per value.
 - Search pages cap at 100; similar results at 50; Ask your documents at 6
   documents.

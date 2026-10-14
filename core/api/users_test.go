@@ -2,10 +2,10 @@
 
 package api
 
-// PATCH /api/users/me covers a narrow but load-bearing surface —
-// display_name only, everything else rejected. Tests pin:
+// PATCH /api/users/me covers display-name and locale preferences. Tests pin:
 //   - anonymous → 401
-//   - happy-path {display_name} updates the row + emits audit event
+//   - happy-path updates emit audit events
+//   - locale values must resolve to an embedded catalog
 //   - unknown fields, including email, are refused
 //   - empty body refused
 //   - overly long name refused
@@ -22,6 +22,7 @@ import (
 	pluginapi "github.com/johnnybravo-xyz/suchi/plugin-api"
 
 	"github.com/johnnybravo-xyz/suchi/core/auth"
+	"github.com/johnnybravo-xyz/suchi/core/i18n"
 )
 
 func doPatchSelf(t *testing.T, s *Server, body string, p *pluginapi.Principal) (int, UserSelf) {
@@ -69,6 +70,40 @@ func TestPatchSelf_UpdatesDisplayName(t *testing.T) {
 	}
 	if count != 1 {
 		t.Errorf("audit rows = %d, want 1", count)
+	}
+}
+
+func TestPatchSelf_PersistsSupportedLocale(t *testing.T) {
+	d := openTestDB(t)
+	seedUser(t, d, 1)
+	catalogs, err := i18n.NewRegistry(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := &Server{DB: d, Log: slog.New(slog.NewTextHandler(os.Stderr, nil)), Catalogs: catalogs}
+	code, self := doPatchSelf(t, s, `{"locale":"en-US"}`, memberPrincipal(1))
+	if code != 200 || self.Locale != "en" {
+		t.Fatalf("locale patch status=%d self=%+v", code, self)
+	}
+	var locale string
+	if err := d.Read.QueryRow(`SELECT locale FROM users WHERE id=1`).Scan(&locale); err != nil {
+		t.Fatal(err)
+	}
+	if locale != "en" {
+		t.Fatalf("stored locale = %q, want en", locale)
+	}
+	if code, _ := doPatchSelf(t, s, `{"locale":"de"}`, memberPrincipal(1)); code != 400 {
+		t.Fatalf("unsupported locale status=%d, want 400", code)
+	}
+	if code, self := doPatchSelf(t, s, `{"locale":""}`, memberPrincipal(1)); code != 200 || self.Locale != "" {
+		t.Fatalf("automatic locale patch status=%d self=%+v", code, self)
+	}
+	var auditCount int
+	if err := d.Read.QueryRow(`SELECT COUNT(*) FROM audit_events WHERE action='user.locale_changed'`).Scan(&auditCount); err != nil {
+		t.Fatal(err)
+	}
+	if auditCount != 2 {
+		t.Fatalf("locale audit rows=%d, want 2", auditCount)
 	}
 }
 

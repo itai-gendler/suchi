@@ -2,7 +2,11 @@
 
 package searchquery
 
-import "strings"
+import (
+	"strings"
+	"unicode"
+	"unicode/utf8"
+)
 
 type Predicate struct {
 	SQL  string
@@ -14,8 +18,13 @@ type FieldPresence struct {
 	Negated bool
 }
 
+// Plan separates membership from ranking. TextPredicates decide which
+// documents match the positive text clauses; Match (word index) and
+// TrigramMatch (substring index) only rank and excerpt those documents.
 type Plan struct {
 	Match           string
+	TrigramMatch    string
+	TextPredicates  []Predicate
 	Predicates      []Predicate
 	HasTrashFilter  bool
 	SelectsTrash    bool
@@ -27,6 +36,7 @@ type Plan struct {
 func Compile(query ResolvedQuery) Plan {
 	plan := Plan{Predicates: make([]Predicate, 0, len(query.Clauses)), VersionMode: VersionLatest}
 	positiveText := make([]string, 0, len(query.Clauses))
+	positiveTrigram := make([]string, 0, len(query.Clauses))
 	positiveDateIndex := -1
 	positiveDateWhere := []string{
 		"sq_di.document_id = d.id",
@@ -36,14 +46,15 @@ func Compile(query ResolvedQuery) Plan {
 	positiveDateArgs := []any{}
 	for _, clause := range query.Clauses {
 		if clause.Kind == ClauseText {
-			expression := compileText(clause.Clause)
+			predicate := compileTextMembership(clause.Clause, clause.Negated)
 			if clause.Negated {
-				plan.Predicates = append(plan.Predicates, Predicate{
-					SQL:  "NOT EXISTS (SELECT 1 FROM documents_fts WHERE documents_fts.rowid = d.id AND documents_fts MATCH ?)",
-					Args: []any{expression},
-				})
-			} else {
-				positiveText = append(positiveText, expression)
+				plan.Predicates = append(plan.Predicates, predicate)
+				continue
+			}
+			plan.TextPredicates = append(plan.TextPredicates, predicate)
+			positiveText = append(positiveText, compileText(clause.Clause))
+			if trigram := compileTrigramText(clause.Clause); trigram != "" {
+				positiveTrigram = append(positiveTrigram, trigram)
 			}
 			continue
 		}
@@ -90,7 +101,67 @@ func Compile(query ResolvedQuery) Plan {
 		}
 	}
 	plan.Match = strings.Join(positiveText, " AND ")
+	plan.TrigramMatch = strings.Join(positiveTrigram, " AND ")
 	return plan
+}
+
+// compileTextMembership matches one text clause in either index: the porter
+// word index finds stems and word prefixes, the trigram index finds any
+// substring of three or more characters (German compounds, CJK runs). Shorter
+// terms in scripts written without spaces fall back to a substring scan.
+func compileTextMembership(clause Clause, negated bool) Predicate {
+	sql := "SELECT rowid FROM documents_fts WHERE documents_fts MATCH ?"
+	args := []any{compileText(clause)}
+	if trigram := compileTrigramText(clause); trigram != "" {
+		sql += " UNION SELECT rowid FROM documents_trigram WHERE documents_trigram MATCH ?"
+		args = append(args, trigram)
+	} else if UnspacedScript(clause.Text) {
+		columns := []string{"title", "content"}
+		switch clause.Field {
+		case TextTitle:
+			columns = columns[:1]
+		case TextContent:
+			columns = columns[1:]
+		}
+		conditions := make([]string, len(columns))
+		for i, column := range columns {
+			conditions[i] = "instr(" + column + ", ?) > 0"
+			args = append(args, clause.Text)
+		}
+		sql += " UNION SELECT id FROM documents WHERE " + strings.Join(conditions, " OR ")
+	}
+	operator := "IN"
+	if negated {
+		operator = "NOT IN"
+	}
+	return Predicate{SQL: "d.id " + operator + " (" + sql + ")", Args: args}
+}
+
+// compileTrigramText is empty for terms the trigram index cannot match.
+func compileTrigramText(clause Clause) string {
+	if utf8.RuneCountInString(clause.Text) < 3 {
+		return ""
+	}
+	value := `"` + strings.ReplaceAll(clause.Text, `"`, `""`) + `"`
+	switch clause.Field {
+	case TextTitle:
+		return "title : " + value
+	case TextContent:
+		return "content : " + value
+	default:
+		return value
+	}
+}
+
+// UnspacedScript reports text in a script written without spaces between
+// words, where word tokenizers see whole sentences as one token.
+func UnspacedScript(text string) bool {
+	for _, r := range text {
+		if unicode.In(r, unicode.Han, unicode.Hiragana, unicode.Katakana, unicode.Hangul, unicode.Thai, unicode.Lao, unicode.Khmer, unicode.Myanmar) {
+			return true
+		}
+	}
+	return false
 }
 
 func compileText(clause Clause) string {

@@ -258,10 +258,10 @@ func (s *Server) ListIntelligence(w http.ResponseWriter, r *http.Request) {
 		where = append(where, versionWhere)
 		args = append(args, versionArgs...)
 	}
-	where, args = appendFTSDrivenQueryPredicates(where, args, queryPlan)
+	where, args = appendQueryPredicates(where, args, queryPlan)
 	whereSQL := strings.Join(where, " AND ")
 	fromSQL := `document_intelligence di
-		JOIN documents d ON d.id = di.document_id` + queryDocumentFTSJoin(queryPlan)
+		JOIN documents d ON d.id = di.document_id`
 	pp := ParsePageParams(r, 100, 500)
 	var total int
 	if err := s.DB.Read.QueryRowContext(r.Context(), `

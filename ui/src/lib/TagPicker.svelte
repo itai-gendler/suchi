@@ -1,6 +1,8 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script>
-  let { tags = [], excludedSlugs = [], disabled = false, label = 'Tag to add', menuId = 'tag-options', onChoose } = $props()
+  import { localeState, t as translate } from './i18n.svelte.js'
+  import { compareLocalized } from './format.js'
+  let { tags = [], excludedSlugs = [], disabled = false, label = translate("tagPicker.tagToAdd"), menuId = 'tag-options', onChoose } = $props()
   let query = $state('')
   let open = $state(false)
   let highlight = $state(-1)
@@ -8,11 +10,11 @@
   let box, input
 
   const matches = $derived.by(() => {
-    const needle = query.trim().toLocaleLowerCase()
+    const needle = query.trim().toLocaleLowerCase(localeState.locale)
     const excluded = new Set(excludedSlugs)
     return tags.filter(tag => !excluded.has(tag.slug) &&
-      (!needle || tag.name.toLocaleLowerCase().includes(needle) || tag.slug.toLocaleLowerCase().includes(needle)))
-      .sort((a, b) => a.name.localeCompare(b.name) || a.id - b.id).slice(0, 8)
+      (!needle || tag.name.toLocaleLowerCase(localeState.locale).includes(needle) || tag.slug.toLocaleLowerCase(localeState.locale).includes(needle)))
+      .sort((a, b) => compareLocalized(a.name, b.name) || a.id - b.id).slice(0, 8)
   })
 
   function close() { open = false; highlight = -1 }
@@ -52,7 +54,7 @@
          autocomplete="off" role="combobox" aria-label={label} aria-autocomplete="list"
          aria-expanded={open} aria-controls={menuId}
          aria-activedescendant={open && highlight >= 0 && matches[highlight] ? `${menuId}-${highlight}` : undefined}
-         placeholder="Type to select a tag" onfocus={() => (open = true)}
+         placeholder={translate("tagPicker.typeToSelectATag")} onfocus={() => (open = true)}
          oninput={() => { open = true; highlight = -1 }} onkeydown={keydown} />
   {#if open && !disabled}
     <div class="omni-drop" id={menuId} role="listbox" aria-label={label}>
@@ -62,7 +64,7 @@
                 disabled={working} onmousedown={(event) => event.preventDefault()}
                 onclick={() => choose(tag)}>{tag.name}<span class="slug">{tag.slug}</span></button>
       {:else}
-        <div class="empty">No matching tags</div>
+        <div class="empty">{translate("tagPicker.noMatchingTags")}</div>
       {/each}
     </div>
   {/if}

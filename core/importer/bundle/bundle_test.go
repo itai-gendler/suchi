@@ -401,7 +401,7 @@ func setupTarget(t *testing.T, ctx context.Context, dataDir string) (*db.DB, *bl
 	migs, err := db.LoadMigrations(migrations.FS, ".")
 	must(t, err)
 	must(t, db.Migrate(ctx, d, migs, log))
-	must(t, jd.ApplyPreset(ctx, d, log, "household", jd.ApplyPresetOpts{SystemID: 1, SkipSeeds: true}))
+	must(t, jd.ApplyPreset(ctx, d, log, "household", jd.ApplyPresetOpts{SystemID: 1}))
 
 	// Seed admin.
 	err = d.WriteTx(ctx, func(tx *sql.Tx) error {

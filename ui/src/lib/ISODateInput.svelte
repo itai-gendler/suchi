@@ -1,8 +1,9 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script>
+  import { t as translate } from "./i18n.svelte.js";
   import Icon from './Icon.svelte'
 
-  let { id, value = $bindable(''), label = 'Date', title = label,
+  let { id, value = $bindable(''), label = translate("iSODateInput.date"), title = label,
         includeTime = false, compact = false, onchange } = $props()
   let textInput
   let nativePicker
@@ -35,7 +36,7 @@
 
   function edit(event) {
     draft = event.currentTarget.value
-    event.currentTarget.setCustomValidity(validValue(draft) ? '' : `Use ${format}`)
+    event.currentTarget.setCustomValidity(validValue(draft) ? '' : translate("iSODateInput.useValue", { "format": format }))
   }
 
   function commit(next) {
@@ -70,8 +71,8 @@
          placeholder={format} title={title} aria-label={label} maxlength={includeTime ? 16 : 10}
          inputmode="numeric" autocomplete="off" spellcheck="false"
          oninput={edit} onchange={() => commit(draft)} />
-  <button class="calendar-button" type="button" title={`Choose ${label.toLowerCase()}`}
-          aria-label={`Choose ${label.toLowerCase()}`} onclick={openPicker}>
+  <button class="calendar-button" type="button" title={translate("iSODateInput.chooseField", { label })}
+          aria-label={translate("iSODateInput.chooseField", { label })} onclick={openPicker}>
     <Icon name="calendar" size={17} />
   </button>
   <input bind:this={nativePicker} class="native-picker" type={includeTime ? 'datetime-local' : 'date'}

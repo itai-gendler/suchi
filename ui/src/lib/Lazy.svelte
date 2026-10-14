@@ -1,5 +1,6 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script>
+  import { t as translate } from "./i18n.svelte.js";
   // Awaits a dynamic import and mounts it; keyed on `load` so route
   // switches swap components. Failed fetch (stale deploy) -> reload link.
   let { load, props = {} } = $props()
@@ -18,11 +19,11 @@
   <C {...props} />
 {:else if failed}
   <div class="empty">
-    This view failed to load, likely because the server was updated.
-    <a href={location.href} onclick={() => location.reload()}>Reload</a>
+    {translate("lazy.thisViewFailedToLoadLikelyBecause")}
+    <a href={location.href} onclick={() => location.reload()}>{translate("lazy.reload")}</a>
   </div>
 {:else}
-  <div class="route-loading" aria-label="Loading view">
+  <div class="route-loading" aria-label={translate("lazy.loadingView")}>
     <div class="skel"></div>
     <div class="skel"></div>
     <div class="skel"></div>

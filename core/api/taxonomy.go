@@ -22,7 +22,6 @@ type TaxonomyImportReq struct {
 	Content            string         `json:"content"`
 	Format             string         `json:"format,omitempty"`
 	Apply              bool           `json:"apply,omitempty"`
-	SkipSeeds          bool           `json:"skip_seeds,omitempty"`
 	Remaps             map[string]int `json:"remaps,omitempty"`
 	ExpectedStateHash  string         `json:"expected_state_hash,omitempty"`
 	TargetSystem       string         `json:"target_system,omitempty"`
@@ -80,7 +79,7 @@ func (s *Server) ImportTaxonomy(w http.ResponseWriter, r *http.Request) {
 		}
 		target = system.Code
 	}
-	opts := importer.Options{SkipSeeds: req.SkipSeeds, Remaps: remaps, ContentSHA256: sha256hex(req.Content), ExpectedStateHash: req.ExpectedStateHash,
+	opts := importer.Options{Remaps: remaps, ContentSHA256: sha256hex(req.Content), ExpectedStateHash: req.ExpectedStateHash,
 		TargetSystem: target, ExistingSystemCode: req.ExistingSystemCode, ActorID: actor.UserID}
 	var diff *importer.Diff
 	if req.Apply {
@@ -134,16 +133,7 @@ func (s *Server) ExportTaxonomy(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, 400, "bad_format", "format must be huml or toml")
 		return
 	}
-	skipSeeds := false
-	if value := r.URL.Query().Get("skip_seeds"); value != "" {
-		var err error
-		skipSeeds, err = strconv.ParseBool(value)
-		if err != nil {
-			s.writeError(w, 400, "bad_skip_seeds", "skip_seeds must be true or false")
-			return
-		}
-	}
-	pf, err := exporter.BuildExport(r.Context(), s.DB, systemID, skipSeeds)
+	pf, err := exporter.BuildExport(r.Context(), s.DB, systemID)
 	if err != nil {
 		s.writeError(w, 409, "taxonomy_export", err.Error())
 		return

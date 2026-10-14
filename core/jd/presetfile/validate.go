@@ -4,12 +4,9 @@ package presetfile
 
 import (
 	"fmt"
-	"reflect"
-	"sort"
 	"strings"
 	"unicode/utf8"
 
-	"github.com/johnnybravo-xyz/suchi/core/automations"
 	"github.com/johnnybravo-xyz/suchi/core/jd/systems"
 )
 
@@ -99,111 +96,9 @@ func Validate(pf *PresetFile) Errors {
 			seenCats[c.Code] = true
 			text(cp+".name", c.Name, 80, true)
 			text(cp+".description", c.Description, 240, false)
-			if len(c.Keywords) > 20 {
-				add("%s.keywords: at most 20 keywords", cp)
-			}
-			for k, kw := range c.Keywords {
-				text(fmt.Sprintf("%s.keywords[%d]", cp, k), kw, 40, true)
-			}
-		}
-	}
-	if pf.Seeds != nil {
-		names := map[string]bool{}
-		for i, a := range pf.Seeds.Automations {
-			p := fmt.Sprintf("seeds.automations[%d]", i)
-			text(p+".name", a.Name, 80, true)
-			if names[a.Name] {
-				add("%s.name: duplicate starter name %q", p, a.Name)
-			}
-			names[a.Name] = true
-			t := a.Trigger
-			if err := automations.ValidateTriggers([]automations.Trigger{{TypeCode: t.Type, FilterPath: t.FilterPath, FilterFilename: t.FilterFilename, FilterTitleRE: t.FilterTitleMatching, FilterContentRE: t.FilterContentMatching, FilterEmailFrom: t.FilterEmailFrom, FilterEmailSubject: t.FilterEmailSubject, FilterEmailFolder: t.FilterEmailFolder, FilterEmailHasAttachment: t.FilterEmailHasAttachment}}); err != nil {
-				add("%s.trigger: %v", p, err)
-			}
-			if len(a.Actions) == 0 {
-				add("%s.actions: at least one action required", p)
-			}
-			for j, act := range a.Actions {
-				if err := validateAction(act, seenCats); err != nil {
-					add("%s.actions[%d]: %v", p, j, err)
-				}
-			}
 		}
 	}
 	return es
-}
-
-func validateAction(a Action, cats map[int]bool) error {
-	key := ""
-	switch a.Kind {
-	case "assign_title":
-		key = "template"
-	case "assign_correspondent":
-		key = "correspondent"
-	case "assign_jd_category":
-		key = "jd_category_code"
-	case "assign_tags":
-		_, tag := a.Params["tag"]
-		_, tags := a.Params["tags"]
-		if tag == tags {
-			return fmt.Errorf("params: provide exactly one of tag or tags")
-		}
-		key = "tag"
-		if tags {
-			key = "tags"
-		}
-	default:
-		return fmt.Errorf("kind: unsupported portable action %q", a.Kind)
-	}
-	keys := make([]string, 0, len(a.Params))
-	for k := range a.Params {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	for _, k := range keys {
-		if k != key {
-			return fmt.Errorf("params.%s: unsupported parameter for %s", k, a.Kind)
-		}
-	}
-	value, ok := a.Params[key]
-	if !ok {
-		return fmt.Errorf("params.%s: required", key)
-	}
-	switch key {
-	case "jd_category_code":
-		var code int
-		switch v := value.(type) {
-		case int:
-			code = v
-		case int64:
-			code = int(v)
-			if int64(code) != v {
-				return fmt.Errorf("params.%s: integer out of range", key)
-			}
-		default:
-			return fmt.Errorf("params.%s: expected integer", key)
-		}
-		if !cats[code] || code < 11 || code/10 == 4 || code%10 == 0 {
-			return fmt.Errorf("params.%s: must reference a declared user category, got %d", key, code)
-		}
-	case "tags":
-		v := reflect.ValueOf(value)
-		if !v.IsValid() || v.Kind() != reflect.Slice || v.Len() == 0 {
-			return fmt.Errorf("params.tags: nonempty string list required")
-		}
-		for i := range v.Len() {
-			s, ok := v.Index(i).Interface().(string)
-			if !ok || strings.TrimSpace(s) == "" {
-				return fmt.Errorf("params.tags[%d]: nonempty string required", i)
-			}
-		}
-	default:
-		s, ok := value.(string)
-		if !ok || strings.TrimSpace(s) == "" {
-			return fmt.Errorf("params.%s: nonempty string required", key)
-		}
-	}
-	return nil
 }
 
 // ValidateNormalized protects importer entry points that receive an in-memory tree.
@@ -229,7 +124,7 @@ func rawFromNormalized(pf *PresetFile) (*PresetFile, error) {
 			continue
 		}
 		systems++
-		if a.Name != "System" || len(a.Categories) != 1 || a.Categories[0].Code != 49 || a.Categories[0].Name != "Inbox" || a.Categories[0].Description != "" || len(a.Categories[0].Keywords) != 0 {
+		if a.Name != "System" || len(a.Categories) != 1 || a.Categories[0].Code != 49 || a.Categories[0].Name != "Inbox" || a.Categories[0].Description != "" {
 			return nil, Errors{noPos("reserved area 40 must contain only generated System / 49 Inbox; legacy/custom reserved content cannot be exported or imported")}
 		}
 	}

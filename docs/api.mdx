@@ -1527,15 +1527,16 @@ accept only same-system live targets.
 
 **Body:** `{"value": <T>}` where `<T>` matches the field's `data_type`:
 
-| data_type            | Accepted `value` shape                                                 |
-| -------------------- | ---------------------------------------------------------------------- |
-| `text`, `url`        | string                                                                 |
-| `number`, `monetary` | number OR numeric string                                               |
-| `date`               | ISO string `"YYYY-MM-DD"` OR unix seconds                              |
-| `bool`               | boolean OR any of `"yes"`/`"no"`/`"1"`/`"0"`                           |
-| `select`             | string; must appear in the field's `extra_data.choices`                |
-| `multi`              | `["a","b"]` OR comma-separated string; each element must be in choices |
-| `documentlink`       | integer document id; refuses trashed/missing targets, self-links, and targets in the source's version family |
+| data_type      | Accepted `value` shape                                                                                       |
+| -------------- | ------------------------------------------------------------------------------------------------------------ |
+| `text`, `url`  | string                                                                                                       |
+| `number`       | number OR numeric string                                                                                     |
+| `monetary`     | number OR amount text such as `"EUR1234.56"`, `"1.234,56 €"`, `"€1,234.56"`                                  |
+| `date`         | ISO string `"YYYY-MM-DD"` OR unix seconds                                                                    |
+| `bool`         | boolean OR any of `"yes"`/`"no"`/`"1"`/`"0"`                                                                 |
+| `select`       | string; must appear in the field's `extra_data.choices`                                                      |
+| `multi`        | `["a","b"]` OR comma-separated string; each element must be in choices                                       |
+| `documentlink` | integer document id; refuses trashed/missing targets, self-links, and targets in the source's version family |
 
 `url` validates as `http`/`https`. Empty value ⇒ row is deleted.
 
@@ -1664,14 +1665,13 @@ tree with `set_ids`. API tokens cannot use it.
 ```json
 {
   "preset_id": "smb_billing",
-  "include_seeds": true,
   "replacements": { "21": true },
   "remaps": { "34": 36 }
 }
 ```
 
 The response includes the complete target `user_areas`, `state_hash`, selected
-set IDs, rule additions/preservations, and each category collision. Collision
+set IDs, and each category collision. Collision
 rows include existing/incoming names, live/Trash document counts, automatic or
 suggested replacement state, and a proposed free same-decade code when one exists.
 A remap value of `0` skips the incoming category.
@@ -1685,16 +1685,16 @@ must be true for a target with no user sets. `refile: true` runs the explicit
 post-Apply sweep and returns its document/rule/render counters.
 
 Reviewed replacement updates a category name/description in place so its row ID,
-documents and dependent local configuration survive. Source preset-owned rules
-are suspended and target rules activated; user-owned rules and edited forks are
-not taken over.
+documents and dependent local configuration survive. Preset changes never touch
+automations.
 
 ### `POST /api/admin/taxonomy/import`
 
 Session-admin-only, with existing same-origin protections; API tokens cannot
 administer taxonomy. Accepts strict `suchi-taxonomy/v1` HuML or TOML and previews
 or atomically applies it. Taxonomy content is bounded to 1 MiB; invalid input is
-rejected before mutation, including when `skip_seeds` is true.
+rejected before mutation. Category `keywords` and `seeds.automations` from
+v0.2 exports are ignored.
 
 **Request body**
 
@@ -1703,14 +1703,13 @@ rejected before mutation, including when `skip_seeds` is true.
   "content": "format = \"suchi-taxonomy/v1\"\n...",
   "format": "toml",
   "apply": false,
-  "skip_seeds": false,
   "remaps": { "12": 15 }
 }
 ```
 
 `format` is `"huml"` or `"toml"`; omitted/empty means HuML, never content
 sniffing. UI callers send it explicitly. `apply=false` returns the preview.
-Apply sends the same content, format, seed choice and remaps plus
+Apply sends the same content, format and remaps plus
 `"expected_state_hash":"<state_hash from preview>"` and `"apply":true`.
 
 Optional body `target_system` must agree with a file's top-level `system`.
@@ -1735,7 +1734,7 @@ The hash is a consistency check, not a permission token or signed session.
 | `format` | Declared `suchi-taxonomy/v1` schema; HuML/TOML is the separate file format |
 | `preset_id`, `preset_version`, `name`, `story` | Submitted author identity, file version, name, and explanation |
 | `content_sha256` | SHA-256 of exact submitted bytes |
-| `state_hash` | Binding of source hash, seed choice, remaps and relevant current configuration |
+| `state_hash` | Binding of source hash, remaps and relevant current configuration |
 | `mode` | `replace` only for safe first setup; otherwise `merge`, which adds to the current filing tree |
 | `system_code`, `system_name` | Proposed destination code/display name |
 | `system_created`, `systems_introduced` | Whether Apply creates a destination or introduces the system layer |
@@ -1745,20 +1744,15 @@ The hash is a consistency check, not a permission token or signed session.
 | `areas_incoming`, `categories_incoming` | Incoming user counts, excluding generated structure |
 | `categories_to_add` | Actual category codes to add after remaps/skips |
 | `collisions` | Objects `{code,existing,incoming,proposed_code,resolved}` |
-| `keywords_to_seed`, `automations_to_seed` | Actual starter additions |
-| `rules_to_add` | Rule names (`string[]`) |
-| `rules_preserved` | Objects `{name,enabled}`, including existing disabled rows |
-| `rules_skipped` | Objects `{name,reason}`, including category dependency skips |
 | `applied` | Whether application committed |
 | `index_refresh_pending` | Refresh is queued, not proof of a completed physical write |
 
 The UI explains `00-09 System index` separately; it is not in either area array.
 Only safe initial setup can replace bootstrap structure: filed documents,
 including recoverable Trash, and dependent configuration prevent replacement.
-Merge preserves same-code/same-name local descriptions and existing rule names,
-disabled originals and user-owned forks. A skipped category skips the entire
-dependent starter. Destination introduction/creation, membership preservation,
-symbol resolution, supported additions, provenance and durable jobs commit together.
+Merge preserves same-code/same-name local descriptions and never touches
+automations. Destination introduction/creation, membership preservation,
+category additions, provenance and durable jobs commit together.
 Apply rechecks that the authenticated actor remains an active instance admin.
 
 Validation errors retain readable messages and may include structured field
@@ -1769,16 +1763,14 @@ and unsupported behavior are errors, never partially accepted extensions.
 
 Session-admin-only. Build and validate a consistent current snapshot in HuML
 or TOML: `?format=huml|toml&system=S01` (default HuML and original system).
-Add `skip_seeds=true` for tree-only output, omitting keywords/starters.
 Attachment filenames are `<SYS>.taxonomy.huml|toml` after introduction and
 `archive.huml|toml` before it; the current system code/name accompanies the snapshot.
 
 Snapshot header is `id = "archive"`, `version = 1`, separate from last-import
-provenance. Generated System/49 is implicit. Default export preserves only
-representable preset-owned starters; disabled/unrepresentable rules fail rather
-than being enabled or silently lost. Legacy incompatible reserved structure also
-fails without automatic repair. User-owned rules/forks, access/review state and
-document/version/link identity require complete backup or their portable owner.
+provenance. Generated System/49 is implicit. Export contains the filing tree
+only. Legacy incompatible reserved structure fails without automatic repair.
+Automations, access/review state and document/version/link identity require
+complete backup or their portable owner.
 
 ## Activity and access
 

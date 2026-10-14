@@ -88,7 +88,7 @@ test('shows explicit revision state and retries an uncertain replacement with on
       keys.push(request.headers()['idempotency-key'])
       attempts++
       if (attempts === 1) {
-        await route.fulfill({ status: 500, json: { code: 'db_write', error: 'Upload response was interrupted' } })
+        await route.fulfill({ status: 500, json: { code: 'db_write', error: 'server error' } })
       } else {
         await route.fulfill({ status: 201, json: { id: 44 } })
       }
@@ -119,7 +119,7 @@ test('shows explicit revision state and retries an uncertain replacement with on
   await history.locator('input[type=file]').setInputFiles(replacementFile)
   await expect(history.getByText('corrected.pdf', { exact: true })).toBeVisible()
   await history.getByRole('button', { name: 'Upload replacement', exact: true }).click()
-  await expect(history.getByText('Upload response was interrupted', { exact: true })).toBeVisible()
+  await expect(history.getByText('The server could not complete the request.', { exact: true })).toBeVisible()
   await expect(history.getByText('corrected.pdf', { exact: true })).toBeVisible()
   await history.getByRole('button', { name: 'Retry upload', exact: true }).click()
   await expect(page).toHaveURL(/#\/doc\/44/)

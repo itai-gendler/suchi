@@ -17,8 +17,9 @@ window.addEventListener('hashchange', () => Object.assign(route, parse()))
 
 export function go(hash, { replace = false } = {}) {
   hash = scopedHash(hash)
-  if (replace) {
-    history.replaceState(null, '', hash)
-    Object.assign(route, parse())
-  } else location.hash = hash
+  // Update route now, not on the later hashchange, so a second change made
+  // before that event builds on this one instead of the previous query.
+  if (replace) history.replaceState(null, '', hash)
+  else location.hash = hash
+  Object.assign(route, parse())
 }

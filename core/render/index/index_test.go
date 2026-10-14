@@ -73,7 +73,7 @@ func TestIndexJobUsesCurrentTreeAndPreservesCompleteFileOnFailure(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if pf.ID != "archive" || pf.Seeds != nil || len(pf.Areas[0].Categories[0].Keywords) != 0 || pf.Areas[0].Categories[0].Description != "Latest description" {
+	if pf.ID != "archive" || pf.Areas[0].Categories[0].Description != "Latest description" {
 		t.Fatalf("index contents: %+v", pf)
 	}
 	var docs, archiveJobs int
@@ -330,7 +330,7 @@ func TestNamedIndexesAreIndependentAndOnlyOriginalCleansLegacy(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if pf.System != code || pf.Name != name || pf.ID != "archive" || pf.Version != 1 || pf.Seeds != nil {
+		if pf.System != code || pf.Name != name || pf.ID != "archive" || pf.Version != 1 {
 			t.Fatalf("wrong system snapshot: %+v", pf)
 		}
 	}

@@ -40,11 +40,11 @@ func newUISrv(t *testing.T) *Server {
 		t.Fatal(err)
 	}
 
-	cat, err := i18n.Load("en", log)
+	catalogs, err := i18n.NewRegistry(log)
 	if err != nil {
 		t.Fatal(err)
 	}
-	s, err := New(d, nil, cat, log)
+	s, err := New(d, nil, catalogs, log)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -1,5 +1,6 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script>
+  import { t as translate } from "./i18n.svelte.js";
   import { scopedHash as filingHref } from './systems.svelte.js'
   import { sensitivityLabel, sensDot } from './format.js'
   import Icon from './Icon.svelte'
@@ -9,16 +10,16 @@
     // The response retains exact evidence; cards only need the two visible lines.
     const characters = [...String(item.source.snippet || '')]
     if (characters.length <= 420) return characters.join('')
-    return `${characters.slice(0, 420).join('').trimEnd()}…`
+    return translate("archiveChatSource.value", { "trimEnd": characters.slice(0, 420).join('').trimEnd() })
   })
 </script>
 
 <a class="source-card" class:cited
    href={filingHref(`#/doc/${item.source.id}`)} onclick={(event) => onOpen?.(event)}
-   aria-label={`Open document ${item.number}: ${item.source.title || `Document #${item.source.id}`}`}>
+   aria-label={translate("archiveChatSource.openDocumentValueValue", { "number": item.number, "id": item.source.title || `Document #${item.source.id}` })}>
   <span class="source-number">[{item.number}]</span>
   <span class="source-copy">
-    <strong>{item.source.title || `Document #${item.source.id}`}</strong>
+    <strong>{item.source.title || translate("archiveChatSource.documentValue", { "id": item.source.id })}</strong>
     <span>{snippetPreview}</span>
     <small><i class:danger={sensDot(item.source.sensitivity) === 'danger'}></i>{sensitivityLabel(item.source.sensitivity)}</small>
   </span>

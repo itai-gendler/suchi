@@ -5,6 +5,7 @@ ALTER TABLE documents ADD COLUMN title_owner TEXT NOT NULL DEFAULT 'auto'
 
 ALTER TABLE share_links ADD COLUMN visibility TEXT NOT NULL DEFAULT 'network'
     CHECK (visibility IN ('network', 'public'));
+ALTER TABLE users ADD COLUMN locale TEXT NOT NULL DEFAULT '';
 
 ALTER TABLE custom_fields ADD COLUMN managed_by TEXT NOT NULL DEFAULT ''
     CHECK (managed_by IN ('', 'zugferd'));
@@ -146,3 +147,45 @@ CREATE TABLE fs_watch_observations (
     updated_at        INTEGER NOT NULL,
     PRIMARY KEY (root_path, owner_id, system_id, relative_path)
 ) STRICT;
+
+-- Presets no longer seed automations. Editing a built-in rule already forked a
+-- user-owned copy, so the remaining preset rows carry no user edits.
+DELETE FROM automation_asks WHERE automation_id IN
+    (SELECT id FROM automations WHERE COALESCE(preset_slug, '') <> '');
+DELETE FROM automation_actions WHERE automation_id IN
+    (SELECT id FROM automations WHERE COALESCE(preset_slug, '') <> '');
+DELETE FROM automation_triggers WHERE automation_id IN
+    (SELECT id FROM automations WHERE COALESCE(preset_slug, '') <> '');
+DELETE FROM automations WHERE COALESCE(preset_slug, '') <> '';
+DROP INDEX idx_automations_preset_slug;
+ALTER TABLE automations DROP COLUMN preset_slug;
+
+-- documents_fts (porter word stems) cannot match inside words: CJK and Thai
+-- runs have no spaces and German builds compounds. The trigram index matches
+-- any substring of three or more characters; search queries both.
+CREATE VIRTUAL TABLE documents_trigram USING fts5 (
+    title,
+    content,
+    content='documents',
+    content_rowid='id',
+    tokenize='trigram remove_diacritics 1'
+);
+
+CREATE TRIGGER documents_trigram_ad AFTER DELETE ON documents BEGIN
+    INSERT INTO documents_trigram(documents_trigram, rowid, title, content)
+    VALUES ('delete', old.id, old.title, coalesce(old.content, ''));
+END;
+
+CREATE TRIGGER documents_trigram_ai AFTER INSERT ON documents BEGIN
+    INSERT INTO documents_trigram(rowid, title, content)
+    VALUES (new.id, new.title, coalesce(new.content, ''));
+END;
+
+CREATE TRIGGER documents_trigram_au AFTER UPDATE OF title, content ON documents BEGIN
+    INSERT INTO documents_trigram(documents_trigram, rowid, title, content)
+    VALUES ('delete', old.id, old.title, coalesce(old.content, ''));
+    INSERT INTO documents_trigram(rowid, title, content)
+    VALUES (new.id, new.title, coalesce(new.content, ''));
+END;
+
+INSERT INTO documents_trigram(documents_trigram) VALUES ('rebuild');
