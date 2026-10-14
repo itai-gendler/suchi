@@ -3,11 +3,8 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import german from '../testdata/locales/de.js'
-
-globalThis.$state = value => value
-const { localeState, registerCatalogForTest, setLocale, t } = await import('./i18n.svelte.js')
-const { formatDate, formatNumber, plural } = await import('./format.js')
-delete globalThis.$state
+import { localeState, registerCatalogForTest, setLocale, t } from './i18n.svelte.js'
+import { formatDate, formatNumber, plural } from './format.js'
 
 test('switches complete locale catalogs and locale-sensitive formatting', async () => {
   await registerCatalogForTest('de', german)
