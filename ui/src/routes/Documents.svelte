@@ -12,7 +12,7 @@
   import Icon from '../lib/Icon.svelte'
   import DocumentUnlockStatus from '../lib/DocumentUnlockStatus.svelte'
   import ConfirmDialog from '../lib/ConfirmDialog.svelte'
-  import TagPicker from '../lib/TagPicker.svelte'
+  import TypeaheadPicker from '../lib/TypeaheadPicker.svelte'
   import { createQueryAssistant } from '../lib/queryAssist.js'
   import { copyText } from '../lib/clipboard.js'
   import LinkQR from '../lib/LinkQR.svelte'
@@ -625,8 +625,9 @@
           <span class="err" role="alert">{bulkTagLoadError}</span>
           <button class="btn sm" disabled={bulkBusy} onclick={openBulkTags}>{translate("documents.retryTags")}</button>
         {:else}
-          <TagPicker tags={bulkTags} disabled={bulkBusy} label={translate("documents.tagForSelection")}
-                     menuId="bulk-tag-options" onChoose={chooseBulkTag} />
+          <TypeaheadPicker items={bulkTags} disabled={bulkBusy} label={translate("documents.tagForSelection")}
+                           menuId="bulk-tag-options" placeholder={translate("tagPicker.typeToSelectATag")}
+                           emptyText={translate("tagPicker.noMatchingTags")} onChoose={chooseBulkTag} />
         {/if}
         {#if bulkTagError}<span class="err" role="alert">{bulkTagError}</span>{/if}
       </div>

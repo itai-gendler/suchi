@@ -12,7 +12,7 @@
   import { hasCapability } from '../lib/capabilities.js'
   import { CUSTOM_FIELDS_SETTINGS_HASH, TAGS_SETTINGS_HASH } from '../lib/configuration.js'
   import Icon from '../lib/Icon.svelte'
-  import TagPicker from '../lib/TagPicker.svelte'
+  import TypeaheadPicker from '../lib/TypeaheadPicker.svelte'
   import DocumentUnlockStatus from '../lib/DocumentUnlockStatus.svelte'
   import ConfirmDialog from '../lib/ConfirmDialog.svelte'
   import { copyText } from '../lib/clipboard.js'
@@ -67,6 +67,10 @@
   let correspondentDraft = $state('')
   let correspondentBusy = $state(false)
   let correspondentError = $state('')
+  const correspondentChoices = $derived([
+    { id: 0, name: translate("documentDetail.noSender") },
+    ...correspondentOptions,
+  ])
   let shareURL = $state('')
   let shareBusy = $state(false)
   let documentLinkOpen = $state(false)
@@ -865,6 +869,8 @@
     if (correspondentBusy || trashed) return
     const version = loadVersion
     const scope = captureScope()
+    const currentOptions = (doc?.correspondents || []).map(item => ({ id: item.id, name: item.name }))
+    correspondentOptions = currentOptions
     correspondentDraft = String(doc?.correspondents?.find(item => item.role === 'sender')?.id || 0)
     editingCorrespondent = true
     correspondentBusy = true
@@ -873,9 +879,9 @@
       const response = await listCorrespondents()
       if (disposed || version !== loadVersion || !scopeCurrent(scope)) return
       correspondentOptions = [...(response.results || [])]
-      for (const current of doc?.correspondents || []) {
+      for (const current of currentOptions) {
         if (!correspondentOptions.some(option => option.id === current.id)) {
-          correspondentOptions.unshift({ id: current.id, name: current.name })
+          correspondentOptions.unshift(current)
         }
       }
     } catch (ex) {
@@ -887,9 +893,14 @@
     }
   }
 
+  function chooseCorrespondent(correspondent) {
+    correspondentDraft = String(correspondent.id)
+    return true
+  }
+
   async function saveCorrespondent(event) {
     event.preventDefault()
-    if (correspondentBusy || trashed) return
+    if (correspondentBusy || trashed || correspondentDraft === '') return
     const version = loadVersion
     const scope = captureScope()
     const documentID = Number(id)
@@ -1514,9 +1525,11 @@
                 {:else if tagsBusy && !tagOptions.length}
                   <span class="sub">{translate("documentDetail.loadingTags")}</span>
                 {:else}
-                  <TagPicker tags={tagOptions} excludedSlugs={doc.tags || []} disabled={tagsBusy}
-                             label={translate("documentDetail.tagToAdd")} menuId="document-tag-options"
-                             onChoose={(tag) => changeTag(tag, 'add_tag')} />
+                  <TypeaheadPicker items={tagOptions} excludedValues={doc.tags || []} valueKey="slug"
+                                   disabled={tagsBusy} label={translate("documentDetail.tagToAdd")}
+                                   menuId="document-tag-options" placeholder={translate("tagPicker.typeToSelectATag")}
+                                   emptyText={translate("tagPicker.noMatchingTags")}
+                                   onChoose={(tag) => changeTag(tag, 'add_tag')} />
                 {/if}
                 <button class="btn sm" type="button" disabled={tagsBusy} onclick={() => { editingTags = false; tagsError = ''; tagLoadError = '' }}>{translate("documentDetail.done")}</button>
               </div>
@@ -1528,14 +1541,16 @@
           <dd class="document-correspondents">
             {#if editingCorrespondent}
               <form class="tag-actions" onsubmit={saveCorrespondent}>
-                <select class="input" aria-label={translate("documentDetail.primaryCorrespondent")} bind:value={correspondentDraft}
-                        disabled={correspondentBusy}>
-                  <option value="0">{translate("documentDetail.noSender")}</option>
-                  {#each correspondentOptions as correspondent}
-                    <option value={String(correspondent.id)}>{correspondent.name}</option>
-                  {/each}
-                </select>
-                <button class="btn sm primary" type="submit" disabled={correspondentBusy}>
+                <TypeaheadPicker items={correspondentChoices} disabled={correspondentBusy}
+                                 label={translate("documentDetail.primaryCorrespondent")}
+                                 menuId="document-correspondent-options"
+                                 placeholder={translate("documentDetail.typeToSelectACorrespondent")}
+                                 emptyText={translate("documentDetail.noMatchingCorrespondents")}
+                                 initialQuery={correspondentChoices.find(item => String(item.id) === correspondentDraft)?.name || ''}
+                                 clearOnChoose={false}
+                                 onQueryChange={() => (correspondentDraft = '')}
+                                 onChoose={chooseCorrespondent} />
+                <button class="btn sm primary" type="submit" disabled={correspondentBusy || correspondentDraft === ''}>
                   {correspondentBusy ? translate("common.working") : translate("common.save")}
                 </button>
                 <button class="btn sm" type="button" disabled={correspondentBusy}
@@ -2242,7 +2257,7 @@
   .tag-remove { display:inline-flex; align-items:center; justify-content:center; width:24px; height:24px; padding:0; border:0; background:transparent; color:inherit; cursor:pointer }
   .tag-remove:disabled { cursor:default; opacity:.5 }
   .tag-actions { margin:8px 0 4px }
-  .tag-actions :global(.tag-picker) { flex:1 1 140px }
+  .tag-actions :global(.typeahead-picker) { flex:1 1 140px }
   .inline-state { display:flex; align-items:center; justify-content:space-between; gap:10px; }
   .custom-field-value { min-width:0; }
   .custom-field-add .input { flex:1 1 180px; width:auto; max-width:none; padding:4px 8px; font-size:.8rem; }

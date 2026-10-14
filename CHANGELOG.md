@@ -19,6 +19,8 @@ Notable user-visible changes to Suchi are recorded here.
 - Document Detail and Documents selection can now assign or clear primary
   correspondents. Documents also filters items with no correspondent relation,
   and **Ask your documents** keeps that scope.
+- Document Detail correspondent editing now uses the same searchable
+  type-to-select control as tags.
 - Model classification now receives bounded existing correspondent and tag names
   and reuses unambiguous catalog entries instead of creating near-duplicates.
   Automation actions also accept correspondent and tag IDs decoded from JSON

@@ -570,7 +570,7 @@ textarea.input { resize: vertical; font-family: ui-monospace, monospace; font-si
   display: flex; flex: 0 0 100%; align-items: center; flex-wrap: wrap;
   gap: 8px; min-width: 0; max-width: 100%;
 }
-.bulk-tag-editor .tag-picker { flex: 0 1 260px; max-width: 100%; }
+.bulk-tag-editor .typeahead-picker { flex: 0 1 260px; max-width: 100%; }
 .bulk-tag-editor .omni-drop { max-width: min(100%, calc(100vw - 48px)); }
 .bulk-tag-editor .err { margin: 0; max-width: 100%; overflow-wrap: anywhere; }
 .rowcheck { accent-color: var(--accent); width: 15px; height: 15px; flex: none; cursor: pointer; }

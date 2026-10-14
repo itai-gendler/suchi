@@ -86,10 +86,9 @@ source version line when no release version was injected.
 `Lazy.svelte` component. There are no route
 re-export wrappers. A native Rolldown group keeps the shell, API client, filing
 context and their static dependencies together. A separate group combines small
-document controls (including the
-shared tag picker), link display, clipboard/query helpers, upload-list refresh
-state and the shared configuration link inventory; other shared dependencies
-use normal chunking.
+document controls (including the shared type-to-select picker), link display,
+clipboard/query helpers, upload-list refresh state and the shared configuration
+link inventory; other shared dependencies use normal chunking.
 The shared password-unlock indicator belongs to this group and reads the
 existing encryption state exposed by document list and detail responses.
 The QR encoder remains a separate on-demand import. My account defers archive configuration and loads
@@ -221,8 +220,9 @@ subtle **Let Suchi rename this** action. Rename completion updates local
 ownership to `human`; release sends only `title_owner: auto` and removes the
 lock without changing the title. Both paths use the same route-generation guard
 as other detail metadata writes.
-The Correspondents editor loads the existing system catalog on demand and sends
-one `bulk_edit set_correspondent` operation for the open document. It promotes a
+The Correspondents editor loads the existing system catalog on demand and uses
+the shared type-to-select picker before sending one
+`bulk_edit set_correspondent` operation for the open document. It promotes a
 selected primary sender or clears sender roles with ID `0`, preserves other role
 relations in local state, and rejects late responses through the same generation
 guard.

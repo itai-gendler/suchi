@@ -41,6 +41,7 @@ test('production chunks group document controls without pulling lazy screens int
   assert.ok(initialGzip <= 36 * 1024, `Initial JavaScript is ${initialGzip} gzip bytes; budget is 36 KiB`)
   const controls = owner('/lib/ConfirmDialog.svelte')
   assert.ok(controls)
+  assert.equal(owner('/lib/TypeaheadPicker.svelte'), controls)
   assert.equal(owner('/lib/clipboard.js'), controls)
   assert.equal(owner('/lib/queryAssist.js'), controls)
   assert.equal(owner('/lib/LinkQR.svelte'), controls)
