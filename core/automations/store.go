@@ -858,6 +858,9 @@ func positiveInteger(value any) (int64, bool) {
 	case float64:
 		id := int64(typed)
 		return id, typed == float64(id) && id > 0
+	case json.Number:
+		id, err := typed.Int64()
+		return id, err == nil && id > 0
 	case int:
 		return int64(typed), typed > 0
 	case int64:
