@@ -64,6 +64,12 @@ and `extractor=demo-corpus`; no model confidence or human review is invented.
 Evidence must come from the fixture. Reseeding preserves existing documents;
 updated fixtures take effect on a fresh demo volume at the next reset.
 
+Corpus v0.3.0 places three public multilingual examples at the front of the
+dashboard's recent-document pile: a Japanese electricity bill, a Korean mobile
+bill, and a German electricity statement. The seeder preserves manifest order;
+because one seed run gives fixtures the same timestamp, the document list's
+descending ID tie-breaker makes the manifest's final fixtures appear first.
+
 A fixture can also replace an earlier fixture and name document links, both by
 filename:
 

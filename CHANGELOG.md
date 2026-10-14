@@ -6,6 +6,9 @@ Notable user-visible changes to Suchi are recorded here.
 
 ### Changed
 
+- The demo corpus now opens with Japanese, Korean and German documents in the
+  dashboard's recent-document pile, with native-script metadata, curated source
+  dates, and local Japanese and Korean font fallbacks.
 - Document Detail and Documents selection can now assign or clear primary
   correspondents. Documents also filters items with no correspondent relation,
   and **Ask your documents** keeps that scope.
